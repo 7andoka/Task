@@ -34,6 +34,10 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth) {
+      setError("Authentication service not initialized. Please check your configuration.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -99,7 +103,7 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
     setLoading(true);
     setError("");
     try {
-      if (auth.currentUser) {
+      if (auth && auth.currentUser) {
         await updatePassword(auth.currentUser, newPassword);
         const user = tempUser as UserProfile;
         user.needsPasswordChange = false;
