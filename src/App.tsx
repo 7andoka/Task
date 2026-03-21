@@ -116,7 +116,9 @@ function AppContent() {
         }
 
         // Fetch all users
-        const usersData = await storageService.getUsers();
+        const rawUsersData = await storageService.getUsers();
+        // Deduplicate by UID to prevent React key errors
+        const usersData = Array.from(new Map(rawUsersData.map(u => [u.uid, u])).values());
         setAllUsers(usersData);
         
         let userSubordinates: UserProfile[] = [];
@@ -136,10 +138,15 @@ function AppContent() {
           };
           userSubordinates = getAllSubordinates(user.uid, usersData);
         }
-        setSubordinates(userSubordinates);
+        
+        // Deduplicate subordinates as well
+        const uniqueSubordinates = Array.from(new Map(userSubordinates.map(u => [u.uid, u])).values());
+        setSubordinates(uniqueSubordinates);
 
         // Fetch tasks based on role
-        const tasksData = await storageService.getTasks();
+        const rawTasksData = await storageService.getTasks();
+        // Deduplicate by ID to prevent React key errors
+        const tasksData = Array.from(new Map(rawTasksData.map(t => [t.id, t])).values());
         let filteredTasks = tasksData;
         if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
           filteredTasks = tasksData;
