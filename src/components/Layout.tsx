@@ -96,27 +96,13 @@ export default function Layout({
       >
         <div className="p-4 flex items-center justify-between">
           {(isSidebarOpen || isDesktopMode) && (
-            <motion.div 
+            <motion.h1 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-center gap-2"
+              className="text-xl font-bold tracking-tight text-emerald-500"
             >
-              <img 
-                src="/logo.png" 
-                alt="Logo" 
-                className="w-8 h-8 rounded-lg object-contain"
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  // Fallback to text if image fails to load
-                  e.currentTarget.style.display = 'none';
-                  const textLogo = e.currentTarget.parentElement?.querySelector('.text-logo');
-                  if (textLogo) (textLogo as HTMLElement).style.display = 'block';
-                }}
-              />
-              <h1 className="text-xl font-bold tracking-tight text-emerald-500 text-logo">
-                ETA
-              </h1>
-            </motion.div>
+              ETA
+            </motion.h1>
           )}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
