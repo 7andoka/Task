@@ -106,68 +106,52 @@ function AppContent() {
   useEffect(() => {
     if (!user || !db) return;
 
-    const fetchData = async () => {
-      try {
-        // Wait for Firebase Auth to be ready if we're using it for security rules
-        let retryCount = 0;
-        while (auth && !auth.currentUser && retryCount < 10) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          retryCount++;
-        }
+    // Listen for real-time updates to all users
+    const usersQuery = collection(db, COLLECTIONS.USERS);
+    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+      const rawUsersData = snapshot.docs.map(doc => doc.data() as UserProfile);
+      const usersData = Array.from(new Map(rawUsersData.map(u => [u.uid, u])).values());
+      setAllUsers(usersData);
+    });
 
-        // Fetch all users
-        const rawUsersData = await storageService.getUsers();
-        // Deduplicate by UID to prevent React key errors
-        const usersData = Array.from(new Map(rawUsersData.map(u => [u.uid, u])).values());
-        setAllUsers(usersData);
-        
-        let userSubordinates: UserProfile[] = [];
-        if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
-          userSubordinates = usersData.filter(u => u.uid !== user.uid);
-        } else {
-          const getAllSubordinates = (managerId: string, allUsers: UserProfile[], visited = new Set<string>()): UserProfile[] => {
-            if (visited.has(managerId)) return [];
-            visited.add(managerId);
-            
-            const directSubordinates = allUsers.filter(u => u.managerId === managerId);
-            let allSubs = [...directSubordinates];
-            for (const sub of directSubordinates) {
-              allSubs = [...allSubs, ...getAllSubordinates(sub.uid, allUsers, visited)];
-            }
-            return allSubs;
-          };
-          userSubordinates = getAllSubordinates(user.uid, usersData);
-        }
-        
-        // Deduplicate subordinates as well
-        const uniqueSubordinates = Array.from(new Map(userSubordinates.map(u => [u.uid, u])).values());
-        setSubordinates(uniqueSubordinates);
+    // Listen for real-time updates to all tasks
+    const tasksQuery = collection(db, COLLECTIONS.TASKS);
+    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
+      const rawTasksData = snapshot.docs.map(doc => doc.data() as Task);
+      const tasksData = Array.from(new Map(rawTasksData.map(t => [t.id, t])).values());
+      setTasks(tasksData);
+    });
 
-        // Fetch tasks based on role
-        const rawTasksData = await storageService.getTasks();
-        // Deduplicate by ID to prevent React key errors
-        const tasksData = Array.from(new Map(rawTasksData.map(t => [t.id, t])).values());
-        let filteredTasks = tasksData;
-        if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
-          filteredTasks = tasksData;
-        } else if (user.role === 'Worker') {
-          filteredTasks = tasksData.filter(t => t.assigneeId === user.uid);
-        } else {
-          const subIds = new Set(userSubordinates.map(u => u.uid));
-          filteredTasks = tasksData.filter(t => 
-            t.assigneeId === user.uid || 
-            t.managerId === user.uid || 
-            subIds.has(t.assigneeId)
-          );
-        }
-        setTasks(filteredTasks);
-      } catch (error) {
-        console.error("Fetch Data Error:", error);
-      }
+    return () => {
+      unsubscribeUsers();
+      unsubscribeTasks();
     };
+  }, [user, db]);
 
-    fetchData();
-  }, [user]);
+  useEffect(() => {
+    if (!user || !db) return;
+
+    // Listen for real-time updates to all users
+    const usersQuery = collection(db, COLLECTIONS.USERS);
+    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+      const rawUsersData = snapshot.docs.map(doc => doc.data() as UserProfile);
+      const usersData = Array.from(new Map(rawUsersData.map(u => [u.uid, u])).values());
+      setAllUsers(usersData);
+    });
+
+    // Listen for real-time updates to all tasks
+    const tasksQuery = collection(db, COLLECTIONS.TASKS);
+    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
+      const rawTasksData = snapshot.docs.map(doc => doc.data() as Task);
+      const tasksData = Array.from(new Map(rawTasksData.map(t => [t.id, t])).values());
+      setTasks(tasksData);
+    });
+
+    return () => {
+      unsubscribeUsers();
+      unsubscribeTasks();
+    };
+  }, [user, db]);
 
   const handleLogout = async () => {
     try {
