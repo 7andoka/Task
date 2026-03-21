@@ -14,6 +14,7 @@ import {
   BarChart3,
   Settings as SettingsIcon
 } from 'lucide-react';
+import { Logo } from './Logo';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
 import { clsx, type ClassValue } from 'clsx';
@@ -96,13 +97,18 @@ export default function Layout({
       >
         <div className="p-4 flex items-center justify-between">
           {(isSidebarOpen || isDesktopMode) && (
-            <motion.h1 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-xl font-bold tracking-tight text-emerald-500"
-            >
-              ETA
-            </motion.h1>
+            <div className="flex items-center gap-3 overflow-hidden">
+              <Logo size={32} className="shrink-0" />
+              {isSidebarOpen && (
+                <motion.h1 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="text-xl font-bold tracking-tight text-emerald-500 whitespace-nowrap"
+                >
+                  Rich Land
+                </motion.h1>
+              )}
+            </div>
           )}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
