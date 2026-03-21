@@ -3,19 +3,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Import the Firebase configuration
-let firebaseConfig: any;
-try {
-  firebaseConfig = await import('../firebase-applet-config.json').then(m => m.default);
-} catch (e) {
-  console.error("Firebase configuration not found. Please ensure firebase-applet-config.json exists at the root.");
-  // Provide a minimal fallback to prevent immediate crash, though it won't work
-  firebaseConfig = {
-    apiKey: "missing",
-    authDomain: "missing",
-    projectId: "missing",
-    appId: "missing"
-  };
-}
+import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase SDK
 let app: any;

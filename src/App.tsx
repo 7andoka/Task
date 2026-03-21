@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useEffect, useState } from 'react';
 import { storageService } from './services/storageService';
 import { Language, UserProfile, Task } from './types';
 import Layout from './components/Layout';
@@ -8,74 +8,12 @@ import Auth from './components/Auth';
 import UserManagement from './components/UserManagement';
 import Team from './components/Team';
 import Settings from './components/Settings';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { onSnapshot, collection, query, where } from 'firebase/firestore';
 import { COLLECTIONS } from './constants';
-
-interface ErrorBoundaryProps {
-  children: ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6 text-center">
-          <div className="max-w-md w-full bg-zinc-900 border border-red-500/20 rounded-3xl p-8 shadow-2xl">
-            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <span className="text-3xl text-red-500">âš ï¸ </span>
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-4">Something went wrong</h1>
-            <p className="text-zinc-400 mb-6">
-              The application encountered an unexpected error. This might be due to a configuration issue or a temporary network failure.
-            </p>
-            <div className="bg-black/50 rounded-xl p-4 mb-6 text-left overflow-auto max-h-40">
-              <code className="text-xs text-red-400 font-mono">
-                {this.state.error?.message || "Unknown error"}
-              </code>
-            </div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-all"
-            >
-              Reload Application
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
-
-export default function App() {
-  return (
-    <ErrorBoundary>
-      <AppContent />
-    </ErrorBoundary>
-  );
-}
 
 function AppContent() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -90,7 +28,7 @@ function AppContent() {
   const [lastNotificationTime, setLastNotificationTime] = useState<number>(Date.now());
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
 
     // Listen for real-time updates to tasks assigned to the user
     const q = query(
@@ -166,7 +104,7 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
 
     const fetchData = async () => {
       try {
@@ -205,7 +143,7 @@ function AppContent() {
         let filteredTasks = tasksData;
         if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
           filteredTasks = tasksData;
-        } else if (user.role === 'Worker' || user.role === 'Employee') {
+        } else if (user.role === 'Worker') {
           filteredTasks = tasksData.filter(t => t.assigneeId === user.uid);
         } else {
           const subIds = new Set(userSubordinates.map(u => u.uid));
@@ -226,7 +164,9 @@ function AppContent() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if (auth) {
+        await signOut(auth);
+      }
       setUser(null);
     } catch (error) {
       console.error('Logout error:', error);
@@ -275,5 +215,13 @@ function AppContent() {
     >
       {renderContent()}
     </Layout>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
   );
 }

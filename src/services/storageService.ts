@@ -50,6 +50,10 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 // Test connection to Firestore
 async function testConnection() {
+  if (!db) {
+    console.error("Firestore DB not initialized. Skipping connection test.");
+    return;
+  }
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
@@ -62,6 +66,7 @@ testConnection();
 
 export const storageService = {
   getUsers: async (): Promise<UserProfile[]> => {
+    if (!db) return [];
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.USERS));
       const users = snapshot.docs.map(doc => doc.data() as UserProfile);
@@ -85,6 +90,7 @@ export const storageService = {
     }
   },
   saveUsers: async (users: UserProfile[]) => {
+    if (!db) return;
     try {
       for (const user of users) {
         await setDoc(doc(db, COLLECTIONS.USERS, user.uid), user);
@@ -95,6 +101,7 @@ export const storageService = {
   },
 
   getUserByUid: async (uid: string): Promise<UserProfile | undefined> => {
+    if (!db) return undefined;
     try {
       // Since document ID is username, we need to query by UID field
       const snapshot = await getDocs(query(collection(db, COLLECTIONS.USERS), where('uid', '==', uid)));
@@ -107,6 +114,7 @@ export const storageService = {
     }
   },
   getUserByUsername: async (username: string): Promise<UserProfile | undefined> => {
+    if (!db) return undefined;
     try {
       // For pre-created users, the username is the document ID
       const docSnap = await getDoc(doc(db, COLLECTIONS.USERS, username));
@@ -141,6 +149,7 @@ export const storageService = {
     }
   },
   saveUser: async (user: UserProfile) => {
+    if (!db) return;
     try {
       // Always use username as the document ID for the users collection
       await setDoc(doc(db, COLLECTIONS.USERS, user.username), user);
@@ -149,6 +158,7 @@ export const storageService = {
     }
   },
   getTasks: async (): Promise<Task[]> => {
+    if (!db) return [];
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.TASKS));
       return snapshot.docs.map(doc => doc.data() as Task);
@@ -157,6 +167,7 @@ export const storageService = {
     }
   },
   saveTasks: async (tasks: Task[]) => {
+    if (!db) return;
     try {
       for (const task of tasks) {
         await setDoc(doc(db, COLLECTIONS.TASKS, task.id), task);
@@ -166,6 +177,7 @@ export const storageService = {
     }
   },
   saveTask: async (task: Task) => {
+    if (!db) return;
     try {
       const updatedTask = { ...task, lastUpdatedAt: new Date().toISOString() };
       await setDoc(doc(db, COLLECTIONS.TASKS, task.id), updatedTask);
@@ -174,6 +186,7 @@ export const storageService = {
     }
   },
   sendUrgentReminder: async (taskId: string) => {
+    if (!db) return;
     try {
       const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
       const snapshot = await getDoc(taskRef);
@@ -191,6 +204,7 @@ export const storageService = {
     }
   },
   getSubtasks: async (): Promise<Subtask[]> => {
+    if (!db) return [];
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.SUBTASKS));
       return snapshot.docs.map(doc => doc.data() as Subtask);
@@ -199,6 +213,7 @@ export const storageService = {
     }
   },
   saveSubtasks: async (subtasks: Subtask[]) => {
+    if (!db) return;
     try {
       for (const subtask of subtasks) {
         await setDoc(doc(db, COLLECTIONS.SUBTASKS, subtask.id), subtask);
@@ -209,6 +224,7 @@ export const storageService = {
   },
   // Future proofing
   getComments: async (taskId: string): Promise<Comment[]> => {
+    if (!db) return [];
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.COMMENTS));
       return snapshot.docs.map(doc => doc.data() as Comment).filter(c => c.taskId === taskId);
@@ -217,6 +233,7 @@ export const storageService = {
     }
   },
   saveComment: async (comment: Comment) => {
+    if (!db) return;
     try {
       await setDoc(doc(db, COLLECTIONS.COMMENTS, comment.id), comment);
     } catch (error) {
@@ -224,6 +241,7 @@ export const storageService = {
     }
   },
   getNotifications: async (userId: string): Promise<Notification[]> => {
+    if (!db) return [];
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.NOTIFICATIONS));
       return snapshot.docs.map(doc => doc.data() as Notification).filter(n => n.userId === userId);
@@ -232,6 +250,7 @@ export const storageService = {
     }
   },
   saveNotification: async (notification: Notification) => {
+    if (!db) return;
     try {
       await setDoc(doc(db, COLLECTIONS.NOTIFICATIONS, notification.id), notification);
     } catch (error) {
