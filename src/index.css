@@ -1,0 +1,38 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    /* Change primary color from emerald to indigo globally */
+    --color-emerald-50: #eef2ff;
+    --color-emerald-100: #e0e7ff;
+    --color-emerald-200: #c7d2fe;
+    --color-emerald-300: #a5b4fc;
+    --color-emerald-400: #818cf8;
+    --color-emerald-500: #6366f1;
+    --color-emerald-600: #4f46e5;
+    --color-emerald-700: #4338ca;
+    --color-emerald-800: #3730a3;
+    --color-emerald-900: #312e81;
+    --color-emerald-950: #1e1b4b;
+  }
+
+  .dark {
+    /* Pure black background */
+    --color-zinc-950: #000000;
+    /* Dark gray for cards to stand out from black background */
+    --color-zinc-900: #121212;
+    /* Lighter borders so they are clearly visible */
+    --color-zinc-800: #27272a;
+    --color-zinc-700: #3f3f46;
+    
+    /* Brighter text colors to contrast with black */
+    --color-zinc-600: #a1a1aa;
+    --color-zinc-500: #d4d4d8;
+    --color-zinc-400: #e4e4e7;
+    --color-zinc-300: #f4f4f5;
+    --color-zinc-200: #fafafa;
+    --color-zinc-100: #ffffff;
+    --color-zinc-50: #ffffff;
+  }
+}

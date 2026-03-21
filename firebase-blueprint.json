@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Information about a user in the system",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Warehouse Manager", "Department Head", "Supervisor", "Warehouse Specialist", "Warehouse Keeper", "Assistant Warehouse Keeper", "Worker"] },
+        "managerId": { "type": "string" },
+        "department": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "needsPasswordChange": { "type": "boolean" },
+        "notificationPreferences": {
+          "type": "object",
+          "properties": {
+            "newAssignments": { "type": "boolean" },
+            "deadlineReminders": { "type": "boolean" },
+            "statusChanges": { "type": "boolean" }
+          }
+        }
+      },
+      "required": ["uid", "email", "displayName", "role", "createdAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A task assigned to a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Urgent"] },
+        "status": { "type": "string", "enum": ["Pending", "In Progress", "Pending Review", "Delayed", "Completed", "Cancelled"] },
+        "deadline": { "type": "string", "format": "date-time" },
+        "estimatedTime": { "type": "number" },
+        "actualTimeSpent": { "type": "number" },
+        "progress": { "type": "number" },
+        "assigneeId": { "type": "string" },
+        "managerId": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "attachments": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completionNotes": { "type": "string" },
+        "managerRating": { "type": "number" },
+        "managerFeedback": { "type": "string" }
+      },
+      "required": ["id", "title", "description", "priority", "status", "deadline", "estimatedTime", "actualTimeSpent", "progress", "assigneeId", "managerId", "createdAt"]
+    },
+    "Subtask": {
+      "title": "Subtask",
+      "description": "A subtask of a task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "taskId": { "type": "string" },
+        "title": { "type": "string" },
+        "isCompleted": { "type": "boolean" }
+      },
+      "required": ["id", "taskId", "title", "isCompleted"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "UserProfile",
+      "description": "Collection of user profiles"
+    },
+    "tasks": {
+      "schema": "Task",
+      "description": "Collection of tasks"
+    },
+    "subtasks": {
+      "schema": "Subtask",
+      "description": "Collection of subtasks"
+    }
+  }
+}

@@ -1,0 +1,157 @@
+import React, { useEffect, useState } from 'react';
+import { storageService } from './services/storageService';
+import { Language, UserProfile, Task } from './types';
+import Layout from './components/Layout';
+import Dashboard from './components/Dashboard';
+import TaskList from './components/TaskList';
+import Auth from './components/Auth';
+import UserManagement from './components/UserManagement';
+import Team from './components/Team';
+import Settings from './components/Settings';
+
+import { auth } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+
+export default function App() {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [lang, setLang] = useState<Language>('ar');
+  const [isDark, setIsDark] = useState(true);
+  const [activeTab, setActiveTab] = useState('tasks');
+  
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [subordinates, setSubordinates] = useState<UserProfile[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Fetch user profile from Firestore
+        const profile = await storageService.getUserByUid(firebaseUser.uid);
+        if (profile) {
+          setUser(profile);
+        } else {
+          // Fallback if profile doesn't exist yet (should be handled in Auth.tsx)
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchData = async () => {
+      try {
+        // Wait for Firebase Auth to be ready if we're using it for security rules
+        let retryCount = 0;
+        while (!auth.currentUser && retryCount < 10) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          retryCount++;
+        }
+
+        // Fetch all users
+        const usersData = await storageService.getUsers();
+        setAllUsers(usersData);
+        
+        let userSubordinates: UserProfile[] = [];
+        if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+          userSubordinates = usersData.filter(u => u.uid !== user.uid);
+        } else {
+          const getAllSubordinates = (managerId: string, allUsers: UserProfile[], visited = new Set<string>()): UserProfile[] => {
+            if (visited.has(managerId)) return [];
+            visited.add(managerId);
+            
+            const directSubordinates = allUsers.filter(u => u.managerId === managerId);
+            let allSubs = [...directSubordinates];
+            for (const sub of directSubordinates) {
+              allSubs = [...allSubs, ...getAllSubordinates(sub.uid, allUsers, visited)];
+            }
+            return allSubs;
+          };
+          userSubordinates = getAllSubordinates(user.uid, usersData);
+        }
+        setSubordinates(userSubordinates);
+
+        // Fetch tasks based on role
+        const tasksData = await storageService.getTasks();
+        let filteredTasks = tasksData;
+        if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+          filteredTasks = tasksData;
+        } else if (user.role === 'Worker' || user.role === 'Employee') {
+          filteredTasks = tasksData.filter(t => t.assigneeId === user.uid);
+        } else {
+          const subIds = new Set(userSubordinates.map(u => u.uid));
+          filteredTasks = tasksData.filter(t => 
+            t.assigneeId === user.uid || 
+            t.managerId === user.uid || 
+            subIds.has(t.assigneeId)
+          );
+        }
+        setTasks(filteredTasks);
+      } catch (error) {
+        console.error("Fetch Data Error:", error);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth lang={lang} isDark={isDark} onAuthComplete={setUser} />;
+  }
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return <Dashboard lang={lang} user={user} tasks={tasks} />;
+      case 'tasks':
+        return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} setTasks={setTasks} />;
+      case 'team':
+        return <Team lang={lang} users={subordinates} tasks={tasks} />;
+      case 'users':
+        return <UserManagement lang={lang} users={allUsers} setUsers={setAllUsers} />;
+      case 'settings':
+        return <Settings lang={lang} user={user} setUser={setUser} />;
+      default:
+        return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} setTasks={setTasks} />;
+    }
+  };
+
+  return (
+    <Layout 
+      lang={lang} 
+      setLang={setLang} 
+      isDark={isDark} 
+      setIsDark={setIsDark} 
+      user={user}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      onLogout={handleLogout}
+    >
+      {renderContent()}
+    </Layout>
+  );
+}
