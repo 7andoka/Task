@@ -18,7 +18,8 @@ import {
   Trash2,
   Share2,
   Edit2,
-  XCircle
+  XCircle,
+  Bell
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, Task, UserProfile, TaskStatus, TaskPriority, Subtask } from '../types';
@@ -110,6 +111,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
     if (!newTitle || !newAssignee) return;
 
     if (editingTaskId) {
+      const now = new Date().toISOString();
       const updatedTasks = tasks.map(t => t.id === editingTaskId ? {
         ...t,
         title: newTitle,
@@ -117,7 +119,8 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
         assigneeId: newAssignee,
         priority: newPriority,
         deadline: new Date(newDeadline).toISOString(),
-        estimatedTime: newEstimatedTime
+        estimatedTime: newEstimatedTime,
+        lastUpdatedAt: now
       } : t);
       await storageService.saveTasks(updatedTasks);
       setTasks(updatedTasks);
@@ -127,6 +130,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
       setIsModalOpen(false);
       resetForm();
     } else {
+      const now = new Date().toISOString();
       const newTask: Task = {
         id: Date.now().toString(),
         title: newTitle,
@@ -139,7 +143,8 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
         estimatedTime: newEstimatedTime,
         actualTimeSpent: 0,
         progress: 0,
-        createdAt: new Date().toISOString()
+        createdAt: now,
+        lastUpdatedAt: now
       };
       
       const updatedTasks = [...tasks, newTask];
@@ -179,19 +184,22 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
   };
 
   const updateTaskStatus = async (taskId: string, status: TaskStatus) => {
-    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status } : t);
+    const now = new Date().toISOString();
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status, lastUpdatedAt: now } : t);
     await storageService.saveTasks(updatedTasks);
     setTasks(updatedTasks);
     if (selectedTask && selectedTask.id === taskId) {
-      setSelectedTask({ ...selectedTask, status });
+      setSelectedTask({ ...selectedTask, status, lastUpdatedAt: now });
     }
   };
 
   const handleSubmitForReview = async (taskId: string) => {
+    const now = new Date().toISOString();
     const updatedTasks = tasks.map(t => t.id === taskId ? { 
       ...t, 
       status: 'Pending Review' as TaskStatus, 
-      completionNotes 
+      completionNotes,
+      lastUpdatedAt: now
     } : t);
     await storageService.saveTasks(updatedTasks);
     setTasks(updatedTasks);
@@ -201,27 +209,40 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
     }
   };
 
+  const handleSendReminder = async (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await storageService.sendUrgentReminder(taskId);
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask({ ...selectedTask, lastReminderAt: new Date().toISOString() });
+    }
+    // Show success toast or feedback
+    alert(lang === 'ar' ? 'تم إرسال تنبيه استعجال للموظف' : 'Urgent reminder sent to employee');
+  };
+
   const handleConfirmCompletion = async (taskId: string) => {
+    const now = new Date().toISOString();
     const updatedTasks = tasks.map(t => t.id === taskId ? { 
       ...t, 
       status: 'Completed' as TaskStatus, 
       managerRating, 
-      managerFeedback 
+      managerFeedback,
+      lastUpdatedAt: now
     } : t);
     await storageService.saveTasks(updatedTasks);
     setTasks(updatedTasks);
     if (selectedTask && selectedTask.id === taskId) {
-      setSelectedTask({ ...selectedTask, status: 'Completed', managerRating, managerFeedback });
+      setSelectedTask({ ...selectedTask, status: 'Completed', managerRating, managerFeedback, lastUpdatedAt: now });
       setIsReviewing(false);
     }
   };
 
   const updateTaskProgress = async (taskId: string, progress: number) => {
-    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, progress } : t);
+    const now = new Date().toISOString();
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, progress, lastUpdatedAt: now } : t);
     await storageService.saveTasks(updatedTasks);
     setTasks(updatedTasks);
     if (selectedTask && selectedTask.id === taskId) {
-      setSelectedTask({ ...selectedTask, progress });
+      setSelectedTask({ ...selectedTask, progress, lastUpdatedAt: now });
     }
   };
 
@@ -521,8 +542,15 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
               <div className="flex items-center justify-between mb-8">
                 <h3 className="text-2xl font-bold">{selectedTask.title}</h3>
                 <div className="flex items-center gap-2">
-                  {user.role === 'Admin' && (
+                  {(user.role === 'Admin' || user.role === 'Warehouse Manager' || user.role === 'Department Head' || user.role === 'Supervisor') && (
                     <>
+                      <button 
+                        onClick={(e) => handleSendReminder(selectedTask.id, e)}
+                        title={lang === 'ar' ? 'تنبيه استعجال' : 'Urgent Reminder'}
+                        className="p-2 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 rounded-full transition-colors"
+                      >
+                        <Bell size={20} />
+                      </button>
                       <button 
                         onClick={(e) => {
                           updateTaskStatus(selectedTask.id, 'Cancelled');

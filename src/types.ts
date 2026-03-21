@@ -41,6 +41,8 @@ export interface Task {
   endTime?: string;
   attachments?: string[];
   createdAt: string;
+  lastUpdatedAt?: string;
+  lastReminderAt?: string;
   completionNotes?: string;
   managerRating?: number;
   managerFeedback?: string;

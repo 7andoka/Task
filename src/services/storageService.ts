@@ -1,6 +1,7 @@
 import { UserProfile, Task, Subtask, Comment, Notification, AuditLog } from '../types';
 import { auth, db } from '../firebase';
 import { collection, doc, getDocs, getDoc, setDoc, getDocFromServer, query, where } from 'firebase/firestore';
+import { COLLECTIONS } from '../constants';
 
 enum OperationType {
   CREATE = 'create',
@@ -42,15 +43,6 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
-
-const COLLECTIONS = {
-  USERS: 'users',
-  TASKS: 'tasks',
-  SUBTASKS: 'subtasks',
-  COMMENTS: 'comments',
-  NOTIFICATIONS: 'notifications',
-  AUDIT_LOGS: 'audit_logs',
-};
 
 // Test connection to Firestore
 async function testConnection() {
@@ -167,6 +159,31 @@ export const storageService = {
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.TASKS);
+    }
+  },
+  saveTask: async (task: Task) => {
+    try {
+      const updatedTask = { ...task, lastUpdatedAt: new Date().toISOString() };
+      await setDoc(doc(db, COLLECTIONS.TASKS, task.id), updatedTask);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.TASKS}/${task.id}`);
+    }
+  },
+  sendUrgentReminder: async (taskId: string) => {
+    try {
+      const taskRef = doc(db, COLLECTIONS.TASKS, taskId);
+      const snapshot = await getDoc(taskRef);
+      if (snapshot.exists()) {
+        const task = snapshot.data() as Task;
+        const now = new Date().toISOString();
+        await setDoc(taskRef, { 
+          ...task, 
+          lastReminderAt: now,
+          lastUpdatedAt: now 
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.TASKS}/${taskId}`);
     }
   },
   getSubtasks: async (): Promise<Subtask[]> => {

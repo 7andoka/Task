@@ -104,6 +104,19 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
           </div>
         </div>
 
+        <div className="mt-8 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20 flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-emerald-900 dark:text-emerald-100">{lang === 'ar' ? 'تفعيل التنبيهات على المتصفح' : 'Enable Browser Notifications'}</h3>
+            <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">{lang === 'ar' ? 'مطلوب لتشغيل الرنة والاهتزاز عند التنبيهات' : 'Required for sound and vibration alerts'}</p>
+          </div>
+          <button 
+            onClick={() => Notification.requestPermission()}
+            className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
+          >
+            {lang === 'ar' ? 'تفعيل الآن' : 'Enable Now'}
+          </button>
+        </div>
+
         <div className="mt-8 flex items-center justify-between">
           <motion.div 
             initial={{ opacity: 0 }}
