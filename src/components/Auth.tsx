@@ -177,8 +177,21 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
         )}
       >
         <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20">
-            <Shield className="text-white" size={32} />
+          <div className="w-20 h-20 bg-white dark:bg-zinc-800 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/10 overflow-hidden">
+            <img 
+              src="/logo.png" 
+              alt="Company Logo" 
+              className="w-full h-full object-contain p-2"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const fallback = e.currentTarget.parentElement?.querySelector('.fallback-icon');
+                if (fallback) (fallback as HTMLElement).style.display = 'flex';
+              }}
+            />
+            <div className="fallback-icon hidden w-full h-full items-center justify-center bg-emerald-500">
+              <Shield className="text-white" size={32} />
+            </div>
           </div>
           <h1 className={cn(
             "text-3xl font-bold tracking-tight mb-2",
