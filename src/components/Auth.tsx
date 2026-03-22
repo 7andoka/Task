@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { 
   Shield
 } from 'lucide-react';
+import { Logo } from './Logo';
 import { storageService } from '../services/storageService';
 import { translations } from '../i18n';
 import { Language, UserRole, UserProfile } from '../types';
@@ -33,6 +34,10 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth) {
+      setError("Authentication service not initialized. Please check your configuration.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -98,7 +103,7 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
     setLoading(true);
     setError("");
     try {
-      if (auth.currentUser) {
+      if (auth && auth.currentUser) {
         await updatePassword(auth.currentUser, newPassword);
         const user = tempUser as UserProfile;
         user.needsPasswordChange = false;
@@ -177,9 +182,7 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
         )}
       >
         <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20">
-            <Shield className="text-white" size={32} />
-          </div>
+          <Logo size={120} showText={true} className="mb-6" />
           <h1 className={cn(
             "text-3xl font-bold tracking-tight mb-2",
             isDark ? "text-white" : "text-black"

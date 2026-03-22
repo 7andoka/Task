@@ -78,6 +78,13 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     setEditForm(null);
   };
 
+  const handleDeleteUser = async (uid: string) => {
+    if (!window.confirm(lang === 'ar' ? 'هل أنت متأكد من حذف هذا المستخدم؟' : 'Are you sure you want to delete this user?')) return;
+    
+    await storageService.deleteUser(uid);
+    setUsers(users.filter(u => u.uid !== uid));
+  };
+
   const filteredUsers = users.filter(u => 
     u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -336,6 +343,12 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   className="p-2 rounded-lg text-zinc-400 hover:text-emerald-500 hover:bg-emerald-500/10 transition-all bg-zinc-50 dark:bg-zinc-800/50"
                 >
                   <Edit2 size={16} />
+                </button>
+                <button 
+                  onClick={() => handleDeleteUser(u.uid)}
+                  className="p-2 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all bg-zinc-50 dark:bg-zinc-800/50"
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
             </motion.div>

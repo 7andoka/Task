@@ -23,38 +23,9 @@ export default function App() {
   
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [subordinates, setSubordinates] = useState<UserProfile[]>([]);
   const [lastNotificationTime, setLastNotificationTime] = useState<number>(Date.now());
-
-  useEffect(() => {
-    if (!user) return;
-
-    // Listen for real-time updates to tasks assigned to the user
-    const q = query(
-      collection(db, COLLECTIONS.TASKS),
-      where('assigneeId', '==', user.uid)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        const task = change.doc.data() as Task;
-        const now = Date.now();
-        
-        // Only notify for changes that happened after the app loaded
-        // and if the task was updated recently
-        const lastUpdate = task.lastUpdatedAt ? new Date(task.lastUpdatedAt).getTime() : 0;
-        const lastReminder = task.lastReminderAt ? new Date(task.lastReminderAt).getTime() : 0;
-        
-        if (lastUpdate > lastNotificationTime || lastReminder > lastNotificationTime) {
-          // Trigger notification effects
-          triggerNotificationEffects(task, change.type === 'added');
-          setLastNotificationTime(now);
-        }
-      });
-    });
-
-    return () => unsubscribe();
-  }, [user, lastNotificationTime]);
 
   const triggerNotificationEffects = (task: Task, isNew: boolean) => {
     // 1. Vibration
@@ -101,61 +72,89 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const fetchData = async () => {
-      try {
-        // Wait for Firebase Auth to be ready if we're using it for security rules
-        let retryCount = 0;
-        while (!auth.currentUser && retryCount < 10) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          retryCount++;
-        }
+    const unsubscribeUsers = onSnapshot(collection(db, COLLECTIONS.USERS), (snapshot) => {
+      const usersData = snapshot.docs.map(doc => doc.data() as UserProfile);
+      setAllUsers(usersData);
+    });
 
-        // Fetch all users
-        const usersData = await storageService.getUsers();
-        setAllUsers(usersData);
-        
-        let userSubordinates: UserProfile[] = [];
-        if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
-          userSubordinates = usersData.filter(u => u.uid !== user.uid);
-        } else {
-          const getAllSubordinates = (managerId: string, allUsers: UserProfile[], visited = new Set<string>()): UserProfile[] => {
-            if (visited.has(managerId)) return [];
-            visited.add(managerId);
-            
-            const directSubordinates = allUsers.filter(u => u.managerId === managerId);
-            let allSubs = [...directSubordinates];
-            for (const sub of directSubordinates) {
-              allSubs = [...allSubs, ...getAllSubordinates(sub.uid, allUsers, visited)];
-            }
-            return allSubs;
-          };
-          userSubordinates = getAllSubordinates(user.uid, usersData);
-        }
-        setSubordinates(userSubordinates);
+    const unsubscribeTasks = onSnapshot(collection(db, COLLECTIONS.TASKS), (snapshot) => {
+      const tasksData = snapshot.docs.map(doc => doc.data() as Task);
+      setAllTasks(tasksData);
+    });
 
-        // Fetch tasks based on role
-        const tasksData = await storageService.getTasks();
-        let filteredTasks = tasksData;
-        if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
-          filteredTasks = tasksData;
-        } else if (user.role === 'Worker' || user.role === 'Employee') {
-          filteredTasks = tasksData.filter(t => t.assigneeId === user.uid);
-        } else {
-          const subIds = new Set(userSubordinates.map(u => u.uid));
-          filteredTasks = tasksData.filter(t => 
-            t.assigneeId === user.uid || 
-            t.managerId === user.uid || 
-            subIds.has(t.assigneeId)
-          );
-        }
-        setTasks(filteredTasks);
-      } catch (error) {
-        console.error("Fetch Data Error:", error);
-      }
+    return () => {
+      unsubscribeUsers();
+      unsubscribeTasks();
     };
-
-    fetchData();
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Listen for real-time updates to tasks assigned to the user for notifications
+    const q = query(
+      collection(db, COLLECTIONS.TASKS),
+      where('assigneeId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        const task = change.doc.data() as Task;
+        const now = Date.now();
+        
+        // Only notify for changes that happened after the app loaded
+        // and if the task was updated recently
+        const lastUpdate = task.lastUpdatedAt ? new Date(task.lastUpdatedAt).getTime() : 0;
+        const lastReminder = task.lastReminderAt ? new Date(task.lastReminderAt).getTime() : 0;
+        
+        if (lastUpdate > lastNotificationTime || lastReminder > lastNotificationTime) {
+          // Trigger notification effects
+          triggerNotificationEffects(task, change.type === 'added');
+          setLastNotificationTime(now);
+        }
+      });
+    });
+
+    return () => unsubscribe();
+  }, [user, lastNotificationTime]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let userSubordinates: UserProfile[] = [];
+    if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+      userSubordinates = allUsers.filter(u => u.uid !== user.uid);
+    } else {
+      const getAllSubordinates = (managerId: string, allUsers: UserProfile[], visited = new Set<string>()): UserProfile[] => {
+        if (visited.has(managerId)) return [];
+        visited.add(managerId);
+        
+        const directSubordinates = allUsers.filter(u => u.managerId === managerId);
+        let allSubs = [...directSubordinates];
+        for (const sub of directSubordinates) {
+          allSubs = [...allSubs, ...getAllSubordinates(sub.uid, allUsers, visited)];
+        }
+        return allSubs;
+      };
+      userSubordinates = getAllSubordinates(user.uid, allUsers);
+    }
+    setSubordinates(userSubordinates);
+
+    let filteredTasks = allTasks;
+    if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+      filteredTasks = allTasks;
+    } else if (user.role === 'Worker' || user.role === 'Employee') {
+      filteredTasks = allTasks.filter(t => t.assigneeId === user.uid);
+    } else {
+      const subIds = new Set(userSubordinates.map(u => u.uid));
+      filteredTasks = allTasks.filter(t => 
+        t.assigneeId === user.uid || 
+        t.managerId === user.uid || 
+        subIds.has(t.assigneeId)
+      );
+    }
+    setTasks(filteredTasks);
+  }, [user, allUsers, allTasks]);
 
   const handleLogout = async () => {
     try {

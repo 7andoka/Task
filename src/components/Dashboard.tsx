@@ -46,7 +46,7 @@ export default function Dashboard({ lang, user, tasks }: DashboardProps) {
   };
 
   const chartData = [
-    { name: t.completed, value: stats.completed, color: '#10b981' },
+    { name: t.completed, value: stats.completed, color: '#006456' },
     { name: t.delayed, value: stats.delayed, color: '#ef4444' },
     { name: t.pendingReview, value: stats.pendingReview, color: '#a855f7' },
     { name: t.pending, value: stats.pending, color: '#f59e0b' },

@@ -18,6 +18,7 @@ import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import ConnectionStatus from './ConnectionStatus';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -196,6 +197,7 @@ export default function Layout({
           
           {user && (
             <div className="flex items-center gap-2 md:gap-4 shrink-0 ps-4">
+              <ConnectionStatus />
               <button 
                 onClick={() => setIsDesktopMode(!isDesktopMode)}
                 className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors"
