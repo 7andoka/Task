@@ -1,8 +1,8 @@
 {
   "entities": {
     "UserProfile": {
-      "title": "User Profile",
-      "description": "Information about a user in the system",
+      "title": "UserProfile",
+      "description": "User profile information",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
@@ -16,20 +16,14 @@
         "phone": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "needsPasswordChange": { "type": "boolean" },
-        "notificationPreferences": {
-          "type": "object",
-          "properties": {
-            "newAssignments": { "type": "boolean" },
-            "deadlineReminders": { "type": "boolean" },
-            "statusChanges": { "type": "boolean" }
-          }
-        }
+        "initialPassword": { "type": "string" },
+        "password": { "type": "string" }
       },
       "required": ["uid", "email", "displayName", "role", "createdAt"]
     },
     "Task": {
       "title": "Task",
-      "description": "A task assigned to a user",
+      "description": "Warehouse task information",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -43,19 +37,13 @@
         "progress": { "type": "number" },
         "assigneeId": { "type": "string" },
         "managerId": { "type": "string" },
-        "startTime": { "type": "string", "format": "date-time" },
-        "endTime": { "type": "string", "format": "date-time" },
-        "attachments": { "type": "array", "items": { "type": "string" } },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "completionNotes": { "type": "string" },
-        "managerRating": { "type": "number" },
-        "managerFeedback": { "type": "string" }
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "title", "description", "priority", "status", "deadline", "estimatedTime", "actualTimeSpent", "progress", "assigneeId", "managerId", "createdAt"]
+      "required": ["id", "title", "priority", "status", "deadline", "assigneeId", "managerId", "createdAt"]
     },
     "Subtask": {
       "title": "Subtask",
-      "description": "A subtask of a task",
+      "description": "Task sub-item",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -64,20 +52,56 @@
         "isCompleted": { "type": "boolean" }
       },
       "required": ["id", "taskId", "title", "isCompleted"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Task comment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "taskId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "taskId", "userId", "userName", "text", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "message", "type", "isRead", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System audit log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "action", "details", "createdAt"]
     }
   },
   "firestore": {
-    "users": {
-      "schema": "UserProfile",
-      "description": "Collection of user profiles"
-    },
-    "tasks": {
-      "schema": "Task",
-      "description": "Collection of tasks"
-    },
-    "subtasks": {
-      "schema": "Subtask",
-      "description": "Collection of subtasks"
-    }
+    "users": { "schema": "UserProfile", "description": "User profiles collection" },
+    "tasks": { "schema": "Task", "description": "Tasks collection" },
+    "subtasks": { "schema": "Subtask", "description": "Subtasks collection" },
+    "comments": { "schema": "Comment", "description": "Comments collection" },
+    "notifications": { "schema": "Notification", "description": "Notifications collection" },
+    "audit_logs": { "schema": "AuditLog", "description": "Audit logs collection" }
   }
 }

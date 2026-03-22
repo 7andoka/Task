@@ -107,7 +107,8 @@ export const translations = {
     managerRating: "تقييم المدير",
     managerFeedback: "ملاحظات المدير",
     confirmCompletion: "تأكيد الانتهاء",
-    rateTask: "تقييم المهمة"
+    rateTask: "تقييم المهمة",
+    serverOffline: "السيرفر غير متصل - يرجى التحقق من الاتصال"
   },
   en: {
     warehouseManager: "Warehouse Manager",
@@ -217,6 +218,7 @@ export const translations = {
     managerRating: "Manager Rating",
     managerFeedback: "Manager Feedback",
     confirmCompletion: "Confirm Completion",
-    rateTask: "Rate Task"
+    rateTask: "Rate Task",
+    serverOffline: "Server is offline - please check your connection"
   }
 };

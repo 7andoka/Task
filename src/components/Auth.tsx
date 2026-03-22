@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { LogIn, Lock, User, Eye, EyeOff } from 'lucide-react';
-import { auth } from '../firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { storageService } from '../services/storageService';
 import { UserProfile, Language } from '../types';
 import { translations } from '../i18n';
@@ -33,10 +31,14 @@ export default function Auth({ lang, onLogin }: AuthProps) {
         return;
       }
 
-      // Using the user's email for Firebase Auth
-      await signInWithEmailAndPassword(auth, user.email, password);
-      onLogin(user);
-    } catch (err) {
+      // Simple password check against database
+      const userPassword = user.password || user.initialPassword;
+      if (password === userPassword) {
+        onLogin(user);
+      } else {
+        setError(t.invalidCredentials);
+      }
+    } catch (err: any) {
       setError(t.invalidCredentials);
       console.error("Login Error:", err);
     } finally {

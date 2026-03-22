@@ -31,10 +31,9 @@ interface TaskListProps {
   tasks: Task[];
   subordinates: UserProfile[];
   allUsers: UserProfile[];
-  setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
 }
 
-export default function TaskList({ lang, user, tasks, subordinates, allUsers, setTasks }: TaskListProps) {
+export default function TaskList({ lang, user, tasks, subordinates, allUsers }: TaskListProps) {
   const t = translations[lang];
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -123,7 +122,6 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
         lastUpdatedAt: now
       } : t);
       await storageService.saveTasks(updatedTasks);
-      setTasks(updatedTasks);
       if (selectedTask && selectedTask.id === editingTaskId) {
         setSelectedTask(updatedTasks.find(t => t.id === editingTaskId) || null);
       }
@@ -149,7 +147,6 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
       
       const updatedTasks = [...tasks, newTask];
       await storageService.saveTasks(updatedTasks);
-      setTasks(updatedTasks);
       setIsModalOpen(false);
       resetForm();
       
@@ -187,7 +184,6 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
     const now = new Date().toISOString();
     const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status, lastUpdatedAt: now } : t);
     await storageService.saveTasks(updatedTasks);
-    setTasks(updatedTasks);
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask({ ...selectedTask, status, lastUpdatedAt: now });
     }
@@ -202,7 +198,6 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
       lastUpdatedAt: now
     } : t);
     await storageService.saveTasks(updatedTasks);
-    setTasks(updatedTasks);
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask({ ...selectedTask, status: 'Pending Review', completionNotes });
       setIsSubmittingReview(false);
@@ -229,7 +224,6 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
       lastUpdatedAt: now
     } : t);
     await storageService.saveTasks(updatedTasks);
-    setTasks(updatedTasks);
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask({ ...selectedTask, status: 'Completed', managerRating, managerFeedback, lastUpdatedAt: now });
       setIsReviewing(false);
@@ -240,7 +234,6 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
     const now = new Date().toISOString();
     const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, progress, lastUpdatedAt: now } : t);
     await storageService.saveTasks(updatedTasks);
-    setTasks(updatedTasks);
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask({ ...selectedTask, progress, lastUpdatedAt: now });
     }
@@ -250,9 +243,15 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
     e.stopPropagation();
     if (!window.confirm(lang === 'ar' ? 'هل أنت متأكد من حذف هذه المهمة؟' : 'Are you sure you want to delete this task?')) return;
     
-    const updatedTasks = tasks.filter(t => t.id !== taskId);
-    await storageService.saveTasks(updatedTasks);
-    setTasks(updatedTasks);
+    try {
+      await storageService.deleteTask(taskId);
+      // Local state will be updated by onSnapshot in App.tsx
+      if (selectedTask && selectedTask.id === taskId) {
+        setSelectedTask(null);
+      }
+    } catch (error) {
+      console.error("Delete Task Error:", error);
+    }
   };
 
   const getPriorityColor = (p: TaskPriority) => {
@@ -625,7 +624,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers, se
                       type="range" 
                       min="0" 
                       max="100" 
-                      value={selectedTask.progress}
+                      value={selectedTask.progress ?? 0}
                       onChange={(e) => updateTaskProgress(selectedTask.id, parseInt(e.target.value))}
                       className="w-full accent-emerald-500"
                     />

@@ -92,7 +92,7 @@ export default function OrgChart({ lang, users }: OrgChartProps) {
 
   const filteredUsers = users.filter(u => 
     u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+    (u.username || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (

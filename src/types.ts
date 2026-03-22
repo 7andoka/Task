@@ -9,7 +9,7 @@ export interface NotificationPreferences {
 export interface UserProfile {
   uid: string;
   username?: string;
-  email: string;
+  email?: string;
   displayName: string;
   role: UserRole;
   managerId?: string;
@@ -19,6 +19,7 @@ export interface UserProfile {
   createdAt: string;
   needsPasswordChange?: boolean;
   initialPassword?: string;
+  password?: string;
   notificationPreferences?: NotificationPreferences;
 }
 

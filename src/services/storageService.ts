@@ -18,39 +18,42 @@ interface FirestoreErrorInfo {
   path: string | null;
   authInfo: {
     userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
+    email?: string | null | undefined;
+    emailVerified?: boolean | undefined;
   }
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
     },
     operationType,
     path
   };
   
-  // Don't throw or log for initial loads if not authenticated to avoid crashing the whole app
-  if (operationType === OperationType.LIST && !auth.currentUser) {
-    return [];
-  }
+  console.error('Firestore Error Details:', JSON.stringify(errInfo));
   
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  // If it's a permission error or offline error, we want to know
+  if (errInfo.error.includes('permission') || errInfo.error.includes('offline')) {
+    window.dispatchEvent(new CustomEvent('firestore-connection-error', { detail: errInfo.error }));
+  }
+
   throw new Error(JSON.stringify(errInfo));
 }
 
 // Test connection to Firestore
 async function testConnection() {
   try {
+    console.log("Testing Firestore connection to database:", (db as any)._databaseId?.database || 'default');
     await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log("Firestore connection successful.");
   } catch (error) {
+    console.error("Firestore Connection Test Error:", error);
     if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. ");
+      console.error("Please check your Firebase configuration. The client is reporting as offline.");
+      window.dispatchEvent(new CustomEvent('firestore-connection-error', { detail: 'offline' }));
     }
   }
 }
@@ -60,16 +63,22 @@ export const storageService = {
   getUsers: async (): Promise<UserProfile[]> => {
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.USERS));
-      const users = snapshot.docs.map(doc => doc.data() as UserProfile);
+      const users = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          uid: data.uid || doc.id
+        } as UserProfile;
+      });
       if (users.length === 0) {
         const defaultAdmin: UserProfile = {
           uid: 'admin',
           username: 'admin',
-          email: 'admin@warehouse.com',
           displayName: 'System Administrator',
           role: 'Admin',
           needsPasswordChange: false,
-          initialPassword: '123456',
+          initialPassword: 'admin',
+          password: 'admin',
           createdAt: new Date().toISOString()
         };
         await setDoc(doc(db, COLLECTIONS.USERS, defaultAdmin.username), defaultAdmin);
@@ -77,13 +86,13 @@ export const storageService = {
       }
       return users;
     } catch (error) {
-      return handleFirestoreError(error, OperationType.LIST, COLLECTIONS.USERS) as UserProfile[];
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.USERS);
     }
   },
   saveUsers: async (users: UserProfile[]) => {
     try {
       for (const user of users) {
-        await setDoc(doc(db, COLLECTIONS.USERS, user.uid), user);
+        await setDoc(doc(db, COLLECTIONS.USERS, user.username), user);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.USERS);
@@ -123,11 +132,11 @@ export const storageService = {
         const defaultAdmin: UserProfile = {
           uid: 'admin',
           username: 'admin',
-          email: 'admin@warehouse.com',
           displayName: 'System Administrator',
           role: 'Admin',
           needsPasswordChange: false,
-          initialPassword: '123456',
+          initialPassword: 'admin',
+          password: 'admin',
           createdAt: new Date().toISOString()
         };
         try {
@@ -155,9 +164,15 @@ export const storageService = {
   getTasks: async (): Promise<Task[]> => {
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.TASKS));
-      return snapshot.docs.map(doc => doc.data() as Task);
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: data.id || doc.id
+        } as Task;
+      });
     } catch (error) {
-      return handleFirestoreError(error, OperationType.LIST, COLLECTIONS.TASKS) as Task[];
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.TASKS);
     }
   },
   saveTasks: async (tasks: Task[]) => {
@@ -169,6 +184,14 @@ export const storageService = {
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.TASKS);
     }
   },
+  deleteTask: async (taskId: string) => {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.TASKS, taskId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.TASKS}/${taskId}`);
+    }
+  },
+
   saveTask: async (task: Task) => {
     try {
       const updatedTask = { ...task, lastUpdatedAt: new Date().toISOString() };
@@ -199,7 +222,7 @@ export const storageService = {
       const snapshot = await getDocs(collection(db, COLLECTIONS.SUBTASKS));
       return snapshot.docs.map(doc => doc.data() as Subtask);
     } catch (error) {
-      return handleFirestoreError(error, OperationType.LIST, COLLECTIONS.SUBTASKS) as Subtask[];
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.SUBTASKS);
     }
   },
   saveSubtasks: async (subtasks: Subtask[]) => {
@@ -217,7 +240,7 @@ export const storageService = {
       const snapshot = await getDocs(collection(db, COLLECTIONS.COMMENTS));
       return snapshot.docs.map(doc => doc.data() as Comment).filter(c => c.taskId === taskId);
     } catch (error) {
-      return handleFirestoreError(error, OperationType.LIST, COLLECTIONS.COMMENTS) as Comment[];
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.COMMENTS);
     }
   },
   saveComment: async (comment: Comment) => {
@@ -232,7 +255,7 @@ export const storageService = {
       const snapshot = await getDocs(collection(db, COLLECTIONS.NOTIFICATIONS));
       return snapshot.docs.map(doc => doc.data() as Notification).filter(n => n.userId === userId);
     } catch (error) {
-      return handleFirestoreError(error, OperationType.LIST, COLLECTIONS.NOTIFICATIONS) as Notification[];
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.NOTIFICATIONS);
     }
   },
   saveNotification: async (notification: Notification) => {

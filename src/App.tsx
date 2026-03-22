@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from './firebase';
+import { db } from './firebase';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { COLLECTIONS } from './constants';
 import Auth from './components/Auth';
@@ -12,6 +11,7 @@ import Team from './components/Team';
 import Settings from './components/Settings';
 import { Language, UserProfile, Task } from './types';
 import { storageService } from './services/storageService';
+import { translations } from './i18n';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -20,33 +20,117 @@ export default function App() {
   const [isDark, setIsDark] = useState(true);
   const [activeTab, setActiveTab] = useState('tasks');
   
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
-  const [subordinates, setSubordinates] = useState<UserProfile[]>([]);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [isDataLoading, setIsDataLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const refreshData = async () => {
+    if (!user) return;
+    setIsRefreshing(true);
+    try {
+      console.log("Manually refreshing data...");
+      const fetchedUsers = await storageService.getUsers();
+      const fetchedTasks = await storageService.getTasks();
+      setAllUsers(fetchedUsers);
+      setAllTasks(fetchedTasks);
+      console.log(`Manual refresh complete. Users: ${fetchedUsers.length}, Tasks: ${fetchedTasks.length}`);
+    } catch (error) {
+      console.error("Manual refresh error:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const userProfile = await storageService.getUserByUid(firebaseUser.uid);
-        setUser(userProfile || null);
-      } else {
-        setUser(null);
+    // Listen for connection errors from storageService
+    const handleConnectionError = (e: any) => {
+      if (e.detail?.includes('offline')) {
+        setConnectionError(translations[lang].serverOffline);
       }
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    };
+    window.addEventListener('firestore-connection-error', handleConnectionError);
+    
+    // Also listen for a custom 'refresh-data' event
+    const handleRefreshRequest = () => refreshData();
+    window.addEventListener('refresh-data', handleRefreshRequest);
+
+    return () => {
+      window.removeEventListener('firestore-connection-error', handleConnectionError);
+      window.removeEventListener('refresh-data', handleRefreshRequest);
+    };
+  }, [lang, user]);
+
+  useEffect(() => {
+    // We use custom username/password login, so we don't need Firebase Auth.
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    const unsubTasks = onSnapshot(query(collection(db, COLLECTIONS.TASKS)), (snapshot) => {
-      setAllTasks(snapshot.docs.map(doc => doc.data() as Task));
-    });
-    const unsubUsers = onSnapshot(query(collection(db, COLLECTIONS.USERS)), (snapshot) => {
-      setAllUsers(snapshot.docs.map(doc => doc.data() as UserProfile));
-    });
+    console.log("Attaching Firestore listeners for user:", user.uid);
+    const unsubTasks = onSnapshot(
+      query(collection(db, COLLECTIONS.TASKS)), 
+      (snapshot) => {
+        const tasksData = snapshot.docs.map(doc => doc.data() as Task);
+        console.log(`Tasks updated: ${tasksData.length} tasks found.`);
+        // Deduplicate by ID
+        const uniqueTasks = Array.from(new Map(tasksData.map(t => [t.id, t])).values());
+        setAllTasks(uniqueTasks);
+      },
+      (error) => {
+        console.error("Tasks Snapshot Error:", error);
+        setConnectionError(lang === 'ar' ? 'خطأ في مزامنة المهام' : 'Error syncing tasks');
+      }
+    );
+
+    const unsubUsers = onSnapshot(
+      query(collection(db, COLLECTIONS.USERS)), 
+      (snapshot) => {
+        const usersData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            ...data,
+            uid: data.uid || doc.id
+          } as UserProfile;
+        });
+        console.log(`Users updated: ${usersData.length} users found.`);
+        // Deduplicate by UID to prevent duplicate key errors
+        const uniqueUsers = Array.from(new Map(usersData.map(u => [u.uid, u])).values());
+        setAllUsers(uniqueUsers);
+      },
+      (error) => {
+        console.error("Users Snapshot Error:", error);
+        setConnectionError(lang === 'ar' ? 'خطأ في مزامنة المستخدمين' : 'Error syncing users');
+      }
+    );
+
+    // Initial fetch to ensure bootstrapping if collections are empty
+    const initialFetch = async () => {
+      if (allUsers.length > 0) return;
+      setIsDataLoading(true);
+      try {
+        console.log("Initial fetch starting...");
+        const users = await storageService.getUsers();
+        if (users && users.length > 0) {
+          const uniqueUsers = Array.from(new Map(users.map(u => [u.uid, u])).values());
+          setAllUsers(uniqueUsers);
+        }
+        const tasks = await storageService.getTasks();
+        if (tasks && tasks.length > 0) {
+          const uniqueTasks = Array.from(new Map(tasks.map(t => [t.id, t])).values());
+          setAllTasks(uniqueTasks);
+        }
+        console.log("Initial fetch complete.");
+      } catch (err) {
+        console.error("Initial fetch error:", err);
+      } finally {
+        setIsDataLoading(false);
+      }
+    };
+    initialFetch();
 
     return () => {
       unsubTasks();
@@ -54,47 +138,66 @@ export default function App() {
     };
   }, [user]);
 
+  // Derive subordinates and filtered tasks
+  const subordinates = React.useMemo(() => {
+    if (!user || allUsers.length === 0) return [];
+    
+    if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+      return allUsers.filter(u => u.uid !== user.uid);
+    }
+    
+    const getAllSubordinates = (managerId: string, users: UserProfile[], visited = new Set<string>()): UserProfile[] => {
+      if (visited.has(managerId)) return [];
+      visited.add(managerId);
+      
+      const directSubordinates = users.filter(u => u.managerId === managerId);
+      let allSubs = [...directSubordinates];
+      for (const sub of directSubordinates) {
+        const subSubs = getAllSubordinates(sub.uid, users, visited);
+        allSubs = [...allSubs, ...subSubs];
+      }
+      // Ensure uniqueness
+      return Array.from(new Map(allSubs.map(u => [u.uid, u])).values());
+    };
+    
+    return getAllSubordinates(user.uid, allUsers);
+  }, [user, allUsers]);
+
+  const tasks = React.useMemo(() => {
+    if (!user) return [];
+    
+    if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+      return allTasks;
+    }
+    
+    if (user.role === 'Worker') {
+      return allTasks.filter(t => t.assigneeId === user.uid);
+    }
+    
+    const subIds = new Set(subordinates.map(u => u.uid));
+    return allTasks.filter(t => 
+      t.assigneeId === user.uid || 
+      t.managerId === user.uid || 
+      subIds.has(t.assigneeId)
+    );
+  }, [user, allTasks, subordinates]);
+
+  // Keep user state in sync with allUsers
   useEffect(() => {
-    if (!user) return;
-
-    let userSubordinates: UserProfile[] = [];
-    if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
-      userSubordinates = allUsers.filter(u => u.uid !== user.uid);
-    } else {
-      const getAllSubordinates = (managerId: string, allUsers: UserProfile[], visited = new Set<string>()): UserProfile[] => {
-        if (visited.has(managerId)) return [];
-        visited.add(managerId);
-        
-        const directSubordinates = allUsers.filter(u => u.managerId === managerId);
-        let allSubs = [...directSubordinates];
-        for (const sub of directSubordinates) {
-          allSubs = [...allSubs, ...getAllSubordinates(sub.uid, allUsers, visited)];
-        }
-        return allSubs;
-      };
-      userSubordinates = getAllSubordinates(user.uid, allUsers);
+    if (!user || allUsers.length === 0) return;
+    const updatedUser = allUsers.find(u => u.uid === user.uid);
+    if (updatedUser && (updatedUser.displayName !== user.displayName || updatedUser.role !== user.role)) {
+      setUser(updatedUser);
     }
-    setSubordinates(userSubordinates);
+  }, [allUsers, user]);
 
-    let filteredTasks = allTasks;
-    if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
-      filteredTasks = allTasks;
-    } else if (user.role === 'Worker') {
-      filteredTasks = allTasks.filter(t => t.assigneeId === user.uid);
-    } else {
-      const subIds = new Set(userSubordinates.map(u => u.uid));
-      filteredTasks = allTasks.filter(t => 
-        t.assigneeId === user.uid || 
-        t.managerId === user.uid || 
-        subIds.has(t.assigneeId)
-      );
-    }
-    setTasks(filteredTasks);
-  }, [user, allUsers, allTasks]);
-
-  const handleLogout = async () => {
-    await auth.signOut();
+  const handleLogout = () => {
     setUser(null);
+  };
+
+  const handleLogin = (u: UserProfile) => {
+    console.log("User logged in:", u.username, "Role:", u.role);
+    setUser(u);
   };
 
   if (loading) {
@@ -106,7 +209,16 @@ export default function App() {
   }
 
   if (!user) {
-    return <Auth lang={lang} onLogin={setUser} />;
+    return (
+      <>
+        {connectionError && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-red-500 text-white px-6 py-3 rounded-2xl shadow-2xl font-bold animate-bounce">
+            {connectionError}
+          </div>
+        )}
+        <Auth lang={lang} onLogin={handleLogin} />
+      </>
+    );
   }
 
   const renderContent = () => {
@@ -114,7 +226,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard lang={lang} user={user} tasks={tasks} />;
       case 'tasks':
-        return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} setTasks={setTasks} />;
+        return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':
         return <Team lang={lang} users={subordinates} tasks={tasks} />;
       case 'users':
@@ -122,7 +234,7 @@ export default function App() {
       case 'settings':
         return <Settings lang={lang} user={user} setUser={setUser} />;
       default:
-        return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} setTasks={setTasks} />;
+        return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
     }
   };
 
@@ -137,7 +249,20 @@ export default function App() {
       setActiveTab={setActiveTab}
       onLogout={handleLogout}
     >
-      {renderContent()}
+      {connectionError && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-red-500 text-white px-6 py-3 rounded-2xl shadow-2xl font-bold animate-bounce flex items-center gap-2">
+          <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+          {connectionError}
+        </div>
+      )}
+      
+      {isDataLoading && (
+        <div className="flex items-center justify-center p-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+        </div>
+      )}
+      
+      {!isDataLoading && renderContent()}
     </Layout>
   );
 }

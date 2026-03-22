@@ -34,7 +34,6 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
   const [createForm, setCreateForm] = React.useState({
     displayName: "",
     username: "",
-    email: "",
     password: "",
     role: "Worker" as UserRole,
     managerId: "",
@@ -47,24 +46,35 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateLoading(true);
-    // Simulate user creation
-    const newUser: UserProfile = {
-        uid: createForm.username, // Use username as initial UID/DocID
-        displayName: createForm.displayName,
-        username: createForm.username,
-        email: createForm.email || createForm.username + '@warehouse.local',
-        role: createForm.role,
-        managerId: createForm.managerId,
-        phone: createForm.phone,
-        initialPassword: createForm.password,
-        needsPasswordChange: true,
-        createdAt: new Date().toISOString()
-    };
-    await storageService.saveUser(newUser);
-    setUsers([...users, newUser]);
-    setIsCreateModalOpen(false);
-    setCreateForm({ displayName: "", username: "", email: "", password: "", role: "Worker", managerId: "", phone: "" });
-    setCreateLoading(false);
+    
+    try {
+      // Create user profile in Firestore directly without Firebase Auth
+      const newUser: UserProfile = {
+          uid: createForm.username, // Use username as UID for simplicity in this mode
+          displayName: createForm.displayName,
+          username: createForm.username,
+          role: createForm.role,
+          managerId: createForm.managerId,
+          phone: createForm.phone,
+          password: createForm.password, // Store password directly
+          initialPassword: createForm.password,
+          needsPasswordChange: true,
+          createdAt: new Date().toISOString()
+      };
+      
+      await storageService.saveUser(newUser);
+      setUsers(prev => {
+        if (prev.find(u => u.uid === newUser.uid)) return prev;
+        return [...prev, newUser];
+      });
+      setIsCreateModalOpen(false);
+      setCreateForm({ displayName: "", username: "", password: "", role: "Worker", managerId: "", phone: "" });
+    } catch (err: any) {
+      console.error("User Creation Error:", err);
+      alert(lang === 'ar' ? `خطأ في إنشاء المستخدم: ${err.message}` : `Error creating user: ${err.message}`);
+    } finally {
+      setCreateLoading(false);
+    }
   };
 
   const handleUpdateUser = async (e: React.FormEvent) => {
@@ -87,7 +97,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
 
   const filteredUsers = users.filter(u => 
     u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+    (u.username || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -144,15 +154,6 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   required
                   value={createForm.username}
                   onChange={(e) => setCreateForm({...createForm, username: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-zinc-500">Email</label>
-                <input 
-                  type="email"
-                  value={createForm.email}
-                  onChange={(e) => setCreateForm({...createForm, email: e.target.value})}
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -232,7 +233,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                 <input 
                   type="text"
                   required
-                  value={editForm.displayName}
+                  value={editForm.displayName || ''}
                   onChange={(e) => setEditForm({...editForm, displayName: e.target.value})}
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                 />
@@ -242,17 +243,8 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                 <input 
                   type="text"
                   required
-                  value={editForm.username}
+                  value={editForm.username || ''}
                   onChange={(e) => setEditForm({...editForm, username: e.target.value})}
-                  className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-zinc-500">Email</label>
-                <input 
-                  type="email"
-                  value={editForm.email}
-                  onChange={(e) => setEditForm({...editForm, email: e.target.value})}
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -303,7 +295,12 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
 
       <div className="space-y-3">
         <div className="flex flex-col gap-2">
-          {filteredUsers.map(u => (
+          {filteredUsers.length === 0 ? (
+            <div className="p-12 text-center text-zinc-500 bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-zinc-800/20">
+              {lang === 'ar' ? 'لم يتم العثور على مستخدمين' : 'No users found'}
+            </div>
+          ) : (
+            filteredUsers.map(u => (
             <motion.div 
               key={u.uid}
               whileHover={{ scale: 1.01 }}
@@ -316,7 +313,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                 <div className="min-w-0 flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-4">
                   <div className="min-w-0">
                     <h3 className="font-bold text-sm truncate">{u.displayName}</h3>
-                    <p className="text-zinc-500 text-[10px] truncate">{u.username || u.email}</p>
+                    <p className="text-zinc-500 text-[10px] truncate">{u.username}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-500">
@@ -352,7 +349,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                 </button>
               </div>
             </motion.div>
-          ))}
+          )))}
         </div>
       </div>
     </div>
