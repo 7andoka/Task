@@ -1,313 +1,111 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { 
-  Shield
-} from 'lucide-react';
+import { LogIn, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { storageService } from '../services/storageService';
+import { UserProfile, Language } from '../types';
 import { translations } from '../i18n';
-import { Language, UserRole, UserProfile } from '../types';
 
 interface AuthProps {
   lang: Language;
-  isDark: boolean;
-  onAuthComplete: (user: UserProfile) => void;
+  onLogin: (user: UserProfile) => void;
 }
 
-import { auth } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut } from 'firebase/auth';
-
-export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
+export default function Auth({ lang, onLogin }: AuthProps) {
   const t = translations[lang];
-  const [step, setStep] = React.useState<'login' | 'role' | 'manager' | 'changePassword'>('login');
-  const [loading, setLoading] = React.useState(false);
-  const [tempUser, setTempUser] = React.useState<any>(null);
-  const [selectedRole, setSelectedRole] = React.useState<UserRole | null>(null);
-  const [availableManagers, setAvailableManagers] = React.useState<UserProfile[]>([]);
-  const [selectedManager, setSelectedManager] = React.useState<string>("");
-  
-  const [username, setUsername] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [newPassword, setNewPassword] = React.useState("");
-  const [confirmPassword, setConfirmPassword] = React.useState("");
-  const [error, setError] = React.useState("");
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
+    setIsLoading(true);
+    setError('');
+
     try {
-      // Simple Firestore-based login
-      const profile = await storageService.getUserByUsername(username);
-      
-      if (!profile) {
-        throw new Error(lang === 'ar' ? "اسم المستخدم غير موجود" : "Username not found");
-      }
-
-      const firebasePassword = password.length < 6 ? `${password}_secure` : password;
-      const loginEmail = profile.email || `${username}@warehouse.com`;
-      let firebaseUser;
-
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, loginEmail, firebasePassword);
-        firebaseUser = userCredential.user;
-      } catch (signInError: any) {
-        console.log("Firebase sign-in error:", signInError.code, signInError.message);
-        if (signInError.code === 'auth/user-not-found') {
-          // If user not found in Firebase, check local password to see if we should create them
-          const isMatch = password === profile.initialPassword || 
-                          (profile as any).password === password ||
-                          (profile.username === 'admin' && (password === '123' || password === '123456'));
-          
-          console.log("Local password match:", isMatch, "Password:", password, "Initial:", profile.initialPassword);
-
-          if (isMatch) {
-            const signupCred = await createUserWithEmailAndPassword(auth, loginEmail, firebasePassword);
-            firebaseUser = signupCred.user;
-          } else {
-            throw new Error(lang === 'ar' ? "كلمة المرور غير صحيحة" : "Invalid password");
-          }
-        } else if (signInError.code === 'auth/invalid-credential' || signInError.code === 'auth/wrong-password') {
-          throw new Error(lang === 'ar' ? "كلمة المرور غير صحيحة" : "Invalid password");
-        } else {
-          throw signInError;
-        }
-      }
-
-      // CRITICAL: Update profile UID to match Firebase UID to prevent "Logout" on first login
-      if (firebaseUser && profile.uid !== firebaseUser.uid) {
-        const updatedProfile = { ...profile, uid: firebaseUser.uid };
-        await storageService.saveUser(updatedProfile);
-        onAuthComplete(updatedProfile);
+      const user = await storageService.getUserByUsername(username);
+      if (!user) {
+        setError(t.userNotFound);
+        setIsLoading(false);
         return;
       }
-        
-      onAuthComplete(profile);
-    } catch (error: any) {
-      console.error("Login Error:", error);
-      let errorMessage = error.message;
-      try {
-        const parsedError = JSON.parse(error.message);
-        if (parsedError.error) {
-          errorMessage = parsedError.error;
-        }
-      } catch (e) {
-        // Not JSON, keep original message
-      }
-      setError(errorMessage);
+
+      // Using the user's email for Firebase Auth
+      await signInWithEmailAndPassword(auth, user.email, password);
+      onLogin(user);
+    } catch (err) {
+      setError(t.invalidCredentials);
+      console.error("Login Error:", err);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setError(t.passwordMismatch);
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      if (auth.currentUser) {
-        await updatePassword(auth.currentUser, newPassword);
-        const user = tempUser as UserProfile;
-        user.needsPasswordChange = false;
-        await storageService.saveUser(user);
-        onAuthComplete(user);
-      }
-    } catch (error) {
-      console.error("Change Password Error:", error);
-      setError("Failed to change password");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRoleSelect = async (role: UserRole) => {
-    setSelectedRole(role);
-    if (role === 'Admin' || role === 'Warehouse Manager') {
-      await finalizeSignup(role, "");
-    } else {
-      setLoading(true);
-      try {
-        const users = await storageService.getUsers();
-        const managers = users.filter(u => u.role === 'Admin' || u.role === 'Warehouse Manager' || u.role === 'Department Head' || u.role === 'Supervisor');
-        setAvailableManagers(managers);
-        setStep('manager');
-      } catch (error) {
-        console.error("Error fetching managers:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const finalizeSignup = async (role: UserRole, managerId: string) => {
-    setLoading(true);
-    const newUser: UserProfile = {
-      uid: tempUser.uid,
-      email: tempUser.email,
-      displayName: tempUser.displayName,
-      photoURL: tempUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${tempUser.uid}`,
-      role,
-      managerId,
-      createdAt: new Date().toISOString()
-    };
-
-    try {
-      await storageService.saveUser(newUser);
-      onAuthComplete(newUser);
-    } catch (error) {
-      console.error("Signup Error:", error);
-      setError("Failed to create user profile");
-    } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className={cn(
-      "min-h-screen flex items-center justify-center p-6 overflow-hidden relative transition-colors duration-300",
-      isDark ? "dark bg-black" : "bg-white"
-    )}>
-      {/* Background Effects */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500/20 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/20 rounded-full blur-[120px]" />
-      </div>
-
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={cn(
-          "relative w-full max-w-md backdrop-blur-xl border rounded-[40px] p-10 shadow-2xl transition-all duration-300",
-          isDark 
-            ? "bg-zinc-900/50 border-zinc-100/10" 
-            : "bg-white/80 border-zinc-800/10"
-        )}
+        className="bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-xl w-full max-w-md border border-zinc-200 dark:border-zinc-800"
       >
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20">
-            <Shield className="text-white" size={32} />
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-600 dark:text-emerald-400">
+            <LogIn size={32} />
           </div>
-          <h1 className={cn(
-            "text-3xl font-bold tracking-tight mb-2",
-            isDark ? "text-white" : "text-black"
-          )}>
-            {lang === 'ar' ? 'تسجيل الدخول' : 'Sign In'}
-          </h1>
+          <h1 className="text-2xl font-bold">{t.login}</h1>
+          <p className="text-zinc-500">{t.welcomeBack}</p>
         </div>
-        
-        {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-sm text-center">
-            {error}
-          </div>
-        )}
 
-        {step === 'login' && (
-          <div className="space-y-6">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <label className={cn("text-sm font-semibold", isDark ? "text-zinc-300" : "text-zinc-700")}>{t.username}</label>
-                <input 
-                  type="text"
-                  required
-                  placeholder={lang === 'ar' ? "اسم المستخدم" : "Username"}
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className={cn(
-                    "w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-emerald-500 transition-all",
-                    isDark 
-                      ? "bg-zinc-800/50 border-zinc-100/10 text-white" 
-                      : "bg-zinc-50 border-zinc-800/10 text-black"
-                  )}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className={cn("text-sm font-semibold", isDark ? "text-zinc-300" : "text-zinc-700")}>{t.password}</label>
-                <input 
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={cn(
-                    "w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-emerald-500 transition-all",
-                    isDark 
-                      ? "bg-zinc-800/50 border-zinc-100/10 text-white" 
-                      : "bg-zinc-50 border-zinc-800/10 text-black"
-                  )}
-                />
-              </div>
-              <button 
-                type="submit"
-                disabled={loading}
-                className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 disabled:opacity-50"
-              >
-                {loading ? (
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
-                ) : (
-                  <span>{t.login}</span>
-                )}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {step === 'changePassword' && (
-          <div className="space-y-6">
-            <div className="text-center mb-6">
-              <p className={isDark ? "text-zinc-400" : "text-zinc-600"}>{t.firstLoginMessage}</p>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5">{t.username}</label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                required
+              />
             </div>
-            <form onSubmit={handleChangePassword} className="space-y-4">
-              <div className="space-y-2">
-                <label className={cn("text-sm font-semibold", isDark ? "text-zinc-500" : "text-zinc-400")}>{t.newPassword}</label>
-                <input 
-                  type="password"
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className={cn(
-                    "w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-emerald-500 transition-all",
-                    isDark 
-                      ? "bg-zinc-800/50 border-zinc-100/10 text-white" 
-                      : "bg-zinc-50 border-zinc-800/10 text-black"
-                  )}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className={cn("text-sm font-semibold", isDark ? "text-zinc-500" : "text-zinc-400")}>{t.confirmPassword}</label>
-                <input 
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={cn(
-                    "w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-emerald-500 transition-all",
-                    isDark 
-                      ? "bg-zinc-800/50 border-zinc-100/10 text-white" 
-                      : "bg-zinc-50 border-zinc-800/10 text-black"
-                  )}
-                />
-              </div>
-              <button 
-                type="submit"
-                disabled={loading}
-                className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 disabled:opacity-50"
-              >
-                {loading ? (
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
-                ) : (
-                  <span>{t.changePassword}</span>
-                )}
-              </button>
-            </form>
           </div>
-        )}
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">{t.password}</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-10 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all disabled:opacity-50"
+          >
+            {isLoading ? t.loading : t.login}
+          </button>
+        </form>
       </motion.div>
     </div>
   );
-}
-
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(' ');
 }

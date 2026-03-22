@@ -1,18 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { storageService } from './services/storageService';
-import { Language, UserProfile, Task } from './types';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from './firebase';
+import { collection, onSnapshot, query } from 'firebase/firestore';
+import { COLLECTIONS } from './constants';
+import Auth from './components/Auth';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import TaskList from './components/TaskList';
-import Auth from './components/Auth';
 import UserManagement from './components/UserManagement';
 import Team from './components/Team';
 import Settings from './components/Settings';
-
-import { auth, db } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { onSnapshot, collection, query, where } from 'firebase/firestore';
-import { COLLECTIONS } from './constants';
+import { Language, UserProfile, Task } from './types';
+import { storageService } from './services/storageService';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -25,100 +24,35 @@ export default function App() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [subordinates, setSubordinates] = useState<UserProfile[]>([]);
-  const [lastNotificationTime, setLastNotificationTime] = useState<number>(Date.now());
-
-  const triggerNotificationEffects = (task: Task, isNew: boolean) => {
-    // 1. Vibration
-    if ('vibrate' in navigator) {
-      // Pattern: vibrate for 200ms, pause for 100ms, vibrate for 200ms
-      navigator.vibrate([200, 100, 200]);
-    }
-
-    // 2. Sound
-    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    audio.play().catch(e => console.log("Audio play blocked by browser policy"));
-
-    // 3. Browser Notification
-    if (Notification.permission === 'granted') {
-      new Notification(isNew ? 'مهمة جديدة!' : 'تحديث في المهمة', {
-        body: `${task.title}\n${task.description.substring(0, 50)}...`,
-        icon: '/manifest.json' // Use app icon
-      });
-    } else if (Notification.permission !== 'denied') {
-      Notification.requestPermission();
-    }
-  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Fetch user profile from Firestore
-        const profile = await storageService.getUserByUid(firebaseUser.uid);
-        if (profile) {
-          setUser(profile);
-        } else {
-          // Fallback if profile doesn't exist yet (should be handled in Auth.tsx)
-          setUser(null);
-        }
+        const userProfile = await storageService.getUserByUid(firebaseUser.uid);
+        setUser(userProfile || null);
       } else {
         setUser(null);
       }
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    const unsubscribeUsers = onSnapshot(collection(db, COLLECTIONS.USERS), (snapshot) => {
-      const usersData = snapshot.docs.map(doc => doc.data() as UserProfile);
-      const uniqueUsers = Array.from(new Map(usersData.map(u => [u.uid, u])).values());
-      setAllUsers(uniqueUsers);
+    const unsubTasks = onSnapshot(query(collection(db, COLLECTIONS.TASKS)), (snapshot) => {
+      setAllTasks(snapshot.docs.map(doc => doc.data() as Task));
     });
-
-    const unsubscribeTasks = onSnapshot(collection(db, COLLECTIONS.TASKS), (snapshot) => {
-      const tasksData = snapshot.docs.map(doc => doc.data() as Task);
-      const uniqueTasks = Array.from(new Map(tasksData.map(t => [t.id, t])).values());
-      setAllTasks(uniqueTasks);
+    const unsubUsers = onSnapshot(query(collection(db, COLLECTIONS.USERS)), (snapshot) => {
+      setAllUsers(snapshot.docs.map(doc => doc.data() as UserProfile));
     });
 
     return () => {
-      unsubscribeUsers();
-      unsubscribeTasks();
+      unsubTasks();
+      unsubUsers();
     };
   }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    // Listen for real-time updates to tasks assigned to the user for notifications
-    const q = query(
-      collection(db, COLLECTIONS.TASKS),
-      where('assigneeId', '==', user.uid)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        const task = change.doc.data() as Task;
-        const now = Date.now();
-        
-        // Only notify for changes that happened after the app loaded
-        // and if the task was updated recently
-        const lastUpdate = task.lastUpdatedAt ? new Date(task.lastUpdatedAt).getTime() : 0;
-        const lastReminder = task.lastReminderAt ? new Date(task.lastReminderAt).getTime() : 0;
-        
-        if (lastUpdate > lastNotificationTime || lastReminder > lastNotificationTime) {
-          // Trigger notification effects
-          triggerNotificationEffects(task, change.type === 'added');
-          setLastNotificationTime(now);
-        }
-      });
-    });
-
-    return () => unsubscribe();
-  }, [user, lastNotificationTime]);
 
   useEffect(() => {
     if (!user) return;
@@ -145,7 +79,7 @@ export default function App() {
     let filteredTasks = allTasks;
     if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
       filteredTasks = allTasks;
-    } else if (user.role === 'Worker' || user.role === 'Employee') {
+    } else if (user.role === 'Worker') {
       filteredTasks = allTasks.filter(t => t.assigneeId === user.uid);
     } else {
       const subIds = new Set(userSubordinates.map(u => u.uid));
@@ -159,12 +93,8 @@ export default function App() {
   }, [user, allUsers, allTasks]);
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      setUser(null);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+    await auth.signOut();
+    setUser(null);
   };
 
   if (loading) {
@@ -176,7 +106,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <Auth lang={lang} isDark={isDark} onAuthComplete={setUser} />;
+    return <Auth lang={lang} onLogin={setUser} />;
   }
 
   const renderContent = () => {

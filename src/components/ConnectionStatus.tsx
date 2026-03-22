@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ref, onValue } from 'firebase/database';
 import { rtdb } from '../firebase';
+import { ref, onValue } from 'firebase/database';
+import { Wifi, WifiOff } from 'lucide-react';
 
 export default function ConnectionStatus() {
   const [isConnected, setIsConnected] = useState(false);
@@ -10,16 +11,13 @@ export default function ConnectionStatus() {
     const unsubscribe = onValue(connectedRef, (snapshot) => {
       setIsConnected(snapshot.val() === true);
     });
-
     return () => unsubscribe();
   }, []);
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800">
-      <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`} />
-      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-        {isConnected ? 'متصل' : 'غير متصل'}
-      </span>
+    <div className={`flex items-center gap-2 text-xs font-medium px-3 py-1 rounded-full ${isConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+      {isConnected ? <Wifi size={14} /> : <WifiOff size={14} />}
+      {isConnected ? 'Connected' : 'Disconnected'}
     </div>
   );
 }
