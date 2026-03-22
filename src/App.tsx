@@ -74,12 +74,14 @@ export default function App() {
 
     const unsubscribeUsers = onSnapshot(collection(db, COLLECTIONS.USERS), (snapshot) => {
       const usersData = snapshot.docs.map(doc => doc.data() as UserProfile);
-      setAllUsers(usersData);
+      const uniqueUsers = Array.from(new Map(usersData.map(u => [u.uid, u])).values());
+      setAllUsers(uniqueUsers);
     });
 
     const unsubscribeTasks = onSnapshot(collection(db, COLLECTIONS.TASKS), (snapshot) => {
       const tasksData = snapshot.docs.map(doc => doc.data() as Task);
-      setAllTasks(tasksData);
+      const uniqueTasks = Array.from(new Map(tasksData.map(t => [t.id, t])).values());
+      setAllTasks(uniqueTasks);
     });
 
     return () => {

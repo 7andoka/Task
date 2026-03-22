@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import { 
   Shield
 } from 'lucide-react';
-import { Logo } from './Logo';
 import { storageService } from '../services/storageService';
 import { translations } from '../i18n';
 import { Language, UserRole, UserProfile } from '../types';
@@ -34,10 +33,6 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth) {
-      setError("Authentication service not initialized. Please check your configuration.");
-      return;
-    }
     setLoading(true);
     setError("");
     try {
@@ -48,47 +43,57 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
         throw new Error(lang === 'ar' ? "اسم المستخدم غير موجود" : "Username not found");
       }
 
-      const isMatch = password === profile.initialPassword || 
-                      (profile as any).password === password ||
-                      (profile.username === 'admin' && (password === '123' || password === '123456'));
+      const firebasePassword = password.length < 6 ? `${password}_secure` : password;
+      const loginEmail = profile.email || `${username}@warehouse.com`;
+      let firebaseUser;
 
-      if (isMatch) {
-        // Ensure user is authenticated in Firebase Auth for security rules to work
-        const firebasePassword = password.length < 6 ? `${password}_secure` : password;
-        
-        try {
-          const loginEmail = profile.email || `${username}@warehouse.com`;
-          let firebaseUser;
-          try {
-            const userCredential = await signInWithEmailAndPassword(auth, loginEmail, firebasePassword);
-            firebaseUser = userCredential.user;
-          } catch (signInError: any) {
-            if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
-              const signupCred = await createUserWithEmailAndPassword(auth, loginEmail, firebasePassword);
-              firebaseUser = signupCred.user;
-            } else {
-              throw signInError;
-            }
-          }
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, loginEmail, firebasePassword);
+        firebaseUser = userCredential.user;
+      } catch (signInError: any) {
+        console.log("Firebase sign-in error:", signInError.code, signInError.message);
+        if (signInError.code === 'auth/user-not-found') {
+          // If user not found in Firebase, check local password to see if we should create them
+          const isMatch = password === profile.initialPassword || 
+                          (profile as any).password === password ||
+                          (profile.username === 'admin' && (password === '123' || password === '123456'));
+          
+          console.log("Local password match:", isMatch, "Password:", password, "Initial:", profile.initialPassword);
 
-          // CRITICAL: Update profile UID to match Firebase UID to prevent "Logout" on first login
-          if (firebaseUser && profile.uid !== firebaseUser.uid) {
-            const updatedProfile = { ...profile, uid: firebaseUser.uid };
-            await storageService.saveUser(updatedProfile);
-            onAuthComplete(updatedProfile);
-            return;
+          if (isMatch) {
+            const signupCred = await createUserWithEmailAndPassword(auth, loginEmail, firebasePassword);
+            firebaseUser = signupCred.user;
+          } else {
+            throw new Error(lang === 'ar' ? "كلمة المرور غير صحيحة" : "Invalid password");
           }
-        } catch (e) {
-          console.error("Background auth failed:", e);
+        } else if (signInError.code === 'auth/invalid-credential' || signInError.code === 'auth/wrong-password') {
+          throw new Error(lang === 'ar' ? "كلمة المرور غير صحيحة" : "Invalid password");
+        } else {
+          throw signInError;
         }
-        
-        onAuthComplete(profile);
-      } else {
-        throw new Error(lang === 'ar' ? "كلمة المرور غير صحيحة" : "Invalid password");
       }
+
+      // CRITICAL: Update profile UID to match Firebase UID to prevent "Logout" on first login
+      if (firebaseUser && profile.uid !== firebaseUser.uid) {
+        const updatedProfile = { ...profile, uid: firebaseUser.uid };
+        await storageService.saveUser(updatedProfile);
+        onAuthComplete(updatedProfile);
+        return;
+      }
+        
+      onAuthComplete(profile);
     } catch (error: any) {
       console.error("Login Error:", error);
-      setError(error.message);
+      let errorMessage = error.message;
+      try {
+        const parsedError = JSON.parse(error.message);
+        if (parsedError.error) {
+          errorMessage = parsedError.error;
+        }
+      } catch (e) {
+        // Not JSON, keep original message
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -103,7 +108,7 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
     setLoading(true);
     setError("");
     try {
-      if (auth && auth.currentUser) {
+      if (auth.currentUser) {
         await updatePassword(auth.currentUser, newPassword);
         const user = tempUser as UserProfile;
         user.needsPasswordChange = false;
@@ -182,7 +187,9 @@ export default function Auth({ lang, isDark, onAuthComplete }: AuthProps) {
         )}
       >
         <div className="text-center mb-10">
-          <Logo size={120} showText={true} className="mb-6" />
+          <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20">
+            <Shield className="text-white" size={32} />
+          </div>
           <h1 className={cn(
             "text-3xl font-bold tracking-tight mb-2",
             isDark ? "text-white" : "text-black"
