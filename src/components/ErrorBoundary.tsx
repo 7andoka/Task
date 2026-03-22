@@ -6,45 +6,32 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error: Error | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
-    hasError: false,
-    error: null
+    hasError: false
   };
 
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  public static getDerivedStateFromError(_: Error): State {
+    return { hasError: true };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    console.error("Uncaught error:", error, errorInfo);
   }
 
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-6 text-center">
-          <div className="max-w-md w-full bg-zinc-900 border border-red-500/20 rounded-3xl p-8 shadow-2xl">
-            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <span className="text-3xl text-red-500">!</span>
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-4">Something went wrong</h1>
-            <p className="text-zinc-400 mb-6">
-              The application encountered an unexpected error.
-            </p>
-            <div className="bg-black/50 rounded-xl p-4 mb-6 text-left overflow-auto max-h-40">
-              <code className="text-xs text-red-400 font-mono">
-                {this.state.error?.message || "Unknown error"}
-              </code>
-            </div>
+        <div className="min-h-screen flex items-center justify-center bg-black text-white p-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">حدث خطأ غير متوقع</h1>
             <button 
+              className="px-4 py-2 bg-emerald-500 rounded-lg"
               onClick={() => window.location.reload()}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-all"
             >
-              Reload Application
+              إعادة تحميل الصفحة
             </button>
           </div>
         </div>
@@ -54,5 +41,3 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
-
-export default ErrorBoundary;
