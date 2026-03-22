@@ -1,6 +1,6 @@
 import { UserProfile, Task, Subtask, Comment, Notification, AuditLog } from '../types';
 import { auth, db } from '../firebase';
-import { collection, doc, getDocs, getDoc, setDoc, getDocFromServer, query, where, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, getDocFromServer, query, where } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
 
 enum OperationType {
@@ -87,14 +87,6 @@ export const storageService = {
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.USERS);
-    }
-  },
-
-  deleteUser: async (uid: string) => {
-    try {
-      await deleteDoc(doc(db, COLLECTIONS.USERS, uid));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.USERS}/${uid}`);
     }
   },
 

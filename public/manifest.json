@@ -1,11 +1,11 @@
 {
-  "name": "Rich Land Food Industries",
-  "short_name": "Rich Land",
-  "description": "Rich Land Food Industries - Advanced task management and workforce analytics application.",
+  "name": "Enterprise Task Analytics",
+  "short_name": "Task Analytics",
+  "description": "Advanced enterprise-grade task management and workforce analytics application.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#006B62",
+  "theme_color": "#10b981",
   "icons": [
     {
       "src": "https://picsum.photos/seed/task-app/192/192",

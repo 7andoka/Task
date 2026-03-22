@@ -112,12 +112,11 @@ export default function App() {
 
         // Fetch all users
         const usersData = await storageService.getUsers();
-        const uniqueUsers = Array.from(new Map(usersData.map(u => [u.uid, u])).values());
-        setAllUsers(uniqueUsers);
+        setAllUsers(usersData);
         
         let userSubordinates: UserProfile[] = [];
-        if (user.role === 'Warehouse Manager' || user.role === 'Admin' || user.role === 'Department Head' || user.role === 'Supervisor') {
-          userSubordinates = uniqueUsers.filter(u => u.uid !== user.uid);
+        if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+          userSubordinates = usersData.filter(u => u.uid !== user.uid);
         } else {
           const getAllSubordinates = (managerId: string, allUsers: UserProfile[], visited = new Set<string>()): UserProfile[] => {
             if (visited.has(managerId)) return [];
@@ -130,21 +129,20 @@ export default function App() {
             }
             return allSubs;
           };
-          userSubordinates = getAllSubordinates(user.uid, uniqueUsers);
+          userSubordinates = getAllSubordinates(user.uid, usersData);
         }
         setSubordinates(userSubordinates);
 
         // Fetch tasks based on role
         const tasksData = await storageService.getTasks();
-        const uniqueTasks = Array.from(new Map(tasksData.map(t => [t.id, t])).values());
-        let filteredTasks = uniqueTasks;
+        let filteredTasks = tasksData;
         if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
-          filteredTasks = uniqueTasks;
+          filteredTasks = tasksData;
         } else if (user.role === 'Worker' || user.role === 'Employee') {
-          filteredTasks = uniqueTasks.filter(t => t.assigneeId === user.uid);
+          filteredTasks = tasksData.filter(t => t.assigneeId === user.uid);
         } else {
           const subIds = new Set(userSubordinates.map(u => u.uid));
-          filteredTasks = uniqueTasks.filter(t => 
+          filteredTasks = tasksData.filter(t => 
             t.assigneeId === user.uid || 
             t.managerId === user.uid || 
             subIds.has(t.assigneeId)
