@@ -8,14 +8,13 @@ import Auth from './components/Auth';
 import UserManagement from './components/UserManagement';
 import Team from './components/Team';
 import Settings from './components/Settings';
-import ErrorBoundary from './components/ErrorBoundary';
 
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { onSnapshot, collection, query, where } from 'firebase/firestore';
 import { COLLECTIONS } from './constants';
 
-function AppContent() {
+export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [lang, setLang] = useState<Language>('ar');
@@ -28,7 +27,7 @@ function AppContent() {
   const [lastNotificationTime, setLastNotificationTime] = useState<number>(Date.now());
 
   useEffect(() => {
-    if (!user || !db) return;
+    if (!user) return;
 
     // Listen for real-time updates to tasks assigned to the user
     const q = query(
@@ -80,10 +79,6 @@ function AppContent() {
   };
 
   useEffect(() => {
-    if (!auth) {
-      setLoading(false);
-      return;
-    }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         // Fetch user profile from Firestore
@@ -104,60 +99,69 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (!user || !db) return;
+    if (!user) return;
 
-    // Listen for real-time updates to all users
-    const usersQuery = collection(db, COLLECTIONS.USERS);
-    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
-      const rawUsersData = snapshot.docs.map(doc => doc.data() as UserProfile);
-      const usersData = Array.from(new Map(rawUsersData.map(u => [u.uid, u])).values());
-      setAllUsers(usersData);
-    });
+    const fetchData = async () => {
+      try {
+        // Wait for Firebase Auth to be ready if we're using it for security rules
+        let retryCount = 0;
+        while (!auth.currentUser && retryCount < 10) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          retryCount++;
+        }
 
-    // Listen for real-time updates to all tasks
-    const tasksQuery = collection(db, COLLECTIONS.TASKS);
-    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
-      const rawTasksData = snapshot.docs.map(doc => doc.data() as Task);
-      const tasksData = Array.from(new Map(rawTasksData.map(t => [t.id, t])).values());
-      setTasks(tasksData);
-    });
+        // Fetch all users
+        const usersData = await storageService.getUsers();
+        const uniqueUsers = Array.from(new Map(usersData.map(u => [u.uid, u])).values());
+        setAllUsers(uniqueUsers);
+        
+        let userSubordinates: UserProfile[] = [];
+        if (user.role === 'Warehouse Manager' || user.role === 'Admin' || user.role === 'Department Head' || user.role === 'Supervisor') {
+          userSubordinates = uniqueUsers.filter(u => u.uid !== user.uid);
+        } else {
+          const getAllSubordinates = (managerId: string, allUsers: UserProfile[], visited = new Set<string>()): UserProfile[] => {
+            if (visited.has(managerId)) return [];
+            visited.add(managerId);
+            
+            const directSubordinates = allUsers.filter(u => u.managerId === managerId);
+            let allSubs = [...directSubordinates];
+            for (const sub of directSubordinates) {
+              allSubs = [...allSubs, ...getAllSubordinates(sub.uid, allUsers, visited)];
+            }
+            return allSubs;
+          };
+          userSubordinates = getAllSubordinates(user.uid, uniqueUsers);
+        }
+        setSubordinates(userSubordinates);
 
-    return () => {
-      unsubscribeUsers();
-      unsubscribeTasks();
+        // Fetch tasks based on role
+        const tasksData = await storageService.getTasks();
+        const uniqueTasks = Array.from(new Map(tasksData.map(t => [t.id, t])).values());
+        let filteredTasks = uniqueTasks;
+        if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+          filteredTasks = uniqueTasks;
+        } else if (user.role === 'Worker' || user.role === 'Employee') {
+          filteredTasks = uniqueTasks.filter(t => t.assigneeId === user.uid);
+        } else {
+          const subIds = new Set(userSubordinates.map(u => u.uid));
+          filteredTasks = uniqueTasks.filter(t => 
+            t.assigneeId === user.uid || 
+            t.managerId === user.uid || 
+            subIds.has(t.assigneeId)
+          );
+        }
+        setTasks(filteredTasks);
+      } catch (error) {
+        console.error("Fetch Data Error:", error);
+      }
     };
-  }, [user, db]);
 
-  useEffect(() => {
-    if (!user || !db) return;
-
-    // Listen for real-time updates to all users
-    const usersQuery = collection(db, COLLECTIONS.USERS);
-    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
-      const rawUsersData = snapshot.docs.map(doc => doc.data() as UserProfile);
-      const usersData = Array.from(new Map(rawUsersData.map(u => [u.uid, u])).values());
-      setAllUsers(usersData);
-    });
-
-    // Listen for real-time updates to all tasks
-    const tasksQuery = collection(db, COLLECTIONS.TASKS);
-    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
-      const rawTasksData = snapshot.docs.map(doc => doc.data() as Task);
-      const tasksData = Array.from(new Map(rawTasksData.map(t => [t.id, t])).values());
-      setTasks(tasksData);
-    });
-
-    return () => {
-      unsubscribeUsers();
-      unsubscribeTasks();
-    };
-  }, [user, db]);
+    fetchData();
+  }, [user]);
 
   const handleLogout = async () => {
     try {
-      if (auth) {
-        await signOut(auth);
-      }
+      await signOut(auth);
       setUser(null);
     } catch (error) {
       console.error('Logout error:', error);
@@ -206,13 +210,5 @@ function AppContent() {
     >
       {renderContent()}
     </Layout>
-  );
-}
-
-export default function App() {
-  return (
-    <ErrorBoundary>
-      <AppContent />
-    </ErrorBoundary>
   );
 }

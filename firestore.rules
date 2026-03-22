@@ -1,15 +1,53 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow reading user profiles for login check (needed for getUserByUsername)
-    match /users/{username} {
-      allow get: if true;
-      allow list, write: if request.auth != null;
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Allow everything else if authenticated
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "khaled.shaban.khalil@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    // User profiles
+    match /users/{username} {
+      // Allow public get for login flow
+      allow get: if true;
+      allow list: if isAuthenticated();
+      // Allow bootstrapping the first admin
+      allow create: if username == 'admin' || isAuthenticated();
+      allow update: if (isAuthenticated() && (request.auth.uid == resource.data.uid || request.auth.uid == request.resource.data.uid)) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Connection test
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Tasks
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated(); // More granular checks could be added
+      allow delete: if isAdmin();
+    }
+
+    // Subtasks
+    match /subtasks/{subtaskId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Default deny
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
   }
 }

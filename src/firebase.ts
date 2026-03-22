@@ -19,7 +19,7 @@ let db: any;
 let auth: any;
 
 try {
-  db = getFirestore(app);
+  db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 } catch (e) {
   console.error("Firestore initialization failed:", e);
 }
