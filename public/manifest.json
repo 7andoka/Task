@@ -8,12 +8,12 @@
   "theme_color": "#006B62",
   "icons": [
     {
-      "src": "/logo.png",
+      "src": "https://picsum.photos/seed/rich-land/192/192",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/logo.png",
+      "src": "https://picsum.photos/seed/rich-land/512/512",
       "sizes": "512x512",
       "type": "image/png"
     }

@@ -85,7 +85,7 @@ export default function Layout({
       {/* Top Bar */}
       <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-4 px-4 h-14 bg-zinc-100/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 backdrop-blur-md">
         <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="Rich Land Logo" className="h-10 w-auto object-contain" referrerPolicy="no-referrer" />
+          <h1 className="text-xl font-black tracking-tighter text-emerald-500 shrink-0">Rich Land</h1>
           
           <div className={cn(
             "flex items-center gap-1 shrink-0",

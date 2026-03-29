@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { LogIn, Lock, User, Eye, EyeOff, Menu, ChevronDown, Leaf } from 'lucide-react';
+import { Lock, User, Eye, EyeOff } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { UserProfile, Language } from '../types';
 import { translations } from '../i18n';
@@ -66,9 +66,6 @@ export default function Auth({ lang, onLogin }: AuthProps) {
           transition={{ delay: 0.2 }}
           className="w-full bg-white/10 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/20 shadow-2xl"
         >
-          <div className="flex justify-center mb-6">
-            <img src="/logo.png" alt="Rich Land Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
-          </div>
           <div className="text-center mb-6">
             <h2 className="text-3xl font-bold text-white tracking-tight">{t.login}</h2>
             <p className="text-white/70 text-sm mt-1">{t.welcomeBack}</p>
