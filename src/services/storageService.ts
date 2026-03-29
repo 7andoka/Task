@@ -70,7 +70,11 @@ export const storageService = {
           uid: data.uid || doc.id
         } as UserProfile;
       });
-      if (users.length === 0) {
+      
+      // Deduplicate by UID
+      const uniqueUsers = Array.from(new Map(users.map(u => [u.uid, u])).values());
+
+      if (uniqueUsers.length === 0) {
         const defaultAdmin: UserProfile = {
           uid: 'admin',
           username: 'admin',
@@ -84,7 +88,7 @@ export const storageService = {
         await setDoc(doc(db, COLLECTIONS.USERS, defaultAdmin.username), defaultAdmin);
         return [defaultAdmin];
       }
-      return users;
+      return uniqueUsers;
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, COLLECTIONS.USERS);
     }
@@ -164,13 +168,15 @@ export const storageService = {
   getTasks: async (): Promise<Task[]> => {
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.TASKS));
-      return snapshot.docs.map(doc => {
+      const tasks = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
           ...data,
           id: data.id || doc.id
         } as Task;
       });
+      // Deduplicate by ID
+      return Array.from(new Map(tasks.map(t => [t.id, t])).values());
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, COLLECTIONS.TASKS);
     }
@@ -220,7 +226,9 @@ export const storageService = {
   getSubtasks: async (): Promise<Subtask[]> => {
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.SUBTASKS));
-      return snapshot.docs.map(doc => doc.data() as Subtask);
+      const subtasks = snapshot.docs.map(doc => doc.data() as Subtask);
+      // Deduplicate by ID
+      return Array.from(new Map(subtasks.map(s => [s.id, s])).values());
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, COLLECTIONS.SUBTASKS);
     }

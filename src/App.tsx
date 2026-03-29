@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { db } from './firebase';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { COLLECTIONS } from './constants';
@@ -12,6 +12,8 @@ import Settings from './components/Settings';
 import { Language, UserProfile, Task } from './types';
 import { storageService } from './services/storageService';
 import { translations } from './i18n';
+import { Toaster, toast } from 'sonner';
+import { notifyUser } from './services/notificationService';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -25,6 +27,8 @@ export default function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isDataLoading, setIsDataLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const prevTasksRef = useRef<Task[]>([]);
 
   const refreshData = async () => {
     if (!user) return;
@@ -63,8 +67,26 @@ export default function App() {
   }, [lang, user]);
 
   useEffect(() => {
-    // We use custom username/password login, so we don't need Firebase Auth.
-    setLoading(false);
+    // Check for saved user session
+    const checkSession = async () => {
+      const savedUsername = localStorage.getItem('task_manager_username');
+      if (savedUsername) {
+        try {
+          const savedUser = await storageService.getUserByUsername(savedUsername);
+          if (savedUser) {
+            setUser(savedUser);
+          } else {
+            localStorage.removeItem('task_manager_username');
+          }
+        } catch (error) {
+          console.error("Session restore error:", error);
+          localStorage.removeItem('task_manager_username');
+        }
+      }
+      setLoading(false);
+    };
+
+    checkSession();
   }, []);
 
   useEffect(() => {
@@ -191,12 +213,116 @@ export default function App() {
     }
   }, [allUsers, user]);
 
+  // Track task changes for notifications
+  useEffect(() => {
+    if (!user || allTasks.length === 0) return;
+    
+    const prevTasks = prevTasksRef.current;
+    if (prevTasks.length > 0) {
+      allTasks.forEach(task => {
+        const prevTask = prevTasks.find(t => t.id === task.id);
+        
+        // 1. New Task
+        if (!prevTask) {
+          if (task.assigneeId === user.uid && task.managerId !== user.uid) {
+            notifyUser(lang === 'ar' ? `تم تكليفك بمهمة جديدة: ${task.title}` : `New task assigned to you: ${task.title}`, false);
+          }
+        } 
+        // 2. Updated Task
+        else if (prevTask.lastUpdatedAt !== task.lastUpdatedAt) {
+          // Check if status changed to Completed or Pending Review
+          if (
+            (task.status === 'Completed' || task.status === 'Pending Review') && 
+            prevTask.status !== task.status &&
+            (task.managerId === user.uid || user.role === 'Admin') &&
+            task.assigneeId !== user.uid
+          ) {
+             notifyUser(lang === 'ar' ? `تم إنجاز المهمة: ${task.title}` : `Task completed: ${task.title}`, false);
+          }
+          
+          // Check if assignee changed to current user
+          if (task.assigneeId === user.uid && prevTask.assigneeId !== user.uid) {
+             notifyUser(lang === 'ar' ? `تم تكليفك بمهمة جديدة: ${task.title}` : `New task assigned to you: ${task.title}`, false);
+          }
+          // Check if reminder was sent
+          else if (task.lastReminderAt !== prevTask.lastReminderAt && task.assigneeId === user.uid) {
+             notifyUser(lang === 'ar' ? `تنبيه استعجال للمهمة: ${task.title}` : `Urgent reminder for task: ${task.title}`, true);
+          }
+          // Check if task details changed for assignee
+          else {
+            const detailsChanged = prevTask.title !== task.title || prevTask.description !== task.description || prevTask.deadline !== task.deadline || prevTask.priority !== task.priority;
+            if (detailsChanged && task.assigneeId === user.uid && task.managerId !== user.uid) {
+               notifyUser(lang === 'ar' ? `تم تعديل تفاصيل المهمة: ${task.title}` : `Task details updated: ${task.title}`, false);
+            }
+          }
+        }
+      });
+    }
+    
+    prevTasksRef.current = allTasks;
+  }, [allTasks, user, lang]);
+
+  // Check for delayed tasks
+  useEffect(() => {
+    if (!user || allTasks.length === 0) return;
+
+    const checkDelayedTasks = async () => {
+      const now = new Date();
+      let hasUpdates = false;
+      const updatedTasks = [...allTasks];
+
+      for (let i = 0; i < updatedTasks.length; i++) {
+        const task = updatedTasks[i];
+        if (
+          task.status !== 'Completed' &&
+          task.status !== 'Cancelled' &&
+          task.status !== 'Delayed'
+        ) {
+          const deadline = new Date(task.deadline);
+          if (deadline < now) {
+            updatedTasks[i] = { ...task, status: 'Delayed', lastUpdatedAt: now.toISOString() };
+            hasUpdates = true;
+            
+            // Only alert if the user is the assignee or manager
+            if (task.assigneeId === user.uid || task.managerId === user.uid || user.role === 'Admin') {
+              notifyUser(
+                lang === 'ar' 
+                  ? `تنبيه: المهمة "${task.title}" متأخرة عن الوقت المحدد!` 
+                  : `Alert: Task "${task.title}" is delayed!`,
+                true
+              );
+            }
+          }
+        }
+      }
+
+      if (hasUpdates) {
+        const tasksToUpdate = updatedTasks.filter((t, i) => t.status !== allTasks[i].status && t.managerId === user.uid);
+        if (tasksToUpdate.length > 0) {
+          const finalTasks = allTasks.map(t => {
+            const updated = tasksToUpdate.find(ut => ut.id === t.id);
+            return updated ? updated : t;
+          });
+          await storageService.saveTasks(finalTasks);
+        }
+      }
+    };
+
+    // Check immediately and then every minute
+    checkDelayedTasks();
+    const interval = setInterval(checkDelayedTasks, 60000);
+
+    return () => clearInterval(interval);
+  }, [allTasks, user, lang]);
+
   const handleLogout = () => {
+    localStorage.removeItem('task_manager_username');
     setUser(null);
   };
 
   const handleLogin = (u: UserProfile) => {
     console.log("User logged in:", u.username, "Role:", u.role);
+    localStorage.setItem('task_manager_username', u.username);
     setUser(u);
   };
 
@@ -249,6 +375,7 @@ export default function App() {
       setActiveTab={setActiveTab}
       onLogout={handleLogout}
     >
+      <Toaster position="top-center" richColors />
       {connectionError && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] bg-red-500 text-white px-6 py-3 rounded-2xl shadow-2xl font-bold animate-bounce flex items-center gap-2">
           <div className="w-2 h-2 bg-white rounded-full animate-pulse" />

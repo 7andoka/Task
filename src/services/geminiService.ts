@@ -38,3 +38,28 @@ export async function getTaskInsights(tasks: Task[], user: UserProfile, lang: 'a
     return lang === 'ar' ? "فشل في الحصول على رؤى الذكاء الاصطناعي." : "Failed to get AI insights.";
   }
 }
+
+export async function generateDelayAlert(task: Task, assignee: UserProfile | undefined, lang: 'ar' | 'en') {
+  const model = "gemini-3-flash-preview";
+  const prompt = `
+    Generate a professional and polite alert message to ${assignee ? assignee.displayName : 'the assignee'} regarding their delayed task.
+    Task Title: ${task.title}
+    Deadline: ${task.deadline}
+    Current Progress: ${task.progress}%
+    
+    The message should be in ${lang === 'ar' ? 'Arabic' : 'English'}.
+    It should remind them of the deadline, ask if they need any help or resources, and encourage them to update the task status.
+    Keep it concise (max 3 sentences).
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
+    return response.text;
+  } catch (error) {
+    console.error("AI Alert Error:", error);
+    return lang === 'ar' ? "تذكير: يرجى تحديث حالة المهمة المتأخرة." : "Reminder: Please update the status of your delayed task.";
+  }
+}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { LogIn, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Lock, User, Eye, EyeOff, Menu, ChevronDown, Leaf } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { UserProfile, Language } from '../types';
 import { translations } from '../i18n';
@@ -47,67 +47,93 @@ export default function Auth({ lang, onLogin }: AuthProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-4">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-xl w-full max-w-md border border-zinc-200 dark:border-zinc-800"
-      >
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4 text-emerald-600 dark:text-emerald-400">
-            <LogIn size={32} />
+    <div className="min-h-screen relative flex flex-col items-center justify-center p-4 overflow-hidden font-sans" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      {/* Background Image */}
+      <div 
+        className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
+        style={{ 
+          backgroundImage: `url('/background.jpg')`,
+        }}
+      />
+      {/* Overlay to ensure text readability while keeping the image visible */}
+      <div className="absolute inset-0 z-0 bg-black/20" />
+      
+      {/* Main Content & Login Form */}
+      <div className="relative z-10 w-full max-w-sm flex flex-col items-center">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="w-full bg-white/10 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/20 shadow-2xl"
+        >
+          <div className="flex justify-center mb-6">
+            <img src="/logo.png" alt="Rich Land Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
           </div>
-          <h1 className="text-2xl font-bold">{t.login}</h1>
-          <p className="text-zinc-500">{t.welcomeBack}</p>
-        </div>
+          <div className="text-center mb-6">
+            <h2 className="text-3xl font-bold text-white tracking-tight">{t.login}</h2>
+            <p className="text-white/70 text-sm mt-1">{t.welcomeBack}</p>
+          </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1.5">{t.username}</label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                required
-              />
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <div className="relative">
+                <User className={`absolute ${lang === 'ar' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 text-white/70`} size={20} />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className={`w-full ${lang === 'ar' ? 'pr-12 pl-4' : 'pl-12 pr-4'} py-4 bg-black/20 rounded-2xl border border-white/10 focus:border-white/40 focus:ring-2 focus:ring-white/25 outline-none text-white placeholder:text-white/60 transition-all`}
+                  placeholder={t.username}
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1.5">{t.password}</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-10 py-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400"
+            <div>
+              <div className="relative">
+                <Lock className={`absolute ${lang === 'ar' ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 text-white/70`} size={20} />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full ${lang === 'ar' ? 'pr-12 pl-12' : 'pl-12 pr-12'} py-4 bg-black/20 rounded-2xl border border-white/10 focus:border-white/40 focus:ring-2 focus:ring-white/25 outline-none text-white placeholder:text-white/60 transition-all`}
+                  placeholder={t.password}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className={`absolute ${lang === 'ar' ? 'left-4' : 'right-4'} top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition-colors`}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <motion.p 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="text-red-300 text-sm text-center bg-red-500/20 py-2 rounded-xl border border-red-500/30"
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+                {error}
+              </motion.p>
+            )}
 
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all disabled:opacity-50"
-          >
-            {isLoading ? t.loading : t.login}
-          </button>
-        </form>
-      </motion.div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-4 mt-2 bg-[#1a4d2e] hover:bg-[#133820] text-white rounded-full font-bold text-lg transition-all shadow-lg shadow-[#1a4d2e]/40 disabled:opacity-70 flex justify-center items-center"
+            >
+              {isLoading ? (
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                t.login
+              )}
+            </button>
+          </form>
+        </motion.div>
+      </div>
     </div>
   );
 }
