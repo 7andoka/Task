@@ -14,7 +14,10 @@ import {
   BarChart3,
   Settings as SettingsIcon,
   RefreshCw,
-  LogIn
+  LogIn,
+  Truck,
+  Snowflake,
+  Package
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -64,6 +67,9 @@ export default function Layout({
 
   const menuItems = [
     { id: 'dashboard', label: t.dashboard, icon: BarChart3, roles: ['Warehouse Manager', 'Department Head', 'Admin', 'Manager'] },
+    { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
+    { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
+    { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
     { id: 'tasks', label: t.tasks, icon: CheckSquare },
     { id: 'team', label: t.team, icon: Users, roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
     { id: 'users', label: t.userManagement, icon: Users, roles: ['Warehouse Manager', 'Admin'] },

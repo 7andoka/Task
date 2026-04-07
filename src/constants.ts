@@ -5,4 +5,7 @@ export const COLLECTIONS = {
   COMMENTS: 'comments',
   NOTIFICATIONS: 'notifications',
   AUDIT_LOGS: 'audit_logs',
+  SUPPLY_MOVEMENTS: 'supply_movements',
+  COLD_STORAGE: 'cold_storage',
+  RAW_MATERIAL: 'raw_material',
 };

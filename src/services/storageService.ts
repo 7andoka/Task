@@ -1,6 +1,6 @@
-import { UserProfile, Task, Subtask, Comment, Notification, AuditLog } from '../types';
+import { UserProfile, Task, Subtask, Comment, Notification, AuditLog, SupplyMovement } from '../types';
 import { auth, db } from '../firebase';
-import { collection, doc, getDocs, getDoc, setDoc, getDocFromServer, query, where, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, getDocFromServer, query, where, deleteDoc, orderBy } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
 
 enum OperationType {
@@ -271,6 +271,23 @@ export const storageService = {
       await setDoc(doc(db, COLLECTIONS.NOTIFICATIONS, notification.id), notification);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.NOTIFICATIONS);
+    }
+  },
+
+  // Supply Movement Methods
+  getSupplyMovements: async (): Promise<SupplyMovement[]> => {
+    try {
+      const snapshot = await getDocs(query(collection(db, COLLECTIONS.SUPPLY_MOVEMENTS), orderBy('createdAt', 'desc')));
+      return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as SupplyMovement));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.SUPPLY_MOVEMENTS);
+    }
+  },
+  saveSupplyMovement: async (movement: SupplyMovement) => {
+    try {
+      await setDoc(doc(db, COLLECTIONS.SUPPLY_MOVEMENTS, movement.id), movement);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.SUPPLY_MOVEMENTS}/${movement.id}`);
     }
   },
 };

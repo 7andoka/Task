@@ -9,6 +9,9 @@ import TaskList from './components/TaskList';
 import UserManagement from './components/UserManagement';
 import Team from './components/Team';
 import Settings from './components/Settings';
+import SupplyTracking from './components/SupplyTracking';
+import ColdStorage from './components/ColdStorage';
+import RawMaterial from './components/RawMaterial';
 import { Language, UserProfile, Task } from './types';
 import { storageService } from './services/storageService';
 import { translations } from './i18n';
@@ -20,7 +23,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [lang, setLang] = useState<Language>('ar');
   const [isDark, setIsDark] = useState(true);
-  const [activeTab, setActiveTab] = useState('tasks');
+  const [activeTab, setActiveTab] = useState('supplyTracking');
   
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
@@ -351,6 +354,12 @@ export default function App() {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard lang={lang} user={user} tasks={tasks} />;
+      case 'supplyTracking':
+        return <SupplyTracking lang={lang} user={user} />;
+      case 'coldStorage':
+        return <ColdStorage lang={lang} user={user} />;
+      case 'rawMaterial':
+        return <RawMaterial lang={lang} user={user} />;
       case 'tasks':
         return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':
@@ -360,7 +369,7 @@ export default function App() {
       case 'settings':
         return <Settings lang={lang} user={user} setUser={setUser} />;
       default:
-        return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
+        return <SupplyTracking lang={lang} user={user} />;
     }
   };
 

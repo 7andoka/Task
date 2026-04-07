@@ -1,4 +1,35 @@
-export type UserRole = 'Admin' | 'Warehouse Manager' | 'Department Head' | 'Supervisor' | 'Warehouse Specialist' | 'Warehouse Keeper' | 'Assistant Warehouse Keeper' | 'Worker';
+export type UserRole = 'Admin' | 'Warehouse Manager' | 'Department Head' | 'Supervisor' | 'Warehouse Specialist' | 'Warehouse Keeper' | 'Assistant Warehouse Keeper' | 'Worker' | 'Security' | 'Quality' | 'Warehouse';
+
+export type SupplyStatus = 'Security Entry' | 'Quality Inspection' | 'Warehouse Unloading' | 'Security Exit' | 'Completed';
+export type QualityDecision = 'Accepted' | 'Rejected' | 'Under Inspection';
+
+export interface SupplyMovement {
+  id: string;
+  entryTime: string;
+  exitTime?: string;
+  clientName: string;
+  itemName: string;
+  driverName: string;
+  vehicleNumber: string;
+  status: SupplyStatus;
+  
+  // Quality Section
+  qualityDecision?: QualityDecision;
+  qualityComments?: string;
+  qualityInspectorId?: string;
+  qualityTime?: string;
+  
+  // Warehouse Section
+  warehouseComments?: string;
+  warehouseOperatorId?: string;
+  warehouseTime?: string;
+  
+  // Security Exit Section
+  securityExitId?: string;
+  
+  createdAt: string;
+  lastUpdatedAt: string;
+}
 
 export interface NotificationPreferences {
   newAssignments: boolean;

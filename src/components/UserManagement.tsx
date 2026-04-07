@@ -41,7 +41,19 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
   });
   const [createLoading, setCreateLoading] = React.useState(false);
 
-  const roles: UserRole[] = ['Admin', 'Warehouse Manager', 'Department Head', 'Supervisor', 'Warehouse Specialist', 'Warehouse Keeper', 'Assistant Warehouse Keeper', 'Worker'];
+  const roles: UserRole[] = [
+    'Admin', 
+    'Warehouse Manager', 
+    'Department Head', 
+    'Supervisor', 
+    'Warehouse Specialist', 
+    'Warehouse Keeper', 
+    'Assistant Warehouse Keeper', 
+    'Worker',
+    'Security',
+    'Quality',
+    'Warehouse'
+  ];
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,7 +196,11 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                     onChange={(e) => setCreateForm({...createForm, role: e.target.value as UserRole})}
                     className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                   >
-                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                    {roles.map(r => {
+                      const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
+                      const translatedLabel = t[translationKey as keyof typeof t] || r;
+                      return <option key={r} value={r}>{translatedLabel}</option>;
+                    })}
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -265,7 +281,11 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                     onChange={(e) => setEditForm({...editForm, role: e.target.value as UserRole})}
                     className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                   >
-                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                    {roles.map(r => {
+                      const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
+                      const translatedLabel = t[translationKey as keyof typeof t] || r;
+                      return <option key={r} value={r}>{translatedLabel}</option>;
+                    })}
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -317,7 +337,10 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-500">
-                      {u.role}
+                      {(() => {
+                        const translationKey = u.role.charAt(0).toLowerCase() + u.role.slice(1).replace(/\s+/g, '');
+                        return t[translationKey as keyof typeof t] || u.role;
+                      })()}
                     </span>
                     {u.managerId && (
                       <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full truncate max-w-[100px]">
