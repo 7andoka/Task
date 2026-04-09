@@ -51,13 +51,16 @@ export default function Auth({ lang, onLogin }: AuthProps) {
       {/* Background Image Container */}
       <div className="absolute inset-0 z-0">
         <img 
-          src="/background.jpg" 
+          src="https://i.ibb.co/N2wL8FhR/background.jpg" 
           alt="" 
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=1920&auto=format&fit=crop';
+          }}
         />
         {/* Overlay to ensure text readability */}
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px]" />
       </div>
       
       {/* Main Content & Login Form */}
