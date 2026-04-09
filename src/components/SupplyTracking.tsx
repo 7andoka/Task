@@ -36,6 +36,8 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
   const [movements, setMovements] = useState<SupplyMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingMovement, setEditingMovement] = useState<SupplyMovement | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<SupplyStatus | 'All'>('All');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -118,6 +120,26 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
       shareToWhatsApp(movement, lang === 'ar' ? 'تسجيل دخول' : 'Entry');
     } catch (error) {
       toast.error(lang === 'ar' ? 'خطأ في الحفظ' : 'Error saving');
+    }
+  };
+
+  const handleEditMovement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMovement) return;
+
+    try {
+      const updatedMovement = {
+        ...editingMovement,
+        lastUpdatedAt: new Date().toISOString(),
+      };
+      await storageService.saveSupplyMovement(updatedMovement);
+      setMovements(movements.map(m => m.id === updatedMovement.id ? updatedMovement : m));
+      setIsEditing(false);
+      setEditingMovement(null);
+      toast.success(lang === 'ar' ? 'تم التعديل بنجاح' : 'Edited successfully');
+      shareToWhatsApp(updatedMovement, lang === 'ar' ? 'تعديل بيانات' : 'Data Edit');
+    } catch (error) {
+      toast.error(lang === 'ar' ? 'خطأ في التعديل' : 'Error editing');
     }
   };
 
@@ -398,7 +420,11 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
                     {user.role === 'Admin' && (
                       <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3">
                         <button
-                          onClick={(e) => { e.stopPropagation(); /* TODO: Implement Edit */ toast.info("Edit not implemented yet"); }}
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setEditingMovement(movement);
+                            setIsEditing(true);
+                          }}
                           className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700"
                         >
                           {t.edit || 'Edit'}
@@ -516,6 +542,95 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
                   <button
                     type="button"
                     onClick={() => setIsAdding(false)}
+                    className="flex-1 px-4 py-2.5 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 rounded-xl font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
+                  >
+                    {t.cancel}
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/20"
+                  >
+                    {t.save}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Movement Modal */}
+      <AnimatePresence>
+        {isEditing && editingMovement && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { setIsEditing(false); setEditingMovement(null); }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{lang === 'ar' ? 'تعديل حركة التوريد' : 'Edit Supply Movement'}</h2>
+                <button onClick={() => { setIsEditing(false); setEditingMovement(null); }} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
+                  <XCircle size={24} />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditMovement} className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.clientName}</label>
+                  <input
+                    required
+                    type="text"
+                    value={editingMovement.clientName}
+                    onChange={(e) => setEditingMovement({ ...editingMovement, clientName: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.itemName}</label>
+                  <input
+                    required
+                    type="text"
+                    value={editingMovement.itemName}
+                    onChange={(e) => setEditingMovement({ ...editingMovement, itemName: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.driverName}</label>
+                    <input
+                      required
+                      type="text"
+                      value={editingMovement.driverName}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, driverName: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.vehicleNumber}</label>
+                    <input
+                      required
+                      type="text"
+                      value={editingMovement.vehicleNumber}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, vehicleNumber: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setIsEditing(false); setEditingMovement(null); }}
                     className="flex-1 px-4 py-2.5 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 rounded-xl font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
                   >
                     {t.cancel}

@@ -133,7 +133,9 @@ export const translations = {
     status_quality_inspection: "فحص الجودة",
     status_warehouse_unloading: "تنزيل المخازن",
     status_security_exit: "خروج الأمن",
-    status_completed: "مكتمل"
+    status_completed: "مكتمل",
+    edit: "تعديل",
+    delete: "حذف"
   },
   en: {
     warehouseManager: "Warehouse Manager",
@@ -269,6 +271,8 @@ export const translations = {
     status_quality_inspection: "Quality Inspection",
     status_warehouse_unloading: "Warehouse Unloading",
     status_security_exit: "Security Exit",
-    status_completed: "Completed"
+    status_completed: "Completed",
+    edit: "Edit",
+    delete: "Delete"
   }
 };

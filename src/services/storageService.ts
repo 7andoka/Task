@@ -290,4 +290,11 @@ export const storageService = {
       handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.SUPPLY_MOVEMENTS}/${movement.id}`);
     }
   },
+  deleteSupplyMovement: async (id: string) => {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.SUPPLY_MOVEMENTS, id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.SUPPLY_MOVEMENTS}/${id}`);
+    }
+  },
 };
