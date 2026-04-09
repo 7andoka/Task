@@ -8,7 +8,7 @@
     "build:client": "vite build",
     "build:server": "esbuild server.ts --bundle --platform=node --format=esm --outfile=server.js --external:vite --external:express --external:path --external:url",
     "build": "npm run build:client && npm run build:server",
-    "start": "node server.js",
+    "start": "NODE_ENV=production node server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
