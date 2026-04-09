@@ -61,6 +61,15 @@ export default function Auth({ lang, onLogin }: AuthProps) {
       {/* Main Content & Login Form */}
       <div className="relative z-10 w-full max-w-sm flex flex-col items-center">
         <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <img src="/logo.png" alt="Logo" className="w-32 h-32 object-contain drop-shadow-2xl" />
+        </motion.div>
+
+        <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
