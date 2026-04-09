@@ -15,7 +15,8 @@ import {
   MoreVertical,
   Calendar,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Camera
 } from 'lucide-react';
 import { SupplyMovement, UserProfile, Language, SupplyStatus, QualityDecision } from '../types';
 import { storageService } from '../services/storageService';
@@ -61,6 +62,39 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
     fetchMovements();
   }, []);
 
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const WHATSAPP_GROUP_URL = 'https://chat.whatsapp.com/LD2Puiu3KEv1qZx0LmiB70';
+
+  const shareToWhatsApp = (movement: SupplyMovement, action: string) => {
+    const message = `
+*حركة توريد جديدة*
+العميل: ${movement.clientName}
+الصنف: ${movement.itemName}
+السائق: ${movement.driverName}
+رقم السيارة: ${movement.vehicleNumber}
+الحالة: ${getStatusLabel(movement.status)}
+الإجراء: ${action}
+التوقيت: ${format(new Date(), 'p - dd/MM/yyyy', { locale: lang === 'ar' ? ar : enUS })}
+    `.trim();
+
+    navigator.clipboard.writeText(message);
+    toast.success(lang === 'ar' ? 'تم نسخ تفاصيل الحركة، يرجى لصقها في واتساب' : 'Movement details copied, please paste in WhatsApp');
+    
+    // Clear temporary image after sharing
+    setSelectedImage(null);
+    
+    window.open(WHATSAPP_GROUP_URL, '_blank');
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const reader = new FileReader();
+      reader.onload = (e) => setSelectedImage(e.target?.result as string);
+      reader.readAsDataURL(e.target.files[0]);
+    }
+  };
+
   const handleAddMovement = async (e: React.FormEvent) => {
     e.preventDefault();
     const movement: SupplyMovement = {
@@ -81,6 +115,7 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
       setIsAdding(false);
       setNewMovement({ clientName: '', itemName: '', driverName: '', vehicleNumber: '' });
       toast.success(lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Entry recorded successfully');
+      shareToWhatsApp(movement, lang === 'ar' ? 'تسجيل دخول' : 'Entry');
     } catch (error) {
       toast.error(lang === 'ar' ? 'خطأ في الحفظ' : 'Error saving');
     }
@@ -98,6 +133,7 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
       await storageService.saveSupplyMovement(updatedMovement);
       setMovements(movements.map(m => m.id === movement.id ? updatedMovement : m));
       toast.success(lang === 'ar' ? 'تم التحديث بنجاح' : 'Updated successfully');
+      shareToWhatsApp(updatedMovement, lang === 'ar' ? 'تحديث الحالة' : 'Status Update');
     } catch (error) {
       toast.error(lang === 'ar' ? 'خطأ في التحديث' : 'Error updating');
     }
@@ -204,31 +240,31 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={() => setExpandedId(expandedId === movement.id ? null : movement.id)}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 md:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer"
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2 md:p-3 shadow-sm hover:shadow-md transition-all cursor-pointer"
             >
-              <div className="flex flex-col md:flex-row justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-                    <Truck className="text-emerald-500" size={24} />
+              <div className="flex flex-col md:flex-row justify-between gap-2">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                    <Truck className="text-emerald-500" size={20} />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-lg text-zinc-900 dark:text-white">{movement.clientName}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(movement.status)}`}>
+                      <h3 className="font-bold text-sm text-zinc-900 dark:text-white">{movement.clientName}</h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(movement.status)}`}>
                         {getStatusLabel(movement.status)}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                      <div className="flex items-center gap-2">
-                        <User size={14} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="flex items-center gap-1.5">
+                        <User size={12} />
                         <span>{movement.driverName} ({movement.vehicleNumber})</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <AlertCircle size={14} />
+                      <div className="flex items-center gap-1.5">
+                        <AlertCircle size={12} />
                         <span>{movement.itemName}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Clock size={14} />
+                      <div className="flex items-center gap-1.5">
+                        <Clock size={12} />
                         <span>{format(new Date(movement.entryTime), 'p - dd/MM/yyyy', { locale: lang === 'ar' ? ar : enUS })}</span>
                       </div>
                     </div>
@@ -236,6 +272,24 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* Camera Input */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageChange}
+                      className="hidden"
+                      id={`camera-${movement.id}`}
+                    />
+                    <label
+                      htmlFor={`camera-${movement.id}`}
+                      className={`flex items-center justify-center w-10 h-10 rounded-xl cursor-pointer transition-all ${selectedImage ? 'bg-emerald-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200'}`}
+                    >
+                      <Camera size={20} />
+                    </label>
+                  </div>
+
                   {/* Quality Actions */}
                   {movement.status === 'Quality Inspection' && (user.role === 'Quality' || user.role === 'Admin') && (
                     <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -339,6 +393,35 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
                         </div>
                       )}
                     </div>
+
+                    {/* Admin Actions */}
+                    {user.role === 'Admin' && (
+                      <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); /* TODO: Implement Edit */ toast.info("Edit not implemented yet"); }}
+                          className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                        >
+                          {t.edit || 'Edit'}
+                        </button>
+                        <button
+                          onClick={async (e) => { 
+                            e.stopPropagation(); 
+                            if (confirm(lang === 'ar' ? 'هل أنت متأكد من حذف هذه الحركة؟' : 'Are you sure you want to delete this movement?')) {
+                              try {
+                                await storageService.deleteSupplyMovement(movement.id);
+                                setMovements(movements.filter(m => m.id !== movement.id));
+                                toast.success(lang === 'ar' ? 'تم الحذف بنجاح' : 'Deleted successfully');
+                              } catch (error) {
+                                toast.error(lang === 'ar' ? 'خطأ في الحذف' : 'Error deleting');
+                              }
+                            }
+                          }}
+                          className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600"
+                        >
+                          {t.delete || 'Delete'}
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
