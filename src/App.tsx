@@ -355,7 +355,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard lang={lang} user={user} tasks={tasks} />;
       case 'supplyTracking':
-        return <SupplyTracking lang={lang} user={user} />;
+        return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
       case 'coldStorage':
         return <ColdStorage lang={lang} user={user} />;
       case 'rawMaterial':
@@ -369,7 +369,7 @@ export default function App() {
       case 'settings':
         return <Settings lang={lang} user={user} setUser={setUser} />;
       default:
-        return <SupplyTracking lang={lang} user={user} />;
+        return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
     }
   };
 

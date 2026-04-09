@@ -27,15 +27,17 @@ import { toast } from 'sonner';
 interface SupplyTrackingProps {
   lang: Language;
   user: UserProfile;
+  allUsers: UserProfile[];
 }
 
-export default function SupplyTracking({ lang, user }: SupplyTrackingProps) {
+export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingProps) {
   const t = translations[lang];
   const [movements, setMovements] = useState<SupplyMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<SupplyStatus | 'All'>('All');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Form state for new movement (Security)
   const [newMovement, setNewMovement] = useState({
@@ -99,6 +101,12 @@ export default function SupplyTracking({ lang, user }: SupplyTrackingProps) {
     } catch (error) {
       toast.error(lang === 'ar' ? 'خطأ في التحديث' : 'Error updating');
     }
+  };
+
+  const getUserName = (uid?: string) => {
+    if (!uid) return '-';
+    const u = allUsers.find(user => user.uid === uid);
+    return u ? u.displayName : uid;
   };
 
   const filteredMovements = movements.filter(m => {
@@ -195,7 +203,8 @@ export default function SupplyTracking({ lang, user }: SupplyTrackingProps) {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 md:p-6 shadow-sm hover:shadow-md transition-all"
+              onClick={() => setExpandedId(expandedId === movement.id ? null : movement.id)}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 md:p-6 shadow-sm hover:shadow-md transition-all cursor-pointer"
             >
               <div className="flex flex-col md:flex-row justify-between gap-4">
                 <div className="flex items-start gap-4">
@@ -231,21 +240,31 @@ export default function SupplyTracking({ lang, user }: SupplyTrackingProps) {
                   {movement.status === 'Quality Inspection' && (user.role === 'Quality' || user.role === 'Admin') && (
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                       <button
-                        onClick={() => handleUpdateStatus(movement, 'Warehouse Unloading', { 
+                        onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Warehouse Unloading', { 
                           qualityDecision: 'Accepted', 
                           qualityInspectorId: user.uid,
                           qualityTime: new Date().toISOString()
-                        })}
+                        })}}
                         className="flex-1 sm:flex-none px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-bold hover:bg-emerald-600 transition-all"
                       >
                         {t.accepted}
                       </button>
                       <button
-                        onClick={() => handleUpdateStatus(movement, 'Completed', { 
+                        onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Quality Inspection', { 
+                          qualityDecision: 'Under Inspection', 
+                          qualityInspectorId: user.uid,
+                          qualityTime: new Date().toISOString()
+                        })}}
+                        className="flex-1 sm:flex-none px-4 py-2 bg-yellow-500 text-white rounded-xl text-sm font-bold hover:bg-yellow-600 transition-all"
+                      >
+                        {t.underInspection}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Completed', { 
                           qualityDecision: 'Rejected', 
                           qualityInspectorId: user.uid,
                           qualityTime: new Date().toISOString()
-                        })}
+                        })}}
                         className="flex-1 sm:flex-none px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition-all"
                       >
                         {t.rejected}
@@ -256,10 +275,10 @@ export default function SupplyTracking({ lang, user }: SupplyTrackingProps) {
                   {/* Warehouse Actions */}
                   {movement.status === 'Warehouse Unloading' && (user.role === 'Warehouse' || user.role === 'Admin') && (
                     <button
-                      onClick={() => handleUpdateStatus(movement, 'Security Exit', { 
+                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Security Exit', { 
                         warehouseOperatorId: user.uid,
                         warehouseTime: new Date().toISOString()
-                      })}
+                      })}}
                       className="w-full sm:w-auto px-6 py-2 bg-purple-500 text-white rounded-xl text-sm font-bold hover:bg-purple-600 transition-all"
                     >
                       {t.unloading}
@@ -269,10 +288,10 @@ export default function SupplyTracking({ lang, user }: SupplyTrackingProps) {
                   {/* Security Exit Actions */}
                   {movement.status === 'Security Exit' && (user.role === 'Security' || user.role === 'Admin') && (
                     <button
-                      onClick={() => handleUpdateStatus(movement, 'Completed', { 
+                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Completed', { 
                         securityExitId: user.uid,
                         exitTime: new Date().toISOString()
-                      })}
+                      })}}
                       className="w-full sm:w-auto px-6 py-2 bg-orange-500 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition-all"
                     >
                       {t.confirmExit}
@@ -281,29 +300,48 @@ export default function SupplyTracking({ lang, user }: SupplyTrackingProps) {
                 </div>
               </div>
 
-              {/* Comments/Details Section */}
-              {(movement.qualityComments || movement.warehouseComments) && (
-                <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {movement.qualityComments && (
-                    <div className="flex gap-2 text-sm">
-                      <MessageSquare size={16} className="text-emerald-500 shrink-0" />
-                      <div>
-                        <span className="font-bold text-zinc-700 dark:text-zinc-300">{t.quality}: </span>
-                        <span className="text-zinc-600 dark:text-zinc-400">{movement.qualityComments}</span>
+              {/* Expanded Details */}
+              <AnimatePresence>
+                {expandedId === movement.id && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-2">
+                        <p className="font-bold text-zinc-900 dark:text-white">{lang === 'ar' ? 'تفاصيل العمليات' : 'Operation Details'}</p>
+                        <div className="text-zinc-500 dark:text-zinc-400 space-y-1">
+                          <p>{lang === 'ar' ? 'دخول الأمن' : 'Security Entry'}: {getUserName(movement.qualityInspectorId || movement.warehouseOperatorId || movement.securityExitId ? 'Security' : undefined)} - {format(new Date(movement.entryTime), 'p - dd/MM/yyyy', { locale: lang === 'ar' ? ar : enUS })}</p>
+                          {movement.qualityTime && <p>{t.inspection}: {getUserName(movement.qualityInspectorId)} - {format(new Date(movement.qualityTime), 'p - dd/MM/yyyy', { locale: lang === 'ar' ? ar : enUS })}</p>}
+                          {movement.warehouseTime && <p>{t.unloading}: {getUserName(movement.warehouseOperatorId)} - {format(new Date(movement.warehouseTime), 'p - dd/MM/yyyy', { locale: lang === 'ar' ? ar : enUS })}</p>}
+                          {movement.exitTime && <p>{t.confirmExit}: {getUserName(movement.securityExitId)} - {format(new Date(movement.exitTime), 'p - dd/MM/yyyy', { locale: lang === 'ar' ? ar : enUS })}</p>}
+                        </div>
                       </div>
+                      
+                      {/* Comments/Details Section */}
+                      {(movement.qualityComments || movement.warehouseComments) && (
+                        <div className="space-y-2">
+                          <p className="font-bold text-zinc-900 dark:text-white">{t.comments}</p>
+                          {movement.qualityComments && (
+                            <div className="flex gap-2">
+                              <MessageSquare size={16} className="text-emerald-500 shrink-0" />
+                              <span className="text-zinc-600 dark:text-zinc-400">{movement.qualityComments}</span>
+                            </div>
+                          )}
+                          {movement.warehouseComments && (
+                            <div className="flex gap-2">
+                              <MessageSquare size={16} className="text-purple-500 shrink-0" />
+                              <span className="text-zinc-600 dark:text-zinc-400">{movement.warehouseComments}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {movement.warehouseComments && (
-                    <div className="flex gap-2 text-sm">
-                      <MessageSquare size={16} className="text-purple-500 shrink-0" />
-                      <div>
-                        <span className="font-bold text-zinc-700 dark:text-zinc-300">{t.warehouse}: </span>
-                        <span className="text-zinc-600 dark:text-zinc-400">{movement.warehouseComments}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           ))}
         </AnimatePresence>
