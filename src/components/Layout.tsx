@@ -17,7 +17,10 @@ import {
   LogIn,
   Truck,
   Snowflake,
-  Package
+  Package,
+  Download,
+  Share,
+  PlusSquare
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -53,6 +56,30 @@ export default function Layout({
   onLogout
 }: LayoutProps) {
   const [isDesktopMode, setIsDesktopMode] = React.useState(true);
+  const [showInstallModal, setShowInstallModal] = React.useState(false);
+  const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else {
+      setShowInstallModal(true);
+    }
+  };
+
   const t = translations[lang];
   const isRtl = lang === 'ar';
 
@@ -128,6 +155,14 @@ export default function Layout({
               <p className="text-[8px] text-zinc-500 leading-none mt-1 uppercase tracking-wider">{translations[lang][user.role.charAt(0).toLowerCase() + user.role.slice(1).replace(' ', '') as keyof typeof translations['en']] || user.role}</p>
             </div>
           )}
+          <button 
+            onClick={handleInstall}
+            title={lang === 'ar' ? 'تثبيت التطبيق' : 'Install App'}
+            className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors flex items-center gap-2"
+          >
+            <Download size={18} />
+            <span className="hidden sm:inline text-xs font-bold">{lang === 'ar' ? 'تثبيت' : 'Install'}</span>
+          </button>
           <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
           <ConnectionStatus />
           <button 
@@ -192,6 +227,63 @@ export default function Layout({
           {children}
         </div>
       </main>
+
+      {/* Install Modal */}
+      {showInstallModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            onClick={() => setShowInstallModal(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="relative w-full max-w-sm bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl border border-zinc-200 dark:border-zinc-800"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">{lang === 'ar' ? 'تثبيت التطبيق' : 'Install App'}</h3>
+              <button onClick={() => setShowInstallModal(false)} className="text-zinc-400 hover:text-zinc-600">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
+                <h4 className="font-bold mb-2 flex items-center gap-2">
+                  <Smartphone size={18} className="text-emerald-500" />
+                  {lang === 'ar' ? 'لمستخدمي آيفون (Safari)' : 'For iPhone Users (Safari)'}
+                </h4>
+                <ol className="text-sm text-zinc-600 dark:text-zinc-400 space-y-2 list-decimal list-inside">
+                  <li>{lang === 'ar' ? 'اضغط على زر "مشاركة" (Share)' : 'Tap the "Share" button'} <Share size={14} className="inline mx-1" /></li>
+                  <li>{lang === 'ar' ? 'اختر "إضافة إلى الشاشة الرئيسية"' : 'Select "Add to Home Screen"'} <PlusSquare size={14} className="inline mx-1" /></li>
+                  <li>{lang === 'ar' ? 'اضغط على "إضافة" (Add)' : 'Tap "Add" at the top right'}</li>
+                </ol>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
+                <h4 className="font-bold mb-2 flex items-center gap-2">
+                  <Smartphone size={18} className="text-blue-500" />
+                  {lang === 'ar' ? 'لمستخدمي أندرويد (Chrome)' : 'For Android Users (Chrome)'}
+                </h4>
+                <ol className="text-sm text-zinc-600 dark:text-zinc-400 space-y-2 list-decimal list-inside">
+                  <li>{lang === 'ar' ? 'اضغط على الثلاث نقاط في الزاوية' : 'Tap the three dots menu'}</li>
+                  <li>{lang === 'ar' ? 'اختر "تثبيت التطبيق"' : 'Select "Install App"'}</li>
+                  <li>{lang === 'ar' ? 'أكد عملية التثبيت' : 'Confirm the installation'}</li>
+                </ol>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowInstallModal(false)}
+              className="w-full mt-8 py-3 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
+            >
+              {lang === 'ar' ? 'حسناً، فهمت' : 'Got it!'}
+            </button>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
