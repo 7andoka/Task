@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Bell, Save, CheckCircle2 } from 'lucide-react';
+import { Bell, Save, CheckCircle2, Download } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile, NotificationPreferences } from '../types';
 import { storageService } from '../services/storageService';
@@ -25,6 +25,25 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
   );
   
   const [showSuccess, setShowSuccess] = React.useState(false);
+  const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const handleSave = async () => {
     const updatedUser = { ...user, notificationPreferences: prefs };
@@ -116,6 +135,22 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
             {lang === 'ar' ? 'تفعيل الآن' : 'Enable Now'}
           </button>
         </div>
+
+        {deferredPrompt && (
+          <div className="mt-6 p-4 rounded-2xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold">{lang === 'ar' ? 'تثبيت التطبيق على هاتفك' : 'Install App on your Phone'}</h3>
+              <p className="text-xs text-zinc-500 mt-1">{lang === 'ar' ? 'استخدم التطبيق كأنه تطبيق أصلي مع وصول أسرع' : 'Use the app as a native application with faster access'}</p>
+            </div>
+            <button 
+              onClick={handleInstall}
+              className="flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl text-sm font-semibold hover:opacity-90 transition-all shadow-lg"
+            >
+              <Download size={18} />
+              <span>{lang === 'ar' ? 'تثبيت' : 'Install'}</span>
+            </button>
+          </div>
+        )}
 
         <div className="mt-8 flex items-center justify-between">
           <motion.div 

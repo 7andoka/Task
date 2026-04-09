@@ -2,6 +2,10 @@
   "version": 2,
   "rewrites": [
     { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/logo.png", "destination": "/logo.png" },
+    { "source": "/background.jpg", "destination": "/background.jpg" },
+    { "source": "/manifest.json", "destination": "/manifest.json" },
+    { "source": "/sw.js", "destination": "/sw.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
