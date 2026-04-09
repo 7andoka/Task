@@ -48,15 +48,17 @@ export default function Auth({ lang, onLogin }: AuthProps) {
 
   return (
     <div className="min-h-screen relative flex flex-col items-center justify-center p-4 overflow-hidden font-sans" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-        style={{ 
-          backgroundImage: `url('/background.jpg')`,
-        }}
-      />
-      {/* Overlay to ensure text readability while keeping the image visible */}
-      <div className="absolute inset-0 z-0 bg-black/20" />
+      {/* Background Image Container */}
+      <div className="absolute inset-0 z-0">
+        <img 
+          src="/background.jpg" 
+          alt="" 
+          className="w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+        />
+        {/* Overlay to ensure text readability */}
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+      </div>
       
       {/* Main Content & Login Form */}
       <div className="relative z-10 w-full max-w-sm flex flex-col items-center">

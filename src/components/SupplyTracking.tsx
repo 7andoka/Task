@@ -19,7 +19,10 @@ import {
   Camera
 } from 'lucide-react';
 import { SupplyMovement, UserProfile, Language, SupplyStatus, QualityDecision } from '../types';
-import { storageService } from '../services/storageService';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
+import { COLLECTIONS } from '../constants';
+import { handleFirestoreError, OperationType, storageService } from '../services/storageService';
 import { translations } from '../i18n';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
@@ -51,17 +54,17 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
   });
 
   useEffect(() => {
-    const fetchMovements = async () => {
-      try {
-        const data = await storageService.getSupplyMovements();
-        setMovements(data);
-      } catch (error) {
-        console.error("Error fetching supply movements:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMovements();
+    const q = query(collection(db, COLLECTIONS.SUPPLY_MOVEMENTS), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as SupplyMovement));
+      setMovements(data);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.SUPPLY_MOVEMENTS);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);

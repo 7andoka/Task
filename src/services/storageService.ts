@@ -3,7 +3,7 @@ import { auth, db } from '../firebase';
 import { collection, doc, getDocs, getDoc, setDoc, getDocFromServer, query, where, deleteDoc, orderBy } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
 
-enum OperationType {
+export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
   DELETE = 'delete',
@@ -23,7 +23,7 @@ interface FirestoreErrorInfo {
   }
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
