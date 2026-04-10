@@ -36,9 +36,12 @@ export default function ConnectionStatus() {
   return (
     <div 
       title={isConnected ? 'Connected' : 'Disconnected'}
-      className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${isConnected ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}
+      className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
     >
-      {isConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
+      <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+      <span className="text-[9px] font-bold uppercase text-zinc-600 dark:text-zinc-400">
+        {isConnected ? 'Online' : 'Offline'}
+      </span>
     </div>
   );
 }

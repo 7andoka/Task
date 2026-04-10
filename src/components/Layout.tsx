@@ -116,10 +116,22 @@ export default function Layout({
     )} dir={isRtl ? 'rtl' : 'ltr'}>
       
       {/* Top Bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-4 px-4 h-14 bg-zinc-100/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 backdrop-blur-md">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-black tracking-tighter text-emerald-500 shrink-0">Rich Land</h1>
-          
+      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-zinc-100/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 backdrop-blur-md">
+        
+        {/* Left Side Controls (Connection Status) */}
+        <div className="flex items-center gap-3 shrink-0 z-10">
+          <ConnectionStatus />
+          <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
+        </div>
+
+        {/* Centered Branding */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center leading-none z-0">
+          <h1 className="text-lg font-bold text-emerald-700 tracking-tight font-serif whitespace-nowrap">Rich Land</h1>
+          <p className="text-[8px] font-bold text-emerald-600 tracking-widest uppercase mt-0.5 whitespace-nowrap">FOOD INDUSTRIES</p>
+        </div>
+
+        {/* Right Side Controls (Navigation + Logout/Mode Toggle) */}
+        <div className="flex items-center gap-3 shrink-0 z-10">
           <div className={cn(
             "flex items-center gap-1 shrink-0",
             !isDesktopMode && "hidden"
@@ -146,32 +158,7 @@ export default function Layout({
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="flex items-center gap-3 shrink-0">
-          {user && (
-            <div className="hidden md:flex flex-col items-end">
-              <p className="text-[10px] font-bold leading-none">{user.displayName}</p>
-              <p className="text-[8px] text-zinc-500 leading-none mt-1 uppercase tracking-wider">{translations[lang][user.role.charAt(0).toLowerCase() + user.role.slice(1).replace(' ', '') as keyof typeof translations['en']] || user.role}</p>
-            </div>
-          )}
-          <button 
-            onClick={handleInstall}
-            title={lang === 'ar' ? 'تثبيت التطبيق' : 'Install App'}
-            className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors flex items-center gap-2"
-          >
-            <Download size={18} />
-            <span className="hidden sm:inline text-xs font-bold">{lang === 'ar' ? 'تثبيت' : 'Install'}</span>
-          </button>
           <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
-          <ConnectionStatus />
-          <button 
-            onClick={() => window.dispatchEvent(new CustomEvent('refresh-data'))}
-            title={lang === 'ar' ? 'تحديث البيانات' : 'Refresh Data'}
-            className="p-2 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
-          >
-            <RefreshCw size={18} />
-          </button>
           <button 
             onClick={() => setIsDesktopMode(!isDesktopMode)}
             title={isDesktopMode ? (lang === 'ar' ? 'وضع الهاتف' : 'Mobile Mode') : (lang === 'ar' ? 'وضع الكمبيوتر' : 'Desktop Mode')}
