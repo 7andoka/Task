@@ -51,16 +51,17 @@ export default function Auth({ lang, onLogin }: AuthProps) {
       {/* Background Image Container */}
       <div className="absolute inset-0 z-0">
         <img 
-          src="https://i.ibb.co/N2wL8FhR/background.jpg" 
+          src="https://i.postimg.cc/j5PH02L7/images-2.jpg" 
           alt="" 
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
+          style={{ imageRendering: 'auto' }}
           onError={(e) => {
             (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=1920&auto=format&fit=crop';
           }}
         />
-        {/* Overlay to ensure text readability */}
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px]" />
+        {/* Subtle overlay for text readability without sacrificing image quality */}
+        <div className="absolute inset-0 bg-black/40" />
       </div>
       
       {/* Main Content & Login Form */}
@@ -69,7 +70,7 @@ export default function Auth({ lang, onLogin }: AuthProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="w-full bg-white/10 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/20 shadow-2xl"
+          className="w-full bg-white/5 backdrop-blur-lg p-6 rounded-[2rem] border border-white/10 shadow-2xl"
         >
           <div className="text-center mb-6">
             <h2 className="text-3xl font-bold text-white tracking-tight">{t.login}</h2>

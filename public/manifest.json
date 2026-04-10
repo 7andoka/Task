@@ -9,15 +9,15 @@
   "theme_color": "#006B62",
   "icons": [
     {
-      "src": "/logo.png",
+      "src": "https://i.postimg.cc/1XRRDjGB/1643207840139.jpg",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any maskable"
     },
     {
-      "src": "/logo.png",
+      "src": "https://i.postimg.cc/1XRRDjGB/1643207840139.jpg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/jpeg",
       "purpose": "any maskable"
     }
   ]
