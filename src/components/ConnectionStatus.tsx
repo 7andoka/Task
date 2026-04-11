@@ -1,10 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { Wifi, WifiOff } from 'lucide-react';
+import { triggerAlert } from '../lib/notifications';
 
 export default function ConnectionStatus() {
   const [isConnected, setIsConnected] = useState(navigator.onLine);
+  const prevConnectedRef = useRef(navigator.onLine);
+
+  useEffect(() => {
+    // Check if connection status changed
+    if (isConnected !== prevConnectedRef.current) {
+      triggerAlert(
+        isConnected ? "تم الاتصال" : "انقطع الاتصال",
+        isConnected ? "تم استعادة الاتصال بالإنترنت" : "فقدت الاتصال بالإنترنت، يرجى التحقق من الشبكة"
+      );
+      prevConnectedRef.current = isConnected;
+    }
+  }, [isConnected]);
 
   useEffect(() => {
     // Basic online/offline listeners
