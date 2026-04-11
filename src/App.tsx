@@ -36,7 +36,10 @@ export default function App() {
   const prevTasksRef = useRef<Task[]>([]);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      setConnectionError(null); // Clear error when online
+    };
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
