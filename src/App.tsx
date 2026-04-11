@@ -12,6 +12,7 @@ import Settings from './components/Settings';
 import SupplyTracking from './components/SupplyTracking';
 import ColdStorage from './components/ColdStorage';
 import RawMaterial from './components/RawMaterial';
+import OfflineScreen from './components/OfflineScreen';
 import { Language, UserProfile, Task } from './types';
 import { storageService } from './services/storageService';
 import { translations } from './i18n';
@@ -24,6 +25,7 @@ export default function App() {
   const [lang, setLang] = useState<Language>('ar');
   const [isDark, setIsDark] = useState(true);
   const [activeTab, setActiveTab] = useState('supplyTracking');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
@@ -32,6 +34,24 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const prevTasksRef = useRef<Task[]>([]);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  if (!isOnline) {
+    return <OfflineScreen lang={lang} />;
+  }
+
 
   const refreshData = async () => {
     if (!user) return;
