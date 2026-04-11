@@ -51,10 +51,6 @@ export default function App() {
     };
   }, []);
 
-  if (!isOnline) {
-    return <OfflineScreen lang={lang} />;
-  }
-
 
   const refreshData = async () => {
     if (!user) return;
@@ -340,6 +336,10 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [allTasks, user, lang]);
+
+  if (!isOnline) {
+    return <OfflineScreen lang={lang} />;
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('task_manager_username');
