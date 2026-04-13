@@ -1,7 +1,37 @@
 export type UserRole = 'Admin' | 'Warehouse Manager' | 'Department Head' | 'Supervisor' | 'Warehouse Specialist' | 'Warehouse Keeper' | 'Assistant Warehouse Keeper' | 'Worker' | 'Security' | 'Quality' | 'Warehouse';
 
 export type SupplyStatus = 'Security Entry' | 'Quality Inspection' | 'Warehouse Unloading' | 'Security Exit' | 'Completed';
-export type QualityDecision = 'Accepted' | 'Rejected' | 'Under Inspection';
+export type QualityDecision = 'Accepted' | 'Rejected' | 'Under Inspection' | 'Not Unloaded';
+
+// Barrel types
+export type BarrelType = 'سنابل' | 'البرتغاليه' | 'وطنيه';
+export type BarrelOwnership = 'ملكي' | 'ملك المورد';
+
+// Interface for a single barrel
+export interface Barrel {
+  id: string;
+  type: BarrelType;
+  ownership: BarrelOwnership;
+  supplierId: string;
+  currentQuantity: number;
+  createdAt: string;
+  lastUpdatedAt: string;
+}
+
+// Interface for barrel movements (receipts and dispatches)
+export interface BarrelMovement {
+  id: string;
+  supplierId: string;
+  barrelType: BarrelType;
+  ownership: BarrelOwnership;
+  location: 'Company' | 'Supplier'; // Where the movement happened
+  quantity: number;
+  movementType: 'Receipt' | 'Dispatch';
+  movementTime: string;
+  notes?: string;
+  createdAt: string;
+  lastUpdatedAt: string;
+}
 
 export interface SupplyMovement {
   id: string;
@@ -11,6 +41,7 @@ export interface SupplyMovement {
   itemName: string;
   driverName: string;
   vehicleNumber: string;
+  poNumber?: string;
   status: SupplyStatus;
   
   // Quality Section
@@ -30,6 +61,7 @@ export interface SupplyMovement {
   createdAt: string;
   lastUpdatedAt: string;
 }
+// ... (rest of the file)
 
 export interface NotificationPreferences {
   newAssignments: boolean;

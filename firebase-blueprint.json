@@ -94,6 +94,24 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "userId", "action", "details", "createdAt"]
+    },
+    "BarrelMovement": {
+      "title": "BarrelMovement",
+      "description": "Barrel movement log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "barrelType": { "type": "string", "enum": ["سنابل", "البرتغاليه", "وطنيه"] },
+        "ownership": { "type": "string", "enum": ["ملكي", "ملك المورد"] },
+        "quantity": { "type": "number" },
+        "movementType": { "type": "string", "enum": ["Receipt", "Dispatch"] },
+        "movementTime": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastUpdatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "supplierId", "barrelType", "ownership", "quantity", "movementType", "movementTime", "createdAt", "lastUpdatedAt"]
     }
   },
   "firestore": {
@@ -102,6 +120,7 @@
     "subtasks": { "schema": "Subtask", "description": "Subtasks collection" },
     "comments": { "schema": "Comment", "description": "Comments collection" },
     "notifications": { "schema": "Notification", "description": "Notifications collection" },
-    "audit_logs": { "schema": "AuditLog", "description": "Audit logs collection" }
+    "audit_logs": { "schema": "AuditLog", "description": "Audit logs collection" },
+    "barrel_movements": { "schema": "BarrelMovement", "description": "Barrel movements collection" }
   }
 }

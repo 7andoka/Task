@@ -285,7 +285,11 @@ export const storageService = {
   },
   saveSupplyMovement: async (movement: SupplyMovement) => {
     try {
-      await setDoc(doc(db, COLLECTIONS.SUPPLY_MOVEMENTS, movement.id), movement);
+      const dataToSave = { ...movement };
+      if (dataToSave.poNumber === undefined || dataToSave.poNumber === '') {
+        delete dataToSave.poNumber;
+      }
+      await setDoc(doc(db, COLLECTIONS.SUPPLY_MOVEMENTS, movement.id), dataToSave);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.SUPPLY_MOVEMENTS}/${movement.id}`);
     }

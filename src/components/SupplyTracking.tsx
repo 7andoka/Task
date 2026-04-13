@@ -16,7 +16,8 @@ import {
   Calendar,
   ChevronRight,
   ChevronLeft,
-  Camera
+  Camera,
+  Download
 } from 'lucide-react';
 import { SupplyMovement, UserProfile, Language, SupplyStatus, QualityDecision } from '../types';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
@@ -27,6 +28,8 @@ import { translations } from '../i18n';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { notifyUser } from '../services/notificationService';
+import * as XLSX from 'xlsx';
 
 interface SupplyTrackingProps {
   lang: Language;
@@ -51,6 +54,7 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
     itemName: '',
     driverName: '',
     vehicleNumber: '',
+    poNumber: '',
   });
 
   useEffect(() => {
@@ -72,14 +76,49 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
   const WHATSAPP_GROUP_URL = 'https://chat.whatsapp.com/LD2Puiu3KEv1qZx0LmiB70';
 
   const shareToWhatsApp = (movement: SupplyMovement, action: string) => {
+    const serialNumber = movement.id.slice(0, 8).toUpperCase();
+    const header = action === 'Entry' ? `*حركة توريد جديدة* ${serialNumber}` : `حركة توريد رقم ${serialNumber}`;
+    
+    let statusLabel = '';
+    let actionLabel = '';
+
+    if (movement.status === 'Security Entry') {
+      statusLabel = 'تم الدخول';
+      actionLabel = 'يرجى الفحص';
+    } else if (movement.status === 'Quality Inspection') {
+      statusLabel = 'تم الفحص';
+      actionLabel = 'برجاء التنزيل';
+    } else if (movement.status === 'Warehouse Unloading') {
+      if (movement.qualityDecision === 'Rejected') {
+        statusLabel = '*تم الفحص (مرفوض)*';
+        actionLabel = '*برجاء عدم التنزيل*';
+      } else if (movement.qualityDecision === 'Not Unloaded') {
+        statusLabel = '*لم يتم التنزيل*';
+        actionLabel = '*يرجي الخروج*';
+      } else {
+        statusLabel = 'تم الفحص (مقبول)';
+        actionLabel = 'برجاء التنزيل';
+      }
+    } else if (movement.status === 'Security Exit') {
+      statusLabel = 'تم التنزيل';
+      actionLabel = 'يرجي الخروج';
+    } else if (movement.status === 'Completed') {
+      statusLabel = 'تم الخروج';
+      actionLabel = 'مكتملة';
+    } else {
+      statusLabel = getStatusLabel(movement.status);
+      actionLabel = action;
+    }
+
     const message = `
-*حركة توريد جديدة*
+${header}
 العميل: ${movement.clientName}
 الصنف: ${movement.itemName}
+رقم الـ PO: ${movement.poNumber || '-'}
 السائق: ${movement.driverName}
 رقم السيارة: ${movement.vehicleNumber}
-الحالة: ${getStatusLabel(movement.status)}
-الإجراء: ${action}
+الحالة: ${statusLabel}
+الإجراء: ${actionLabel}
 التوقيت: ${format(new Date(), 'p - dd/MM/yyyy', { locale: lang === 'ar' ? ar : enUS })}
     `.trim();
 
@@ -89,7 +128,7 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
     // Clear temporary image after sharing
     setSelectedImage(null);
     
-    window.open(WHATSAPP_GROUP_URL, '_blank');
+    window.open(WHATSAPP_GROUP_URL, '_system');
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,7 +148,8 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
       itemName: newMovement.itemName,
       driverName: newMovement.driverName,
       vehicleNumber: newMovement.vehicleNumber,
-      status: 'Quality Inspection',
+      poNumber: newMovement.poNumber,
+      status: 'Security Entry',
       createdAt: new Date().toISOString(),
       lastUpdatedAt: new Date().toISOString(),
     };
@@ -118,9 +158,15 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
       await storageService.saveSupplyMovement(movement);
       setMovements([movement, ...movements]);
       setIsAdding(false);
-      setNewMovement({ clientName: '', itemName: '', driverName: '', vehicleNumber: '' });
+      setNewMovement({ clientName: '', itemName: '', driverName: '', vehicleNumber: '', poNumber: '' });
       toast.success(lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Entry recorded successfully');
+      
+      // Open WhatsApp first, then notify
       shareToWhatsApp(movement, lang === 'ar' ? 'تسجيل دخول' : 'Entry');
+      
+      setTimeout(() => {
+        notifyUser(lang === 'ar' ? 'تم إضافة حركة توريد جديدة' : 'New supply movement added', false);
+      }, 500);
     } catch (error) {
       toast.error(lang === 'ar' ? 'خطأ في الحفظ' : 'Error saving');
     }
@@ -147,6 +193,8 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
   };
 
   const handleUpdateStatus = async (movement: SupplyMovement, nextStatus: SupplyStatus, updates: Partial<SupplyMovement>) => {
+    console.log('handleUpdateStatus called', { movement, nextStatus, updates });
+    toast.info('Updating status...');
     const updatedMovement = {
       ...movement,
       ...updates,
@@ -156,7 +204,7 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
 
     try {
       await storageService.saveSupplyMovement(updatedMovement);
-      setMovements(movements.map(m => m.id === movement.id ? updatedMovement : m));
+      setMovements(prev => prev.map(m => m.id === movement.id ? updatedMovement : m));
       toast.success(lang === 'ar' ? 'تم التحديث بنجاح' : 'Updated successfully');
       shareToWhatsApp(updatedMovement, lang === 'ar' ? 'تحديث الحالة' : 'Status Update');
     } catch (error) {
@@ -170,13 +218,46 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
     return u ? u.displayName : uid;
   };
 
+  const exportToExcel = () => {
+    const data = movements.map(m => ({
+      'Client Name': m.clientName,
+      'Item Name': m.itemName,
+      'Driver Name': m.driverName,
+      'Vehicle Number': m.vehicleNumber,
+      'Status': m.status,
+      'Quality Decision': m.qualityDecision || 'N/A',
+      'Entry Time': m.entryTime,
+      'Quality Time': m.qualityTime || 'N/A',
+      'Warehouse Time': m.warehouseTime || 'N/A',
+      'Exit Time': m.exitTime || 'N/A',
+      'PO Number': m.poNumber || 'N/A'
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Movements");
+    XLSX.writeFile(wb, "SupplyMovements.xlsx");
+  };
+
   const filteredMovements = movements.filter(m => {
     const matchesSearch = 
       m.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.vehicleNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.driverName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Role-based filtering
+    let isRelevant = true;
+    if (user.role === 'Quality') {
+      isRelevant = m.status === 'Security Entry' || m.status === 'Quality Inspection';
+    } else if (user.role === 'Warehouse') {
+      isRelevant = m.status === 'Warehouse Unloading';
+    } else if (user.role === 'Security') {
+      isRelevant = m.status !== 'Completed';
+    } else if (user.role !== 'Admin') {
+      isRelevant = false; // Other roles don't see movements
+    }
+
     const matchesFilter = filterStatus === 'All' || m.status === filterStatus;
-    return matchesSearch && matchesFilter;
+    return matchesSearch && matchesFilter && isRelevant;
   });
 
   const getStatusColor = (status: SupplyStatus) => {
@@ -192,10 +273,10 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
 
   const getStatusLabel = (status: SupplyStatus) => {
     switch (status) {
-      case 'Security Entry': return t.status_security_entry;
-      case 'Quality Inspection': return t.status_quality_inspection;
-      case 'Warehouse Unloading': return t.status_warehouse_unloading;
-      case 'Security Exit': return t.status_security_exit;
+      case 'Security Entry': return lang === 'ar' ? 'تم الدخول' : 'Vehicle Entered';
+      case 'Quality Inspection': return lang === 'ar' ? 'تم الفحص' : 'Inspected';
+      case 'Warehouse Unloading': return lang === 'ar' ? 'تم التنزيل' : 'Unloaded';
+      case 'Security Exit': return lang === 'ar' ? 'تم الخروج' : 'Exited';
       case 'Completed': return t.status_completed;
       default: return status;
     }
@@ -238,19 +319,28 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
             className={`w-full ${lang === 'ar' ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all`}
           />
         </div>
-        <div className="relative">
-          <Filter className={`absolute ${lang === 'ar' ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-zinc-400`} size={20} />
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
-            className={`w-full ${lang === 'ar' ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 appearance-none transition-all`}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Filter className={`absolute ${lang === 'ar' ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-zinc-400`} size={20} />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+              className={`w-full ${lang === 'ar' ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 appearance-none transition-all`}
+            >
+              <option value="All">{lang === 'ar' ? 'كل الحالات' : 'All Statuses'}</option>
+              <option value="Quality Inspection">{t.status_quality_inspection}</option>
+              <option value="Warehouse Unloading">{t.status_warehouse_unloading}</option>
+              <option value="Security Exit">{t.status_security_exit}</option>
+              <option value="Completed">{t.status_completed}</option>
+            </select>
+          </div>
+          <button
+            onClick={exportToExcel}
+            className="flex items-center justify-center px-3 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-all"
+            title={lang === 'ar' ? 'تصدير لإكسيل' : 'Export to Excel'}
           >
-            <option value="All">{lang === 'ar' ? 'كل الحالات' : 'All Statuses'}</option>
-            <option value="Quality Inspection">{t.status_quality_inspection}</option>
-            <option value="Warehouse Unloading">{t.status_warehouse_unloading}</option>
-            <option value="Security Exit">{t.status_security_exit}</option>
-            <option value="Completed">{t.status_completed}</option>
-          </select>
+            <Download size={20} />
+          </button>
         </div>
       </div>
 
@@ -265,7 +355,7 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={() => setExpandedId(expandedId === movement.id ? null : movement.id)}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2 md:p-3 shadow-sm hover:shadow-md transition-all cursor-pointer"
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer"
             >
               <div className="flex flex-col md:flex-row justify-between gap-2">
                 <div className="flex items-start gap-3">
@@ -297,53 +387,35 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Camera Input */}
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleImageChange}
-                      className="hidden"
-                      id={`camera-${movement.id}`}
-                    />
-                    <label
-                      htmlFor={`camera-${movement.id}`}
-                      className={`flex items-center justify-center w-10 h-10 rounded-xl cursor-pointer transition-all ${selectedImage ? 'bg-emerald-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200'}`}
-                    >
-                      <Camera size={20} />
-                    </label>
-                  </div>
-
                   {/* Quality Actions */}
-                  {movement.status === 'Quality Inspection' && (user.role === 'Quality' || user.role === 'Admin') && (
+                  {(movement.status === 'Quality Inspection' || movement.status === 'Security Entry') && (user.role === 'Quality' || user.role === 'Admin') && (
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Warehouse Unloading', { 
+                        onClick={() => handleUpdateStatus(movement, 'Warehouse Unloading', { 
                           qualityDecision: 'Accepted', 
                           qualityInspectorId: user.uid,
                           qualityTime: new Date().toISOString()
-                        })}}
+                        })}
                         className="flex-1 sm:flex-none px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-bold hover:bg-emerald-600 transition-all"
                       >
                         {t.accepted}
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Quality Inspection', { 
+                        onClick={() => handleUpdateStatus(movement, 'Quality Inspection', { 
                           qualityDecision: 'Under Inspection', 
                           qualityInspectorId: user.uid,
                           qualityTime: new Date().toISOString()
-                        })}}
+                        })}
                         className="flex-1 sm:flex-none px-4 py-2 bg-yellow-500 text-white rounded-xl text-sm font-bold hover:bg-yellow-600 transition-all"
                       >
                         {t.underInspection}
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Completed', { 
+                        onClick={() => handleUpdateStatus(movement, 'Warehouse Unloading', { 
                           qualityDecision: 'Rejected', 
                           qualityInspectorId: user.uid,
                           qualityTime: new Date().toISOString()
-                        })}}
+                        })}
                         className="flex-1 sm:flex-none px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition-all"
                       >
                         {t.rejected}
@@ -351,17 +423,49 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
                     </div>
                   )}
 
-                  {/* Warehouse Actions */}
-                  {movement.status === 'Warehouse Unloading' && (user.role === 'Warehouse' || user.role === 'Admin') && (
+                  {/* Start Unloading Action */}
+                  {movement.status === 'Quality Inspection' && movement.qualityDecision === 'Accepted' && (user.role === 'Warehouse' || user.role === 'Admin') && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Security Exit', { 
+                      onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Warehouse Unloading', { 
                         warehouseOperatorId: user.uid,
                         warehouseTime: new Date().toISOString()
                       })}}
-                      className="w-full sm:w-auto px-6 py-2 bg-purple-500 text-white rounded-xl text-sm font-bold hover:bg-purple-600 transition-all"
+                      className="w-full sm:w-auto px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all"
                     >
-                      {t.unloading}
+                      {lang === 'ar' ? 'بدء التنزيل' : 'Start Unloading'}
                     </button>
+                  )}
+
+                  {/* Warehouse Actions */}
+                  {movement.status === 'Warehouse Unloading' && (user.role === 'Warehouse' || user.role === 'Admin') && (
+                    <div className="flex gap-2">
+                      {movement.qualityDecision === 'Rejected' ? (
+                        <>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Quality Inspection', { qualityDecision: 'Under Inspection' }) }}
+                            className="px-4 py-2 bg-yellow-500 text-white rounded-xl text-sm font-bold hover:bg-yellow-600 transition-all"
+                          >
+                            {lang === 'ar' ? 'إعادة الفحص' : 'Re-inspect'}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Security Exit', { qualityDecision: 'Not Unloaded' }) }}
+                            className="px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition-all"
+                          >
+                            {lang === 'ar' ? 'عدم التنزيل' : 'Don\'t Unload'}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Security Exit', { 
+                            warehouseOperatorId: user.uid,
+                            warehouseTime: new Date().toISOString()
+                          })}}
+                          className="w-full sm:w-auto px-6 py-2 bg-purple-500 text-white rounded-xl text-sm font-bold hover:bg-purple-600 transition-all"
+                        >
+                          {t.unloading}
+                        </button>
+                      )}
+                    </div>
                   )}
 
                   {/* Security Exit Actions */}
@@ -540,6 +644,15 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang === 'ar' ? 'رقم الـ PO (اختياري)' : 'PO Number (Optional)'}</label>
+                  <input
+                    type="text"
+                    value={newMovement.poNumber}
+                    onChange={(e) => setNewMovement({ ...newMovement, poNumber: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  />
+                </div>
 
                 <div className="pt-4 flex gap-3">
                   <button
@@ -629,7 +742,31 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang === 'ar' ? 'رقم الـ PO (اختياري)' : 'PO Number (Optional)'}</label>
+                  <input
+                    type="text"
+                    value={editingMovement.poNumber || ''}
+                    onChange={(e) => setEditingMovement({ ...editingMovement, poNumber: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  />
+                </div>
 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang === 'ar' ? 'الحالة' : 'Status'}</label>
+                  <select
+                    value={editingMovement.status}
+                    onChange={(e) => setEditingMovement({ ...editingMovement, status: e.target.value as SupplyStatus })}
+                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  >
+                    <option value="Security Entry">{lang === 'ar' ? 'دخول الأمن' : 'Security Entry'}</option>
+                    <option value="Quality Inspection">{lang === 'ar' ? 'فحص الجودة' : 'Quality Inspection'}</option>
+                    <option value="Warehouse Unloading">{lang === 'ar' ? 'تفريغ المخزن' : 'Warehouse Unloading'}</option>
+                    <option value="Security Exit">{lang === 'ar' ? 'خروج الأمن' : 'Security Exit'}</option>
+                    <option value="Completed">{lang === 'ar' ? 'مكتمل' : 'Completed'}</option>
+                  </select>
+                </div>
+                
                 <div className="pt-4 flex gap-3">
                   <button
                     type="button"
