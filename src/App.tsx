@@ -375,8 +375,6 @@ export default function App() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard lang={lang} user={user} tasks={tasks} />;
       case 'supplyTracking':
         return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
       case 'coldStorage':

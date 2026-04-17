@@ -26,6 +26,10 @@ export interface BarrelMovement {
   ownership: BarrelOwnership;
   location: 'Company' | 'Supplier'; // Where the movement happened
   quantity: number;
+  itemName: string;
+  barrelWeight: number;
+  driverName: string;
+  vehicleNumber: string;
   movementType: 'Receipt' | 'Dispatch';
   movementTime: string;
   notes?: string;

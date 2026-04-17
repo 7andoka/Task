@@ -93,7 +93,6 @@ export default function Layout({
   }, []);
 
   const menuItems = [
-    { id: 'dashboard', label: t.dashboard, icon: BarChart3, roles: ['Warehouse Manager', 'Department Head', 'Admin', 'Manager'] },
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
@@ -120,7 +119,7 @@ export default function Layout({
         
         {/* Left Side Controls (Connection Status) */}
         <div className="flex items-center gap-3 shrink-0 z-10">
-          <ConnectionStatus />
+          <ConnectionStatus username={user?.displayName || user?.username} />
           <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
         </div>
 

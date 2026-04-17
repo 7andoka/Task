@@ -4,7 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { Wifi, WifiOff } from 'lucide-react';
 import { triggerAlert } from '../lib/notifications';
 
-export default function ConnectionStatus() {
+export default function ConnectionStatus({ username }: { username?: string }) {
   const [isConnected, setIsConnected] = useState(navigator.onLine);
   const prevConnectedRef = useRef(navigator.onLine);
 
@@ -49,12 +49,19 @@ export default function ConnectionStatus() {
   return (
     <div 
       title={isConnected ? 'Connected' : 'Disconnected'}
-      className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
+      className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
     >
-      <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`} />
-      <span className="text-[9px] font-bold uppercase text-zinc-600 dark:text-zinc-400">
-        {isConnected ? 'Online' : 'Offline'}
-      </span>
+      <div className="flex items-center gap-1.5 self-start">
+        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+        <span className="text-[9px] font-bold uppercase text-zinc-600 dark:text-zinc-400">
+          {isConnected ? 'Online' : 'Offline'}
+        </span>
+      </div>
+      {username && (
+         <span className="text-[8px] text-zinc-500 dark:text-zinc-500 font-medium">
+           {username}
+         </span>
+      )}
     </div>
   );
 }

@@ -194,7 +194,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   <select 
                     value={createForm.role}
                     onChange={(e) => setCreateForm({...createForm, role: e.target.value as UserRole})}
-                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
                   >
                     {roles.map(r => {
                       const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
@@ -208,7 +208,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   <select 
                     value={createForm.managerId}
                     onChange={(e) => setCreateForm({...createForm, managerId: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
                   >
                     <option value="">{t.selectManager}</option>
                     {users.filter(m => m.role !== 'Worker').map(m => (
@@ -279,7 +279,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   <select 
                     value={editForm.role}
                     onChange={(e) => setEditForm({...editForm, role: e.target.value as UserRole})}
-                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
                   >
                     {roles.map(r => {
                       const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
@@ -293,7 +293,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   <select 
                     value={editForm.managerId || ''}
                     onChange={(e) => setEditForm({...editForm, managerId: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
                   >
                     <option value="">{t.selectManager}</option>
                     {users.filter(m => m.uid !== editForm.uid && m.role !== 'Worker').map(m => (

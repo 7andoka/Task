@@ -330,7 +330,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers }: 
           <select 
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value as any)}
-            className="px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-800/10 dark:border-zinc-100/10 outline-none"
+            className="px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-800/10 dark:border-zinc-100/10 outline-none text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
           >
             <option value="All">{lang === 'ar' ? 'الكل' : 'All'}</option>
             {['Pending', 'In Progress', 'Pending Review', 'Delayed', 'Completed', 'Cancelled'].map(s => (
@@ -454,7 +454,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers }: 
                       required
                       value={newAssignee}
                       onChange={(e) => setNewAssignee(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
                     >
                       <option value="">{lang === 'ar' ? 'اختر الموظف' : 'Select Employee'}</option>
                       {subordinates.map(s => (
@@ -468,7 +468,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers }: 
                     <select 
                       value={newPriority}
                       onChange={(e) => setNewPriority(e.target.value as any)}
-                      className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
                     >
                       {['Low', 'Medium', 'High', 'Urgent'].map(p => (
                         <option key={p} value={p}>{t[p.toLowerCase() as keyof typeof t] || p}</option>

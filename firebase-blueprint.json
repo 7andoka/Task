@@ -105,13 +105,17 @@
         "barrelType": { "type": "string", "enum": ["سنابل", "البرتغاليه", "وطنيه"] },
         "ownership": { "type": "string", "enum": ["ملكي", "ملك المورد"] },
         "quantity": { "type": "number" },
+        "itemName": { "type": "string" },
+        "barrelWeight": { "type": "number" },
+        "driverName": { "type": "string" },
+        "vehicleNumber": { "type": "string" },
         "movementType": { "type": "string", "enum": ["Receipt", "Dispatch"] },
         "movementTime": { "type": "string", "format": "date-time" },
         "notes": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "lastUpdatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "supplierId", "barrelType", "ownership", "quantity", "movementType", "movementTime", "createdAt", "lastUpdatedAt"]
+      "required": ["id", "supplierId", "barrelType", "ownership", "quantity", "itemName", "barrelWeight", "driverName", "vehicleNumber", "movementType", "movementTime", "createdAt", "lastUpdatedAt"]
     }
   },
   "firestore": {
