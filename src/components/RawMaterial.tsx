@@ -16,6 +16,7 @@ export default function RawMaterial({ lang, user }: RawMaterialProps) {
   const t = translations[lang];
   const [movements, setMovements] = useState<BarrelMovement[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [newMovement, setNewMovement] = useState<Omit<BarrelMovement, 'id' | 'createdAt' | 'lastUpdatedAt'>>({
     supplierId: 'جمال سالم',
     barrelType: 'سنابل',
@@ -39,9 +40,24 @@ export default function RawMaterial({ lang, user }: RawMaterialProps) {
     return unsub;
   }, []);
 
+  const handleSaveConfirmed = async () => {
+    setShowConfirm(false);
+    await handleAddMovement();
+  };
+
   const handleAddMovement = async () => {
     try {
       const location = newMovement.movementType === 'Receipt' ? 'Company' : 'Supplier';
+
+      // Check balance
+      if (newMovement.movementType === 'Dispatch') {
+        const balance = newMovement.ownership === 'ملكي' ? myBarrelsAtSupplier : supplierBarrelsAtCompany;
+        if (newMovement.quantity > balance) {
+          setShowConfirm(true);
+          return;
+        }
+      }
+      
       const movementData = { ...newMovement };
       if (movementData.movementType === 'Dispatch') {
         movementData.itemName = '';
@@ -201,6 +217,21 @@ export default function RawMaterial({ lang, user }: RawMaterialProps) {
             <input type="text" placeholder={lang === 'ar' ? 'رقم السيارة' : 'Vehicle Number'} value={newMovement.vehicleNumber} onChange={e => setNewMovement({...newMovement, vehicleNumber: e.target.value})} className="p-2 border rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white" />
           </div>
           <button onClick={handleAddMovement} className="w-full py-2 bg-emerald-500 text-white rounded-lg font-bold">{lang === 'ar' ? 'حفظ' : 'Save'}</button>
+        </div>
+      )}
+
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl w-full max-w-sm space-y-4">
+            <h3 className="font-bold text-lg text-amber-500">{lang === 'ar' ? 'تنبيه: الرصيد غير كافٍ' : 'Alert: Insufficient Balance'}</h3>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+               {lang === 'ar' ? 'الكمية المطلوبة أكبر من الرصيد المتاح. هل ترغب في الاستمرار؟' : 'The requested quantity exceeds the available balance. Do you want to proceed?'}
+            </p>
+            <div className="flex gap-2">
+              <button onClick={handleSaveConfirmed} className="flex-1 py-2 bg-emerald-500 text-white rounded-lg">{lang === 'ar' ? 'تأكيد' : 'Confirm'}</button>
+              <button onClick={() => setShowConfirm(false)} className="flex-1 py-2 bg-zinc-200 rounded-lg">{lang === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+            </div>
+          </div>
         </div>
       )}
 

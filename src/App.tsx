@@ -12,6 +12,7 @@ import Settings from './components/Settings';
 import SupplyTracking from './components/SupplyTracking';
 import ColdStorage from './components/ColdStorage';
 import RawMaterial from './components/RawMaterial';
+import ThirdPartyProcessing from './components/ThirdPartyProcessing';
 import OfflineScreen from './components/OfflineScreen';
 import { Language, UserProfile, Task } from './types';
 import { storageService } from './services/storageService';
@@ -337,6 +338,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [allTasks, user, lang]);
 
+  // Check if current tab is allowed for user
+  useEffect(() => {
+    if (!user || user.role === 'Admin') return;
+    
+    const allowedPages = user.permissions || [];
+    if (allowedPages.length > 0 && !allowedPages.includes(activeTab)) {
+      setActiveTab(allowedPages[0]);
+    }
+  }, [user, activeTab]);
+
   if (!isOnline) {
     return <OfflineScreen lang={lang} />;
   }
@@ -381,6 +392,8 @@ export default function App() {
         return <ColdStorage lang={lang} user={user} />;
       case 'rawMaterial':
         return <RawMaterial lang={lang} user={user} />;
+      case 'thirdPartyProcessing':
+        return <ThirdPartyProcessing lang={lang} user={user} />;
       case 'tasks':
         return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':

@@ -12,6 +12,7 @@ import {
   Smartphone,
   Monitor,
   BarChart3,
+  ClipboardList,
   Settings as SettingsIcon,
   RefreshCw,
   LogIn,
@@ -96,15 +97,19 @@ export default function Layout({
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
+    { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing, icon: ClipboardList },
     { id: 'tasks', label: t.tasks, icon: CheckSquare },
     { id: 'team', label: t.team, icon: Users, roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
     { id: 'users', label: t.userManagement, icon: Users, roles: ['Warehouse Manager', 'Admin'] },
     { id: 'settings', label: t.settings, icon: SettingsIcon },
   ];
 
-  const filteredMenuItems = menuItems.filter(item => 
-    !item.roles || (user && item.roles.includes(user.role))
-  );
+  const filteredMenuItems = menuItems.filter(item => {
+    if (user?.permissions && user.permissions.length > 0) {
+      return user.permissions.includes(item.id);
+    }
+    return !item.roles || (user && item.roles.includes(user.role));
+  });
 
   return (
     <div className={cn(
@@ -206,10 +211,7 @@ export default function Layout({
         "flex-1 min-h-screen pt-14 w-full",
         !isDesktopMode && "pb-16"
       )}>
-        <div className={cn(
-          "p-4 md:p-6",
-          !isDesktopMode && "max-w-md mx-auto"
-        )}>
+        <div className="p-4 md:p-6 w-full">
           {children}
         </div>
       </main>

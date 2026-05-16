@@ -15,6 +15,12 @@ import {
 import { translations } from '../i18n';
 import { Language, UserProfile, UserRole } from '../types';
 import { storageService } from '../services/storageService';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 interface UserManagementProps {
   lang: Language;
@@ -37,7 +43,8 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     password: "",
     role: "Worker" as UserRole,
     managerId: "",
-    phone: ""
+    phone: "",
+    permissions: ['supplyTracking', 'tasks', 'settings'] as string[]
   });
   const [createLoading, setCreateLoading] = React.useState(false);
 
@@ -52,7 +59,22 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     'Worker',
     'Security',
     'Quality',
-    'Warehouse'
+    'Warehouse',
+    'Customer Operations',
+    'Warehouse Operations',
+    'Quality Operations',
+    'Purchasing Operations'
+  ];
+
+  const availablePages = [
+    { id: 'supplyTracking', label: t.supplyTracking },
+    { id: 'coldStorage', label: t.coldStorage },
+    { id: 'rawMaterial', label: t.rawMaterial },
+    { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing },
+    { id: 'tasks', label: t.tasks },
+    { id: 'team', label: t.team },
+    { id: 'users', label: t.userManagement },
+    { id: 'settings', label: t.settings },
   ];
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -71,6 +93,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
           password: createForm.password, // Store password directly
           initialPassword: createForm.password,
           needsPasswordChange: true,
+          permissions: createForm.permissions,
           createdAt: new Date().toISOString()
       };
       
@@ -80,7 +103,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
         return [...prev, newUser];
       });
       setIsCreateModalOpen(false);
-      setCreateForm({ displayName: "", username: "", password: "", role: "Worker", managerId: "", phone: "" });
+      setCreateForm({ displayName: "", username: "", password: "", role: "Worker", managerId: "", phone: "", permissions: ['supplyTracking', 'tasks', 'settings'] });
     } catch (err: any) {
       console.error("User Creation Error:", err);
       alert(lang === 'ar' ? `خطأ في إنشاء المستخدم: ${err.message}` : `Error creating user: ${err.message}`);
@@ -98,6 +121,22 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     setUsers(updatedUsers);
     setIsEditModalOpen(false);
     setEditForm(null);
+  };
+
+  const togglePermission = (formType: 'create' | 'edit', pageId: string) => {
+    if (formType === 'create') {
+      const currentPermissions = createForm.permissions || [];
+      const newPermissions = currentPermissions.includes(pageId)
+        ? currentPermissions.filter(p => p !== pageId)
+        : [...currentPermissions, pageId];
+      setCreateForm({ ...createForm, permissions: newPermissions });
+    } else if (formType === 'edit' && editForm) {
+      const currentPermissions = editForm.permissions || [];
+      const newPermissions = currentPermissions.includes(pageId)
+        ? currentPermissions.filter(p => p !== pageId)
+        : [...currentPermissions, pageId];
+      setEditForm({ ...editForm, permissions: newPermissions });
+    }
   };
 
   const handleDeleteUser = async (uid: string) => {
@@ -139,7 +178,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-zinc-900 rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-zinc-800/10 dark:border-zinc-100/10"
+            className="bg-white dark:bg-zinc-900 rounded-[32px] p-6 sm:p-8 w-full max-w-md shadow-2xl border border-zinc-800/10 dark:border-zinc-100/10 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold">{t.createUser}</h3>
@@ -188,7 +227,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-zinc-500">{t.role}</label>
                   <select 
@@ -217,6 +256,34 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   </select>
                 </div>
               </div>
+
+              {/* Permissions Section */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                  <Shield size={16} className="text-emerald-500" />
+                  {t.accessControl}
+                </label>
+                <p className="text-[10px] text-zinc-400">{t.selectPages}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availablePages.map(page => (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onClick={() => togglePermission('create', page.id)}
+                      className={cn(
+                        "flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-all",
+                        createForm.permissions.includes(page.id)
+                          ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                          : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 text-zinc-500"
+                      )}
+                    >
+                      <span>{page.label}</span>
+                      {createForm.permissions.includes(page.id) ? <Check size={12} /> : <div className="w-3 h-3 rounded-full border border-zinc-300 dark:border-zinc-600" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button 
                 type="submit"
                 disabled={createLoading}
@@ -234,7 +301,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-zinc-900 rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-zinc-800/10 dark:border-zinc-100/10"
+            className="bg-white dark:bg-zinc-900 rounded-[32px] p-6 sm:p-8 w-full max-w-md shadow-2xl border border-zinc-800/10 dark:border-zinc-100/10 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold">{lang === 'ar' ? 'تعديل بيانات المستخدم' : 'Edit User Data'}</h3>
@@ -273,7 +340,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-zinc-500">{t.role}</label>
                   <select 
@@ -302,6 +369,34 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   </select>
                 </div>
               </div>
+
+              {/* Permissions Section */}
+              <div className="space-y-3">
+                <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                  <Shield size={16} className="text-emerald-500" />
+                  {t.accessControl}
+                </label>
+                <p className="text-[10px] text-zinc-400">{t.selectPages}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {availablePages.map(page => (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onClick={() => togglePermission('edit', page.id)}
+                      className={cn(
+                        "flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-all",
+                        (editForm.permissions || []).includes(page.id)
+                          ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                          : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 text-zinc-500"
+                      )}
+                    >
+                      <span>{page.label}</span>
+                      {(editForm.permissions || []).includes(page.id) ? <Check size={12} /> : <div className="w-3 h-3 rounded-full border border-zinc-300 dark:border-zinc-600" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button 
                 type="submit"
                 className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20"
@@ -321,42 +416,40 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
             </div>
           ) : (
             filteredUsers.map(u => (
-            <motion.div 
-              key={u.uid}
-              whileHover={{ scale: 1.01 }}
-              className="bg-white dark:bg-zinc-900 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-all flex items-center justify-between gap-4"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-lg shrink-0">
-                  {u.displayName.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-4">
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-sm truncate">{u.displayName}</h3>
-                    <p className="text-zinc-500 text-[10px] truncate">{u.username}</p>
+              <motion.div 
+                key={u.uid}
+                whileHover={{ scale: 1.005 }}
+                className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-xl shrink-0">
+                    {u.displayName.charAt(0).toUpperCase()}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-500">
-                      {(() => {
-                        const translationKey = u.role.charAt(0).toLowerCase() + u.role.slice(1).replace(/\s+/g, '');
-                        return t[translationKey as keyof typeof t] || u.role;
-                      })()}
-                    </span>
-                    {u.managerId && (
-                      <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full truncate max-w-[100px]">
-                        {t.manager}: {users.find(m => m.uid === u.managerId)?.displayName || '-'}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="font-bold text-base truncate">{u.displayName}</h3>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-tighter">
+                        {(() => {
+                          const translationKey = u.role.charAt(0).toLowerCase() + u.role.slice(1).replace(/\s+/g, '');
+                          return t[translationKey as keyof typeof t] || u.role;
+                        })()}
                       </span>
-                    )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-zinc-500 text-xs font-medium">
+                      <span className="flex items-center gap-1">@{u.username}</span>
+                      {u.phone && <span className="flex items-center gap-1">• {u.phone}</span>}
+                      {u.managerId && (
+                        <span className="px-2 py-0.5 rounded-md bg-zinc-50 dark:bg-zinc-800 text-[10px]">
+                          {t.manager}: {users.find(m => m.uid === u.managerId)?.displayName || '-'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="hidden sm:flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 text-xs mr-2 rtl:ml-2 rtl:mr-0">
-                  <span className="truncate">{u.phone || '-'}</span>
-                </div>
-                <button 
-                  onClick={() => {
+                
+                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                  <button 
+                    onClick={() => {
                     setEditForm(u);
                     setIsEditModalOpen(true);
                   }}

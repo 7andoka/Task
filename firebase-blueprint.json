@@ -116,6 +116,27 @@
         "lastUpdatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "supplierId", "barrelType", "ownership", "quantity", "itemName", "barrelWeight", "driverName", "vehicleNumber", "movementType", "movementTime", "createdAt", "lastUpdatedAt"]
+    },
+    "ProcessingJob": {
+      "title": "ProcessingJob",
+      "description": "Third-party processing job",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "thirdPartyName": { "type": "string" },
+        "inputs": {
+          "type": "array"
+        },
+        "outputs": {
+          "type": "array"
+        },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["Draft", "Completed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "date", "thirdPartyName", "inputs", "outputs", "status", "createdAt", "createdBy"]
     }
   },
   "firestore": {
@@ -125,6 +146,7 @@
     "comments": { "schema": "Comment", "description": "Comments collection" },
     "notifications": { "schema": "Notification", "description": "Notifications collection" },
     "audit_logs": { "schema": "AuditLog", "description": "Audit logs collection" },
-    "barrel_movements": { "schema": "BarrelMovement", "description": "Barrel movements collection" }
+    "barrel_movements": { "schema": "BarrelMovement", "description": "Barrel movements collection" },
+    "third_party_processing": { "schema": "ProcessingJob", "description": "Third-party processing jobs collection" }
   }
 }

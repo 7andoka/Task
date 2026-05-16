@@ -1,4 +1,4 @@
-export type UserRole = 'Admin' | 'Warehouse Manager' | 'Department Head' | 'Supervisor' | 'Warehouse Specialist' | 'Warehouse Keeper' | 'Assistant Warehouse Keeper' | 'Worker' | 'Security' | 'Quality' | 'Warehouse';
+export type UserRole = 'Admin' | 'Warehouse Manager' | 'Department Head' | 'Supervisor' | 'Warehouse Specialist' | 'Warehouse Keeper' | 'Assistant Warehouse Keeper' | 'Worker' | 'Security' | 'Quality' | 'Warehouse' | 'Customer Operations' | 'Warehouse Operations' | 'Quality Operations' | 'Purchasing Operations';
 
 export type SupplyStatus = 'Security Entry' | 'Quality Inspection' | 'Warehouse Unloading' | 'Security Exit' | 'Completed';
 export type QualityDecision = 'Accepted' | 'Rejected' | 'Under Inspection' | 'Not Unloaded';
@@ -88,6 +88,7 @@ export interface UserProfile {
   initialPassword?: string;
   password?: string;
   notificationPreferences?: NotificationPreferences;
+  permissions?: string[];
 }
 
 export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
@@ -148,6 +149,53 @@ export interface AuditLog {
   action: string;
   details: string;
   createdAt: string;
+}
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  systemCode: string;
+  supplierName?: string;
+  location?: string;
+  contactName?: string;
+  whatsappGroup?: string;
+  createdAt: string;
+}
+
+export interface ProcessItem {
+  code: string;
+  name: string;
+  type: string;
+  direction?: string;
+  process: string;
+  size: string;
+}
+
+export interface ProcessingJob {
+  id: string;
+  date: string;
+  thirdPartyName?: string;
+  supplierName?: string;
+  location?: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  warehouseCode?: string;
+  inputs: {
+    itemCode: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+  }[];
+  outputs: {
+    itemCode: string;
+    itemName: string;
+    quantity: number;
+    unit: string;
+  }[];
+  notes?: string;
+  status: 'Draft' | 'Completed';
+  createdAt: string;
+  createdBy: string;
 }
 
 export type Language = 'ar' | 'en';

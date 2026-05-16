@@ -10,4 +10,7 @@ export const COLLECTIONS = {
   RAW_MATERIAL: 'raw_material',
   BARRELS: 'barrels',
   BARREL_MOVEMENTS: 'barrel_movements',
+  THIRD_PARTY_PROCESSING: 'third_party_processing',
+  PROCESS_ITEMS: 'process_items',
+  WAREHOUSES: 'warehouses',
 };
