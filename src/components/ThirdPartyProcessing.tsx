@@ -554,6 +554,18 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     }
   };
 
+  const handleDeleteJob = async (jobId: string) => {
+    if (!window.confirm(lang === 'ar' ? 'هل أنت متأكد من حذف هذه التشغيلة؟ نهائياً؟' : 'Are you sure you want to delete this job permanently?')) return;
+    
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, jobId));
+      toast.success(lang === 'ar' ? 'تم حذف التشغيلة بنجاح' : 'Job deleted successfully');
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error(lang === 'ar' ? 'حدث خطأ أثناء الحذف' : 'Error deleting job');
+    }
+  };
+
   const handleEditJob = (job: ProcessingJob) => {
     setNewJob({
       date: job.date,
@@ -741,50 +753,31 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error('Failed to create image');
 
-      const file = new File([blob], `Job_Report_${job.warehouseCode}_${job.date}.png`, { type: 'image/png' });
+      const textFallback = `📦 *${trans.thirdPartyProcessing}*\n🗓️ ${date}\n🏢 ${job.warehouseName} (${job.warehouseCode})\n\n📊 ${lang === 'ar' ? 'نسبة التشغيل' : 'Yield'}: ${yieldPercentage}%\n📉 ${lang === 'ar' ? 'نسبة الفقد' : 'Loss'}: ${lossPercentage}%\n📥 ${lang === 'ar' ? 'المدخلات' : 'Inputs'}: ${totalIn}kg\n📤 ${lang === 'ar' ? 'المخرجات' : 'Outputs'}: ${totalOut}kg`;
 
-      let shared = false;
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: lang === 'ar' ? 'تقرير عملية تشغيل' : 'Processing Job Report',
-            text: lang === 'ar' ? `تقرير عملية تشغيل - ${job.warehouseName}` : `Processing Job Report - ${job.warehouseName}`
-          });
-          shared = true;
-          toast.dismiss();
-        } catch (shareError) {
-          console.warn('Navigator share failed, falling back:', shareError);
-        }
+      // Copy image to clipboard
+      try {
+        const item = new ClipboardItem({ 'image/png': blob });
+        await navigator.clipboard.write([item]);
+        toast.success(isRtl ? 'تم نسخ صورة التقرير! يمكنك لصقها في واتساب' : 'Report image copied! You can paste it in WhatsApp');
+      } catch (err) {
+        console.warn('Clipboard copy failed, downloading report', err);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Job_Report_${job.warehouseCode}_${job.date}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
       }
 
-      if (!shared) {
-        // Fallback for desktop or when share fails: Copy to clipboard or download
-        try {
-          const item = new ClipboardItem({ 'image/png': blob });
-          await navigator.clipboard.write([item]);
-          toast.dismiss();
-          toast.success(isRtl ? 'تم نسخ التقرير كصورة! يمكنك لصقها في واتساب' : 'Report copied as image! You can paste it in WhatsApp');
-        } catch (clipboardError) {
-          console.error('Clipboard error:', clipboardError);
-          // Last resort: download
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `Job_Report_${job.warehouseCode}_${job.date}.png`;
-          a.click();
-          URL.revokeObjectURL(url);
-          toast.dismiss();
-          toast.info(isRtl ? 'تم تحميل التقرير كصورة' : 'Report downloaded as image');
-        }
-        
-        // Also provide a textual fallback for groups
-        const warehouse = warehouses.find(w => w.id === job.warehouseId);
-        if (warehouse?.whatsappGroup) {
-          const groupLink = warehouse.whatsappGroup.startsWith('http') ? warehouse.whatsappGroup : `https://${warehouse.whatsappGroup}`;
-          window.open(groupLink, '_blank');
-        }
-      }
+      // Directly open WhatsApp
+      const warehouse = warehouses.find(w => w.id === job.warehouseId);
+      const whatsappUrl = warehouse?.whatsappGroup 
+        ? (warehouse.whatsappGroup.startsWith('http') ? warehouse.whatsappGroup : `https://wa.me/${warehouse.whatsappGroup.replace(/\D/g, '')}?text=${encodeURIComponent(textFallback)}`)
+        : `https://wa.me/?text=${encodeURIComponent(textFallback)}`;
+
+      window.open(whatsappUrl, '_blank');
+      toast.dismiss();
     } catch (error) {
       console.error('Share error:', error);
       if (document.body.contains(container)) {
@@ -794,8 +787,14 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       toast.error(isRtl ? 'حدث خطأ أثناء المشاركة' : 'Error during sharing');
       
       // Final fallback to text version
-      const text = `📦 *${trans.thirdPartyProcessing}*\n🗓️ ${date}\n🏢 ${job.warehouseName} (${job.warehouseCode})\n\n📊 Yield: ${yieldPercentage}%\n📥 In: ${totalIn}kg\n📤 Out: ${totalOut}kg`;
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+      const totalIn = job.inputs.reduce((s, i) => s + i.quantity, 0);
+      const totalOut = job.outputs.reduce((s, i) => s + i.quantity, 0);
+      const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
+      const lossWeight = totalIn - totalOut;
+      const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) : '0.0';
+      
+      const absoluteFallback = `📦 *${trans.thirdPartyProcessing}*\n🗓️ ${new Date(job.date).toLocaleDateString()}\n🏢 ${job.warehouseName}\n\n📊 ${lang === 'ar' ? 'نسبة التشغيل' : 'Yield'}: ${yieldPercentage}%\n📉 ${lang === 'ar' ? 'نسبة الفقد' : 'Loss'}: ${lossPercentage}%\n📥 In: ${totalIn}kg\n📤 Out: ${totalOut}kg`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(absoluteFallback)}`, '_blank');
     }
   };
 
@@ -1509,6 +1508,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                       </div>
                       
                       <div className="flex items-center gap-1 sm:ml-4 border-l pl-4 dark:border-zinc-800">
+                          {user.role === 'Admin' && (
+                            <button 
+                              onClick={() => handleDeleteJob(job.id)}
+                              className="p-3 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-2xl transition-all flex items-center gap-2 font-bold"
+                              title={lang === 'ar' ? 'حذف' : 'Delete'}
+                            >
+                              <Trash2 size={20} />
+                              <span className="text-xs hidden lg:inline">{lang === 'ar' ? 'حذف' : 'Delete'}</span>
+                            </button>
+                          )}
                           {(user.role === 'Admin' || job.createdBy === user.uid) && (
                             <button 
                               onClick={() => handleEditJob(job)}
