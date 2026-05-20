@@ -15,10 +15,13 @@ import {
   FileSpreadsheet,
   Share2,
   MessageCircle,
+  Mail,
   FileText,
   Building2,
   Database,
-  Users
+  Users,
+  Settings,
+  AtSign
 } from 'lucide-react';
 import { 
   Language, 
@@ -28,7 +31,7 @@ import {
   Warehouse
 } from '../types';
 import { translations } from '../i18n';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
@@ -322,8 +325,12 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
-  const [isManagingWarehouses, setIsManagingWarehouses] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [toEmails, setToEmails] = useState<string[]>(['Khaled.Shaaban@RichLandfi.com']);
+  const [ccEmails, setCcEmails] = useState<string[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailType, setEmailType] = useState<'to' | 'cc'>('to');
   
   const [newJob, setNewJob] = useState<Omit<ProcessingJob, 'id' | 'createdAt' | 'createdBy'>>({
     date: new Date().toISOString().split('T')[0],
@@ -332,7 +339,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     warehouseCode: '',
     inputs: [],
     outputs: [],
-    status: 'Completed',
+    status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Approval',
     notes: ''
   });
 
@@ -404,10 +411,20 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     const unsubWh = onSnapshot(collection(db, COLLECTIONS.WAREHOUSES), (snap) => {
       setWarehouses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Warehouse)));
     });
+
+    // Load Email Settings
+    const unsubSettings = onSnapshot(doc(db, COLLECTIONS.SETTINGS, 'processing_emails'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.to) setToEmails(data.to);
+        if (data.cc) setCcEmails(data.cc);
+      }
+    });
     
     return () => {
       unsub();
       unsubWh();
+      unsubSettings();
     };
   }, []);
 
@@ -483,9 +500,92 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     }
   };
 
+  const handleAddEmail = async () => {
+    if (!newEmail || !newEmail.includes('@')) {
+      toast.error(lang === 'ar' ? 'يرجى إدخال بريد إلكتروني صالح' : 'Please enter a valid email');
+      return;
+    }
+    
+    if (toEmails.includes(newEmail) || ccEmails.includes(newEmail)) {
+      toast.error(lang === 'ar' ? 'البريد موجود بالفعل' : 'Email already exists');
+      return;
+    }
+    
+    const updatedTo = emailType === 'to' ? [...toEmails, newEmail] : toEmails;
+    const updatedCc = emailType === 'cc' ? [...ccEmails, newEmail] : ccEmails;
+    
+    try {
+      await setDoc(doc(db, COLLECTIONS.SETTINGS, 'processing_emails'), {
+        to: updatedTo,
+        cc: updatedCc,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      setNewEmail('');
+      toast.success(lang === 'ar' ? 'تم إضافة البريد بنجاح' : 'Email added successfully');
+    } catch (e) {
+      toast.error(lang === 'ar' ? 'فشل حفظ الإعدادات' : 'Failed to save settings');
+    }
+  };
+
+  const handleRemoveEmail = async (email: string, type: 'to' | 'cc') => {
+    const updatedTo = type === 'to' ? toEmails.filter(e => e !== email) : toEmails;
+    const updatedCc = type === 'cc' ? ccEmails.filter(e => e !== email) : ccEmails;
+    
+    try {
+      await setDoc(doc(db, COLLECTIONS.SETTINGS, 'processing_emails'), {
+        to: updatedTo,
+        cc: updatedCc,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      toast.success(lang === 'ar' ? 'تم حذف البريد' : 'Email removed');
+    } catch (e) {
+      toast.error(lang === 'ar' ? 'فشل التحديث' : 'Update failed');
+    }
+  };
+
   const handleSaveJob = async () => {
     if (!newJob.warehouseId || newJob.inputs.length === 0 || newJob.outputs.length === 0) {
       toast.error(lang === 'ar' ? 'يرجى ملء جميع البيانات الأساسية والمدخلات والمخرجات' : 'Please fill all basic info, inputs, and outputs');
+      return;
+    }
+
+    // Validation: Total quantity check
+    const totalIn = newJob.inputs.reduce((sum, i) => sum + i.quantity, 0);
+    const totalOut = newJob.outputs.reduce((sum, i) => sum + i.quantity, 0);
+
+    if (totalOut > totalIn) {
+      const excess = totalOut - totalIn;
+      const percentage = ((excess / totalIn) * 100).toFixed(1);
+      toast.warning(lang === 'ar' 
+        ? `تنبيه: كمية المخرجات أكبر من المدخلات! الزيادة: ${excess} كجم (${percentage}%)`
+        : `Warning: Output quantity exceeds input! Excess: ${excess} kg (${percentage}%)`,
+        { duration: 5000 }
+      );
+    }
+
+    // Validation: Item types matching (Input types must be present in output)
+    const inputTypes = Array.from(new Set(newJob.inputs.map(i => {
+      const item = PROCESS_ITEMS_LIST.find(p => p.code === i.itemCode);
+      return item?.type;
+    }).filter(Boolean)));
+
+    const outputTypes = new Set(newJob.outputs.map(o => {
+      const item = PROCESS_ITEMS_LIST.find(p => p.code === o.itemCode);
+      return item?.type;
+    }).filter(Boolean));
+
+    const missingInOutput = inputTypes.filter(type => type && !outputTypes.has(type));
+
+    if (missingInOutput.length > 0) {
+      const typeLabels = missingInOutput.map(t => {
+        const category = CATEGORIES.type.find(cat => cat.id === t);
+        return lang === 'ar' ? category?.labelAr : category?.labelEn || t;
+      }).join(' و ');
+
+      toast.error(lang === 'ar' 
+        ? `خطأ: المخرجات يجب أن تحتوي على نفس أنواع المدخلات. مفقود: ${typeLabels}`
+        : `Error: Outputs must contain the same item types as inputs. Missing: ${typeLabels}`
+      );
       return;
     }
 
@@ -493,6 +593,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const selectedWh = warehouses.find(w => w.id === newJob.warehouseId);
       const jobData = {
         ...newJob,
+        status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? newJob.status : 'Pending Approval',
         warehouseName: selectedWh?.name || '',
         warehouseCode: selectedWh?.systemCode || '',
         updatedAt: new Date().toISOString(),
@@ -505,7 +606,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         });
         toast.success(lang === 'ar' ? 'تم تحديث عملية التشغيل بنجاح' : 'Processing job updated successfully');
         
-        // Auto share after edit too? Let's do it for consistency if it's a "Completion"
+        // Auto share after edit if it is "Completed"
         const updatedJob: ProcessingJob = {
           id: editingJobId,
           ...newJob,
@@ -514,7 +615,9 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           createdBy: user.uid, // Keep original or update? Usually keep original
           createdAt: new Date().toISOString() // This is not quite right for edit but handleShareWhatsApp only needs basic info
         };
-        handleShareWhatsApp(updatedJob);
+        if (updatedJob.status === 'Completed') {
+          handleShareExcelOutlook(updatedJob);
+        }
       } else {
         const docRef = await addDoc(collection(db, COLLECTIONS.THIRD_PARTY_PROCESSING), {
           ...jobData,
@@ -524,7 +627,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         });
         toast.success(lang === 'ar' ? 'تم حفظ عملية التشغيل بنجاح' : 'Processing job saved successfully');
         
-        // Auto share after new job
+        // Auto share after new job if it is "Completed"
         const createdJob: ProcessingJob = {
           id: docRef.id,
           ...newJob,
@@ -533,7 +636,9 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           createdBy: user.uid,
           createdAt: new Date().toISOString()
         };
-        handleShareWhatsApp(createdJob);
+        if (createdJob.status === 'Completed') {
+          handleShareExcelOutlook(createdJob);
+        }
       }
       
       setIsAdding(false);
@@ -545,7 +650,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         warehouseCode: '',
         inputs: [],
         outputs: [],
-        status: 'Completed',
+        status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Approval',
         notes: ''
       });
     } catch (error) {
@@ -583,8 +688,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   };
 
   const filteredJobs = jobs.filter(job => {
-    // Role based visibility: Customer Operations only see their own jobs
+    // Role based visibility: 
+    // - Customer Operations only see their own jobs
+    // - Warehouse Operations see all Pending Approval and Completed jobs
+    // - Admins see everything
+    
     if (user.role === 'Customer Operations' && job.createdBy !== user.uid) {
+      return false;
+    }
+
+    if (user.role === 'Warehouse Operations' && job.status === 'Draft') {
       return false;
     }
 
@@ -593,6 +706,115 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       job.notes?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
+
+  const handleApproveJob = async (job: ProcessingJob) => {
+    try {
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+        status: 'Completed',
+        approvedBy: user.uid,
+        approvedAt: new Date().toISOString(),
+        serverTimestamp: serverTimestamp()
+      });
+      toast.success(lang === 'ar' ? 'تم اعتماد التشغيلة بنجاح' : 'Job approved successfully');
+      
+      // Auto share Excel via Outlook after approval
+      handleShareExcelOutlook({ ...job, status: 'Completed' });
+    } catch (error) {
+      toast.error(lang === 'ar' ? 'فشل اعتماد التشغيلة' : 'Failed to approve job');
+    }
+  };
+
+  const handleShareExcelOutlook = async (job: ProcessingJob) => {
+    try {
+      const isRtl = lang === 'ar';
+      const trans = translations[lang];
+      const date = new Date(job.date).toLocaleDateString(isRtl ? 'ar-EG' : 'en-US');
+
+      const totalIn = job.inputs.reduce((sum, i) => sum + i.quantity, 0);
+      const totalOut = job.outputs.reduce((sum, i) => sum + i.quantity, 0);
+      const efficiency = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) + '%' : '0%';
+      const lossWeight = totalIn - totalOut;
+      const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) + '%' : '0%';
+
+      const reportRows = [
+        [isRtl ? 'نموذج عملية تشغيل لدى الغير' : 'Third-Party Processing Report'],
+        [],
+        [isRtl ? 'بيانات العملية' : 'Job Details'],
+        [trans.processDate, date],
+        [isRtl ? 'المخزن' : 'Warehouse', `${job.warehouseName || '-'} (${job.warehouseCode || '-'})`],
+        [],
+        [isRtl ? 'ملخص الكميات' : 'Quantities Summary'],
+        [isRtl ? 'إجمالي المدخلات' : 'Total Inputs', `${totalIn} kg`],
+        [isRtl ? 'إجمالي المخرجات' : 'Total Outputs', `${totalOut} kg`],
+        [isRtl ? 'نسبة التشغيل' : 'Yield', efficiency],
+        [isRtl ? 'نسبة الفقد' : 'Loss %', lossPercentage],
+        [],
+        [trans.inputs],
+        [isRtl ? 'كود الصنف' : 'Item Code', isRtl ? 'اسم الصنف' : 'Item Name', trans.quantity],
+        ...job.inputs.map(i => [i.itemCode, i.itemName, `${i.quantity} ${i.unit}`]),
+        [],
+        [trans.outputs],
+        [isRtl ? 'كود الصنف' : 'Item Code', isRtl ? 'اسم الصنف' : 'Item Name', trans.quantity],
+        ...job.outputs.map(o => [o.itemCode, o.itemName, `${o.quantity} ${o.unit}`]),
+        [],
+        [trans.comments],
+        [job.notes || '-']
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(reportRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Report");
+      
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const filename = `Job_${job.warehouseCode || 'Report'}_${job.date}.xlsx`;
+      const file = new File([blob], filename, { type: blob.type });
+
+      // Download file automatically
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const toList = toEmails.length > 0 ? toEmails.join(',') : 'Khaled.Shaaban@RichLandfi.com';
+      const ccList = ccEmails.length > 0 ? `&cc=${ccEmails.join(',')}` : '';
+      
+      const recipient = toList;
+      const subjectText = isRtl ? `تقرير عملية تشغيل: ${job.warehouseName}` : `Processing Report: ${job.warehouseName}`;
+      const bodyText = isRtl 
+        ? `برجاء الاطلاع على تقرير عملية التشغيل المرفق لـ ${job.warehouseName} بتاريخ ${date}. (تم تحميل الملف المرفق تلقائياً، يرجى إرفاقه في حال لم يظهر)` 
+        : `Please find the attached processing report for ${job.warehouseName} dated ${date}. (File was downloaded automatically, please attach it if not showing)`;
+
+      const subject = encodeURIComponent(subjectText);
+      const body = encodeURIComponent(bodyText);
+      
+      // Open the Outlook App directly (Desktop/Mobile) with the recipients pre-filled
+      const outlookAppUrl = `ms-outlook://compose?to=${recipient}${ccList}&subject=${subject}&body=${body}`;
+      const mailtoUrl = `mailto:${recipient}?subject=${subject}&body=${body}${ccList}`;
+
+      // Create a hidden link to trigger the app protocol
+      const link = document.createElement('a');
+      link.href = outlookAppUrl;
+      link.click();
+
+      // 2. Fallback to standard mailto if Outlook app isn't the handler
+      setTimeout(() => {
+        if (document.hasFocus()) {
+          window.location.href = mailtoUrl;
+        }
+      }, 1000);
+      
+      toast.info(isRtl 
+        ? 'تم فتح Outlook وتحميل الملف. يرجى إرفاق الملف يدوياً.' 
+        : 'Outlook opened and file downloaded. Please attach the file manually.');
+
+    } catch (error) {
+      console.error("Outlook share error:", error);
+      toast.error(lang === 'ar' ? 'حدث خطأ أثناء المشاركة' : 'Error during sharing');
+    }
+  };
 
   const exportToExcel = () => {
     try {
@@ -1032,15 +1254,15 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           </p>
         </div>
 
-        {!isAdding && !isManagingWarehouses && (
+        {!isAdding && !isSettingsOpen && (
           <div className="flex gap-2">
             {user.role === 'Admin' && (
               <button 
-                onClick={() => setIsManagingWarehouses(true)}
+                onClick={() => setIsSettingsOpen(true)}
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-2xl font-bold transition-all"
               >
-                <Building2 size={20} className="text-zinc-500" />
-                {lang === 'ar' ? 'إدارة المخازن' : 'Manage Warehouses'}
+                <Settings size={20} className="text-zinc-500" />
+                {lang === 'ar' ? 'ضبط التشغيلات' : 'Processing Settings'}
               </button>
             )}
             <button 
@@ -1054,101 +1276,233 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         )}
       </div>
 
-      {isManagingWarehouses ? (
-        <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden">
+      {isSettingsOpen ? (
+        <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden transition-all duration-300">
           <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
             <h2 className="text-lg font-bold flex items-center gap-2">
-              <Building2 className="text-emerald-500" />
-              {lang === 'ar' ? 'إدارة المخازن' : 'Manage Warehouses'}
+              <Settings className="text-emerald-500" />
+              {lang === 'ar' ? 'ضبط التشغيلات' : 'Processing Settings'}
             </h2>
             <button 
-              onClick={() => setIsManagingWarehouses(false)}
+              onClick={() => setIsSettingsOpen(false)}
               className="px-4 py-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 font-medium transition-colors"
             >
-              {t.cancel}
+              {lang === 'ar' ? 'إغلاق' : 'Close'}
             </button>
           </div>
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-zinc-50 dark:bg-zinc-800 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-700">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'اسم المخزن' : 'Warehouse Name'}</label>
-                <input 
-                  type="text" 
-                  value={newWarehouse.name}
-                  onChange={e => setNewWarehouse({...newWarehouse, name: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:border-emerald-500"
-                />
+          
+          <div className="p-6 space-y-10">
+            {/* Email Management Section */}
+            <section className="space-y-6">
+              <div className="flex items-center gap-3 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg text-blue-600">
+                  <Mail size={18} />
+                </div>
+                <h3 className="font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider text-sm">
+                  {lang === 'ar' ? 'إدارة البريد الإلكتروني (Outlook)' : 'Email Contacts Management (Outlook)'}
+                </h3>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'كود السيستم' : 'System Code'}</label>
-                <input 
-                  type="text" 
-                  value={newWarehouse.systemCode}
-                  onChange={e => setNewWarehouse({...newWarehouse, systemCode: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:border-emerald-500"
-                />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-blue-50/30 dark:bg-blue-900/10 p-6 rounded-2xl border border-blue-100 dark:border-blue-900/20">
+                <div className="space-y-2 col-span-1 md:col-span-2">
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'البريد الإلكتروني' : 'Email Address'}</label>
+                  <div className="relative">
+                    <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                    <input 
+                      type="email" 
+                      value={newEmail}
+                      onChange={e => setNewEmail(e.target.value)}
+                      placeholder="example@RichLandfi.com"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'نوع الإدراج' : 'Field Type'}</label>
+                  <div className="flex gap-2 h-[46px]">
+                    <select 
+                      value={emailType}
+                      onChange={e => setEmailType(e.target.value as 'to' | 'cc')}
+                      className="flex-1 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm"
+                    >
+                      <option value="to">TO</option>
+                      <option value="cc">CC</option>
+                    </select>
+                    <button 
+                      onClick={handleAddEmail}
+                      className="aspect-square bg-blue-600 text-white flex items-center justify-center rounded-xl hover:bg-blue-700 transition-shadow shadow-lg shadow-blue-500/20"
+                    >
+                      <Plus size={24} />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'اسم مسؤول التواصل' : 'Contact Person'}</label>
-                <input 
-                  type="text" 
-                  value={newWarehouse.contactName}
-                  onChange={e => setNewWarehouse({...newWarehouse, contactName: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:border-emerald-500"
-                />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* TO Emails List */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full" />
+                    To (المستلمون الأساسيون)
+                  </h4>
+                  <div className="space-y-2">
+                    {toEmails.length === 0 ? (
+                      <p className="text-xs text-zinc-500 italic p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                        {lang === 'ar' ? 'لا يوجد ميلات مضافة في To' : 'No emails added in TO field'}
+                      </p>
+                    ) : (
+                      toEmails.map(email => (
+                        <div key={email} className="flex items-center justify-between p-3 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-800 shadow-sm hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all group">
+                          <span className="text-sm font-medium font-mono">{email}</span>
+                          <button 
+                            onClick={() => handleRemoveEmail(email, 'to')}
+                            className="p-2 text-zinc-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* CC Emails List */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full" />
+                    Cc (نسخة كربونية)
+                  </h4>
+                  <div className="space-y-2">
+                    {ccEmails.length === 0 ? (
+                      <p className="text-xs text-zinc-500 italic p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                        {lang === 'ar' ? 'لا يوجد ميلات مضافة في CC' : 'No emails added in CC field'}
+                      </p>
+                    ) : (
+                      ccEmails.map(email => (
+                        <div key={email} className="flex items-center justify-between p-3 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-800 shadow-sm hover:border-blue-200 dark:hover:border-blue-900/30 transition-all group">
+                          <span className="text-sm font-medium font-mono">{email}</span>
+                          <button 
+                            onClick={() => handleRemoveEmail(email, 'cc')}
+                            className="p-2 text-zinc-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'رابط جروب الواتساب' : 'WhatsApp Group Link'}</label>
-                <div className="flex gap-2">
+            </section>
+
+            {/* Warehouse Management Section */}
+            <section className="space-y-6 pt-10 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-3 pb-2 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg text-emerald-600">
+                  <Building2 size={18} />
+                </div>
+                <h3 className="font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider text-sm">
+                  {lang === 'ar' ? 'إدارة المستودعات/المخازن' : 'Warehouse Management'}
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-emerald-50/30 dark:bg-emerald-900/10 p-6 rounded-2xl border border-emerald-100 dark:border-emerald-900/20">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'اسم المخزن' : 'Warehouse Name'}</label>
                   <input 
                     type="text" 
-                    value={newWarehouse.whatsappGroup}
-                    onChange={e => setNewWarehouse({...newWarehouse, whatsappGroup: e.target.value})}
-                    placeholder="https://chat.whatsapp.com/..."
-                    className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:border-emerald-500 flex-1"
+                    value={newWarehouse.name}
+                    onChange={e => setNewWarehouse({...newWarehouse, name: e.target.value})}
+                    placeholder={lang === 'ar' ? 'مثال: مخزن القاهرة' : 'e.g. Cairo Warehouse'}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
                   />
-                  <button 
-                    onClick={handleAddWarehouse}
-                    className="bg-emerald-500 text-white px-4 rounded-xl hover:bg-emerald-600 transition-colors"
-                  >
-                    <Plus size={20} />
-                  </button>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'كود السيستم' : 'System Code'}</label>
+                  <input 
+                    type="text" 
+                    value={newWarehouse.systemCode}
+                    onChange={e => setNewWarehouse({...newWarehouse, systemCode: e.target.value})}
+                    placeholder="e.g. WH-001"
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 font-medium font-mono"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'اسم مسؤول التواصل' : 'Contact Person'}</label>
+                  <input 
+                    type="text" 
+                    value={newWarehouse.contactName}
+                    onChange={e => setNewWarehouse({...newWarehouse, contactName: e.target.value})}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'رابط جروب الواتساب' : 'WhatsApp Group Link'}</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={newWarehouse.whatsappGroup}
+                      onChange={e => setNewWarehouse({...newWarehouse, whatsappGroup: e.target.value})}
+                      placeholder="https://chat.whatsapp.com/..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 flex-1 font-medium text-xs"
+                    />
+                    <button 
+                      onClick={handleAddWarehouse}
+                      className="bg-emerald-600 text-white px-5 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
+                    >
+                      <Plus size={20} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {warehouses.map(w => (
-                <div key={w.id} className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm relative group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
-                      <Database size={20} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {warehouses.length === 0 ? (
+                   <p className="col-span-full text-center py-10 text-zinc-500 italic">
+                      {lang === 'ar' ? 'لا يوجد مخازن مضافة بعد' : 'No warehouses added yet'}
+                   </p>
+                ) : (
+                  warehouses.map(w => (
+                    <div key={w.id} className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm relative group hover:ring-2 hover:ring-emerald-500/20 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:scale-110 transition-transform">
+                          <Database size={24} />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{w.name}</h4>
+                          <p className="text-[10px] text-zinc-500 font-mono font-bold tracking-wider">{w.systemCode}</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleDeleteWarehouse(w.id)}
+                        className="absolute top-4 right-4 p-2 text-zinc-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                      <div className="mt-4 pt-4 border-t border-zinc-50 dark:border-zinc-800/50 flex flex-col gap-2">
+                        {w.contactName && (
+                          <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                             <Users size={12} />
+                             {w.contactName}
+                          </div>
+                        )}
+                        {w.whatsappGroup && (
+                          <a 
+                            href={w.whatsappGroup} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="flex items-center gap-2 text-xs text-emerald-500 font-bold hover:underline"
+                          >
+                            <MessageCircle size={14} />
+                            {lang === 'ar' ? 'جروب الواتساب' : 'WhatsApp Group'}
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-bold text-sm">{w.name}</h4>
-                      <p className="text-[10px] text-zinc-500 font-mono tracking-tighter">{w.systemCode}</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleDeleteWarehouse(w.id)}
-                    className="absolute top-4 right-4 p-2 text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  {w.whatsappGroup && (
-                    <a 
-                      href={w.whatsappGroup} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="mt-3 flex items-center gap-2 text-xs text-emerald-500 font-medium hover:underline"
-                    >
-                      <MessageCircle size={14} />
-                      {lang === 'ar' ? 'جروب الواتساب' : 'WhatsApp Group'}
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
+                  ))
+                )}
+              </div>
+            </section>
           </div>
         </div>
       ) : isAdding ? (
@@ -1169,7 +1523,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   warehouseCode: '',
                   inputs: [],
                   outputs: [],
-                  status: 'Completed',
+                  status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Approval',
                   notes: ''
                 });
               }}
@@ -1460,6 +1814,20 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                           {job.warehouseName}
                         </h4>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                            job.status === 'Completed' 
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                              : job.status === 'Pending Approval'
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                              : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+                          }`}>
+                            {job.status === 'Completed' 
+                              ? (lang === 'ar' ? 'معتمد' : 'Approved') 
+                              : job.status === 'Pending Approval'
+                              ? (lang === 'ar' ? 'قيد المراجعة' : 'Pending Approval')
+                              : (lang === 'ar' ? 'مسودة' : 'Draft')}
+                          </span>
+                          <span className="w-1 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full shrink-0" />
                           <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                             <Building2 size={12} />
                             {job.warehouseCode}
@@ -1508,6 +1876,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                       </div>
                       
                       <div className="flex items-center gap-1 sm:ml-4 border-l pl-4 dark:border-zinc-800">
+                          {(user.role === 'Admin' || user.role === 'Warehouse Operations') && job.status === 'Pending Approval' && (
+                            <button 
+                              onClick={() => handleApproveJob(job)}
+                              className="p-3 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-2xl transition-all flex items-center gap-2 font-bold"
+                              title={lang === 'ar' ? 'اعتماد' : 'Approve'}
+                            >
+                              <CheckCircle2 size={20} />
+                              <span className="text-xs hidden lg:inline">{lang === 'ar' ? 'اعتماد' : 'Approve'}</span>
+                            </button>
+                          )}
                           {user.role === 'Admin' && (
                             <button 
                               onClick={() => handleDeleteJob(job.id)}
@@ -1518,7 +1896,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                               <span className="text-xs hidden lg:inline">{lang === 'ar' ? 'حذف' : 'Delete'}</span>
                             </button>
                           )}
-                          {(user.role === 'Admin' || job.createdBy === user.uid) && (
+                          {(user.role === 'Admin' || user.role === 'Warehouse Operations' || job.createdBy === user.uid) && (
                             <button 
                               onClick={() => handleEditJob(job)}
                               className="p-3 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-2xl transition-all flex items-center gap-2 font-bold"
@@ -1528,6 +1906,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                               <span className="text-xs hidden sm:inline">{lang === 'ar' ? 'تعديل' : 'Edit'}</span>
                             </button>
                           )}
+                         {job.status === 'Completed' && (
+                           <button 
+                             onClick={() => handleShareExcelOutlook(job)}
+                             className="p-3 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-2xl transition-all flex items-center gap-2 font-bold"
+                             title={lang === 'ar' ? 'مشاركة أوتلوك' : 'Share Outlook'}
+                           >
+                            <Mail size={20} />
+                            <span className="text-xs hidden sm:inline">{lang === 'ar' ? 'أوتلوك' : 'Outlook'}</span>
+                           </button>
+                         )}
                          <button 
                            onClick={() => handleShareWhatsApp(job)}
                         className="p-3 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-2xl transition-all flex items-center gap-2 font-bold"

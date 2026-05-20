@@ -193,7 +193,7 @@ export interface ProcessingJob {
     unit: string;
   }[];
   notes?: string;
-  status: 'Draft' | 'Completed';
+  status: 'Draft' | 'Pending Approval' | 'Completed';
   createdAt: string;
   createdBy: string;
 }

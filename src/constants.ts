@@ -13,4 +13,5 @@ export const COLLECTIONS = {
   THIRD_PARTY_PROCESSING: 'third_party_processing',
   PROCESS_ITEMS: 'process_items',
   WAREHOUSES: 'warehouses',
+  SETTINGS: 'settings',
 };
