@@ -155,6 +155,8 @@ export interface Warehouse {
   id: string;
   name: string;
   systemCode: string;
+  supplierCode?: string;
+  processingPricePerKg?: number;
   supplierName?: string;
   location?: string;
   contactName?: string;
@@ -171,8 +173,11 @@ export interface ProcessItem {
   size: string;
 }
 
+export type JobStatus = 'Draft' | 'Pending Warehouse' | 'Pending Quality' | 'Pending Purchasing' | 'Pending Completion' | 'Completed' | 'Rejected';
+
 export interface ProcessingJob {
   id: string;
+  jobCode?: string;
   date: string;
   thirdPartyName?: string;
   supplierName?: string;
@@ -193,9 +198,24 @@ export interface ProcessingJob {
     unit: string;
   }[];
   notes?: string;
-  status: 'Draft' | 'Pending Approval' | 'Completed';
+  status: JobStatus;
   createdAt: string;
   createdBy: string;
+  
+  // Workflow fields
+  confirmedPrice?: number;
+  qualityComments?: string;
+  poNumber?: string;
+  
+  // Track timestamps/users for each stage
+  warehouseApprovalTime?: string;
+  warehouseApproverId?: string;
+  qualityApprovalTime?: string;
+  qualityApproverId?: string;
+  purchasingApprovalTime?: string;
+  purchasingApproverId?: string;
+  completionTime?: string;
+  completerId?: string;
 }
 
 export type Language = 'ar' | 'en';

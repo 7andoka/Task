@@ -21,7 +21,12 @@ import {
   Database,
   Users,
   Settings,
-  AtSign
+  AtSign,
+  Pencil,
+  X,
+  Tag,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { 
   Language, 
@@ -31,7 +36,7 @@ import {
   Warehouse
 } from '../types';
 import { translations } from '../i18n';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, setDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, setDoc, getDocs, writeBatch, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
@@ -61,43 +66,47 @@ interface ThirdPartyProcessingProps {
 // Representative items categories based on provided labels
 const CATEGORIES = {
   process: [
-    { id: 'SLC', labelAr: 'شرائح', labelEn: 'Slices' },
-    { id: 'Pre', labelAr: 'خام', labelEn: 'Raw' },
-    { id: 'Grd', labelAr: 'مدرج', labelEn: 'Graded' },
-    { id: 'PTD', labelAr: 'مخلي', labelEn: 'Pitted' },
-    { id: 'FARZA', labelAr: 'فرزه', labelEn: 'Farza' },
+    { id: 'SLC', labelAr: 'شرائح', labelEn: 'SLC', aliases: ['slice', 'slices', 'سلايس', 'شرايح'] },
+    { id: 'Pre', labelAr: 'خام', labelEn: 'Pre', aliases: ['raw', 'preparation', 'تجهيز', 'خامات', 'خام'] },
+    { id: 'Grd', labelAr: 'مدرج', labelEn: 'Graded', aliases: ['grd', 'graded', 'فرز', 'تدريج'] },
+    { id: 'PTD', labelAr: 'مخلي', labelEn: 'Pitted', aliases: ['ptd', 'pitted', 'مخلي', 'مخلي من النوي'] },
+    { id: 'FARZA', labelAr: 'فرزه', labelEn: 'Farza', aliases: ['reject', 'bi products', 'فرزة', 'فرزة زيت', 'فرزه زيت'] },
   ],
   direction: [
-    { id: 'Green', labelAr: 'مطبوخ', labelEn: 'Cooked/Green' },
-    { id: 'Black', labelAr: 'ماء وملح', labelEn: 'Brine/Black' },
+    { id: 'Green', labelAr: 'مطبوخ', labelEn: 'Green', aliases: ['gree', 'olive', 'green', 'green olive', 'cooked', 'اخضر'] },
+    { id: 'Black', labelAr: 'مياه وملح', labelEn: 'Black', aliases: ['brine', 'black', 'water and salt', 'م م', 'مياه ملح', 'اسود'] },
   ],
   type: [
-    { id: 'Picual', labelAr: 'بيكوال', labelEn: 'Picual' },
-    { id: 'Azizi', labelAr: 'عجيزي', labelEn: 'Azizi' },
-    { id: 'Akas', labelAr: 'عقص', labelEn: 'Akas' },
-    { id: 'Manzanilla', labelAr: 'منزنيلو', labelEn: 'Manzanilla' },
-    { id: 'Tofahi', labelAr: 'تفاحي', labelEn: 'Tofahi' },
-    { id: 'Kobrosi', labelAr: 'قبرصي', labelEn: 'Kobrosi' },
-    { id: 'Karotina', labelAr: 'كاروتينا', labelEn: 'Karotina' },
-    { id: 'Nour Sabah', labelAr: 'نور صباح', labelEn: 'Nour Sabah' },
-    { id: 'Kalamata', labelAr: 'كلاماتا', labelEn: 'Kalamata' },
-    { id: 'Hamed', labelAr: 'حامد', labelEn: 'Hamed' },
-    { id: 'Dolsy', labelAr: 'دولسي', labelEn: 'Dolsy' },
-    { id: 'Baldiat', labelAr: 'بلديات', labelEn: 'Baldiat' },
-    { id: 'Senara', labelAr: 'سنارة', labelEn: 'Senara' },
-    { id: 'Sers Cola', labelAr: 'سرس كولا', labelEn: 'Sers Cola' },
-    { id: 'Pepper', labelAr: 'فلفل', labelEn: 'Pepper' },
-    { id: 'Cauliflower', labelAr: 'قرنبيط', labelEn: 'Cauliflower' },
-    { id: 'Other', labelAr: 'اخري', labelEn: 'Other' },
+    { id: 'Picual', labelAr: 'بيكوال', labelEn: 'Picual', aliases: ['pic', 'picual', 'بيكوال'] },
+    { id: 'Azizi', labelAr: 'عجيزي', labelEn: 'Azizi', aliases: ['azizi', 'عجيزي'] },
+    { id: 'Akas', labelAr: 'عقص', labelEn: 'Akas', aliases: ['akas', 'عقص'] },
+    { id: 'Kobrosy', labelAr: 'قبرصي', labelEn: 'Kobrosy', aliases: ['kobrosi', 'kob', 'قبرصي'] },
+    { id: 'Manzanilla', labelAr: 'منزنيـلو', labelEn: 'Manzanilla', aliases: ['manz', 'منزنيللو', 'منزنيلا'] },
+    { id: 'Nour Sabah', labelAr: 'نور صباح', labelEn: 'Nour Sabah', aliases: ['نور صباح'] },
+    { id: 'Sers Cola', labelAr: 'سرس كولا', labelEn: 'Sers Cola', aliases: ['serscola', 'سرس'] },
+    { id: 'Kalamata', labelAr: 'كلاماتا', labelEn: 'Kalamata', aliases: ['kal', 'كلاماتا'] },
+    { id: 'Dolsy', labelAr: 'دولسي', labelEn: 'Dolsy', aliases: ['دولسى'] },
+    { id: 'Nepal', labelAr: 'نيبال', labelEn: 'Nepal', aliases: ['نيبال'] },
+    { id: 'Farza Olive For Oil', labelAr: 'فرزة زيت للزيت', labelEn: 'Farza Olive For Oil', aliases: ['olv', 'oil', 'زيت'] },
+    { id: 'Pepperoncini', labelAr: 'فلفل بيبرونسيني', labelEn: 'Pepperoncini', aliases: ['pep', 'فلفل'] },
+    { id: 'Karotina', labelAr: 'كاروتينا', labelEn: 'Karotina', aliases: ['كاروتينا'] },
+    { id: 'Tofahi', labelAr: 'تفاحي', labelEn: 'Tofahi', aliases: ['تفاحي'] },
+    { id: 'Hamed', labelAr: 'حامد', labelEn: 'Hamed', aliases: ['حامد'] },
+    { id: 'Baldiat', labelAr: 'بلديات', labelEn: 'Baldiat', aliases: ['بلديات'] },
+    { id: 'Senara', labelAr: 'سنارة', labelEn: 'Senara', aliases: ['سنارة'] },
+    { id: 'Mexican Pepper', labelAr: 'فلفل مكسيكي', labelEn: 'Mexican Pepper', aliases: ['مكسيكي'] },
+    { id: 'Olive Oil', labelAr: 'زيت زيتون', labelEn: 'Olive Oil', aliases: ['olv', 'زيت'] },
+    { id: 'Banana Pepper Mix Colour', labelAr: 'موز بيبر ملون', labelEn: 'Banana Pepper Mix Colour', aliases: ['موز'] },
   ],
   size: [
-    { id: 'L', labelAr: 'L', labelEn: 'L' },
-    { id: 'M', labelAr: 'M', labelEn: 'M' },
-    { id: 'S', labelAr: 'S', labelEn: 'S' },
+    { id: 'L', labelAr: 'L', labelEn: 'L', aliases: ['كبير', 'لارج'] },
+    { id: 'M', labelAr: 'M', labelEn: 'M', aliases: ['وسط', 'ميديم'] },
+    { id: 'S', labelAr: 'S', labelEn: 'S', aliases: ['صغير', 'سمول'] },
     { id: 'XXXS', labelAr: 'XXXS', labelEn: 'XXXS' },
     { id: 'XXS', labelAr: 'XXS', labelEn: 'XXS' },
-    { id: 'Pre', labelAr: 'خام', labelEn: 'Raw' },
-    { id: 'Mesh.', labelAr: 'مهروس', labelEn: 'Mesh' },
+    { id: 'Natural Black', labelAr: 'طبيعي أسود', labelEn: 'Natural Black', aliases: ['طبيعي'] },
+    { id: 'Mesh', labelAr: 'شبك / مش', labelEn: 'Mesh', aliases: ['mesh.', 'شبك', 'مش'] },
+    { id: 'Raw', labelAr: 'خام', labelEn: 'Raw', aliases: ['pre', 'خام', 'raw'] },
   ]
 };
 
@@ -222,7 +231,9 @@ const ShortcutSelector = ({
   title,
   lang,
   themeColor = 'emerald',
-  enforcedType = ''
+  enforcedType = '',
+  searchTerm = '',
+  setSearchTerm
 }: { 
   filters: any, 
   setFilters: any, 
@@ -232,10 +243,47 @@ const ShortcutSelector = ({
   title: string,
   lang: Language,
   themeColor?: 'emerald' | 'blue',
-  enforcedType?: string
+  enforcedType?: string,
+  searchTerm?: string,
+  setSearchTerm?: (val: string) => void
 }) => {
   const isRtl = lang === 'ar';
   const accentClass = themeColor === 'emerald' ? 'emerald' : 'blue';
+
+  // Auto-selection mechanism based on the 4 filter choices:
+  // Whenever the available filtered items list changes:
+  useEffect(() => {
+    const hasAnyFilter = !!(filters.process || filters.direction || filters.type || filters.size);
+    
+    if (availableItems.length === 1) {
+      // If exactly one item matches the current filters, select it automatically!
+      if (selectedCode !== availableItems[0].code) {
+        setSelectedCode(availableItems[0].code);
+      }
+    } else if (availableItems.length > 1) {
+      // If there are multiple items, check if the currently selected code is still valid according to the new filters
+      const currentValid = availableItems.some(item => item.code === selectedCode);
+      if (selectedCode && !currentValid) {
+        // Clear if the current code is no longer a valid result under the new filters
+        setSelectedCode('');
+      } else if (!selectedCode && hasAnyFilter) {
+        // If nothing is selected, check if we have a very precise matching state where all 4 filters are filled
+        const allFiltersSet = !!(filters.process && filters.direction && filters.type && filters.size);
+        if (allFiltersSet) {
+          // Select the first matched item as the sensible default
+          setSelectedCode(availableItems[0].code);
+        }
+      }
+    } else {
+      // If no items match, clear the selection
+      if (selectedCode) {
+        setSelectedCode('');
+      }
+    }
+  }, [availableItems, filters, selectedCode, setSelectedCode]);
+
+  // Find the currently selected item object to display its detailed info or a success indicator
+  const selectedItem = availableItems.find(item => item.code === selectedCode);
 
   return (
     <div className={`p-5 rounded-3xl bg-${accentClass}-50/30 dark:bg-${accentClass}-900/10 border border-${accentClass}-100 dark:border-${accentClass}-900/30 space-y-5 shadow-sm`}>
@@ -252,7 +300,6 @@ const ShortcutSelector = ({
             value={filters.process}
             onChange={(e) => { 
               setFilters({ ...filters, process: e.target.value });
-              setSelectedCode('');
             }}
             className="w-full px-2 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
           >
@@ -268,7 +315,6 @@ const ShortcutSelector = ({
             value={filters.direction}
             onChange={(e) => {
               setFilters({ ...filters, direction: e.target.value });
-              setSelectedCode('');
             }}
             className="w-full px-2 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
           >
@@ -285,7 +331,6 @@ const ShortcutSelector = ({
             disabled={!!enforcedType && themeColor === 'blue'}
             onChange={(e) => {
               setFilters({ ...filters, type: e.target.value });
-              setSelectedCode('');
             }}
             className={`w-full px-2 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-emerald-500 outline-none ${!!enforcedType && themeColor === 'blue' ? 'opacity-70 cursor-not-allowed bg-zinc-100 dark:bg-zinc-700' : ''}`}
           >
@@ -301,7 +346,6 @@ const ShortcutSelector = ({
             value={filters.size}
             onChange={(e) => {
               setFilters({ ...filters, size: e.target.value });
-              setSelectedCode('');
             }}
             className="w-full px-2 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
           >
@@ -311,24 +355,55 @@ const ShortcutSelector = ({
         </div>
       </div>
 
-      {/* Final Item List */}
-      <div className="space-y-1 bg-white/50 dark:bg-black/20 p-3 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800">
-         <span className="text-[10px] font-bold text-zinc-400 uppercase">{isRtl ? 'اختيار الصنف المطابق' : 'Select Matching Item'}</span>
-         <select 
-            value={selectedCode}
-            onChange={(e) => setSelectedCode(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-          >
-            <option value="">{isRtl ? `--- اختر من النتائج (${availableItems.length}) ---` : `--- Select from results (${availableItems.length}) ---`}</option>
-            {availableItems.map(item => (
-              <option key={item.code} value={item.code}>{item.code} - {item.name}</option>
-            ))}
-          </select>
-          {availableItems.length === 0 && (filters.process || filters.direction || filters.type || filters.size) && (
-            <p className="text-[10px] text-red-500 mt-1 italic font-medium">
-              {isRtl ? 'لا يوجد صنف يطابق هذه الفلاتر' : 'No item matches these filters'}
-            </p>
-          )}
+      {/* Selected Item Feedback Indicator */}
+      {selectedItem && (
+        <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-800 rounded-2xl flex items-center justify-between gap-3 text-xs animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-emerald-500 shrink-0 animate-bounce" />
+            <span className="font-extrabold text-zinc-700 dark:text-zinc-200">
+              {isRtl 
+                ? `تم اختيار: ${selectedItem.name}` 
+                : `Selected: ${selectedItem.name}`}
+            </span>
+          </div>
+          <span className="font-mono bg-emerald-100/50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-lg">
+            {selectedItem.code}
+          </span>
+        </div>
+      )}
+
+      {/* Global Search and Select */}
+      <div className="space-y-3 bg-white/50 dark:bg-black/20 p-4 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800">
+          {/* Text Search Input */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={14} />
+            <input 
+              type="text"
+              placeholder={isRtl ? 'بحث باسم الصنف أو الكود...' : 'Search by name or code...'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm?.(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase">{isRtl ? 'أو اختر الصنف يدوياً من نتائج المطابقة' : 'Or Select Item Manually from Matching Results'}</span>
+            <select 
+                value={selectedCode}
+                onChange={(e) => setSelectedCode(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              >
+                <option value="">{isRtl ? `--- نتائج التصفية (${availableItems.length}) ---` : `--- Filter Results (${availableItems.length}) ---`}</option>
+                {availableItems.map(item => (
+                  <option key={item.code} value={item.code}>{item.code} - {item.name}</option>
+                ))}
+              </select>
+              {availableItems.length === 0 && (filters.process || filters.direction || filters.type || filters.size || searchTerm) && (
+                <p className="text-[10px] text-red-500 mt-1 italic font-medium">
+                  {isRtl ? 'لا يوجد صنف يطابق هذه المعايير' : 'No item matches these criteria'}
+                </p>
+              )}
+          </div>
       </div>
     </div>
   );
@@ -371,16 +446,61 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     warehouseCode: '',
     inputs: [],
     outputs: [],
-    status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Approval',
-    notes: ''
+    status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Warehouse',
+    notes: '',
+    qualityComments: '',
+    poNumber: '',
+    confirmedPrice: 0
   });
+
+  const [jobActionsState, setJobActionsState] = useState<{
+    [jobId: string]: {
+      qualityComments?: string;
+      confirmedPrice?: number;
+      poNumber?: string;
+    }
+  }>({});
+
+  const [expandedJobs, setExpandedJobs] = useState<{[jobId: string]: boolean}>({});
+
+  const toggleJobExpanded = (jobId: string) => {
+    setExpandedJobs(prev => ({
+      ...prev,
+      [jobId]: !prev[jobId]
+    }));
+  };
+
+  const handleUpdateManualPrice = async (jobId: string, newPrice: number) => {
+    try {
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, jobId), {
+        confirmedPrice: newPrice,
+        serverTimestamp: serverTimestamp()
+      });
+      toast.success(lang === 'ar' ? 'تم تحديث السعر بنجاح' : 'Price updated successfully');
+    } catch (error) {
+      toast.error(lang === 'ar' ? 'فشل تحديث السعر' : 'Failed to update price');
+    }
+  };
+
+  const handleUpdateJobActionState = (jobId: string, field: string, value: any) => {
+    setJobActionsState(prev => ({
+      ...prev,
+      [jobId]: {
+        ...prev[jobId],
+        [field]: value
+      }
+    }));
+  };
 
   const [newWarehouse, setNewWarehouse] = useState({
     name: '',
     systemCode: '',
+    supplierCode: '',
+    processingPricePerKg: '',
     contactName: '',
     whatsappGroup: ''
   });
+  const [editingWarehouseId, setEditingWarehouseId] = useState<string | null>(null);
 
   const [inputFilters, setInputFilters] = useState({ process: '', direction: '', type: '', size: '' });
   const [currentInput, setCurrentInput] = useState({ itemCode: '', quantity: 0, unit: 'kg' });
@@ -400,18 +520,145 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   }, [enforcedType]);
 
   // Filter items matching the selection
-  const getFilteredItems = (filters: typeof inputFilters) => {
+  const getFilteredItems = (filters: typeof inputFilters, search: string = '') => {
+    // Robust normalization for Arabic and general text
+    const normalize = (text: string) => {
+      if (!text) return "";
+      let normalized = text.toLowerCase().trim();
+      
+      // Arabic normalization: Alef, Teh Marbuta, Yeh, Kashida
+      normalized = normalized
+        .replace(/[أإآ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/ى/g, 'ي')
+        .replace(/ئ/g, 'ي')
+        .replace(/ؤ/g, 'و')
+        .replace(/\u0640/g, ''); // Remove Arabic Kashida
+        
+      // Also remove common punctuation that might interfere with word matching
+      normalized = normalized.replace(/[._\-/\\]/g, ' ');
+      return normalized.trim().replace(/\s+/g, ' ');
+    };
+
+    const getTargetInfo = (val: string, categoryKey: keyof typeof CATEGORIES) => {
+      const category = CATEGORIES[categoryKey] as any[];
+      const normVal = normalize(val);
+      if (!normVal) return null;
+
+      const matchedEntry = category.find(c => {
+        const cId = normalize(c.id);
+        const cAr = normalize(c.labelAr);
+        const cEn = normalize(c.labelEn);
+        const aliases = (c.aliases || []).map((a: string) => normalize(a));
+
+        return (
+          cId === normVal || 
+          cAr === normVal || 
+          cEn === normVal ||
+          aliases.includes(normVal) ||
+          (c.labelAr.includes('/') && c.labelAr.split('/').some((p: string) => normalize(p) === normVal)) ||
+          (c.labelEn.includes('/') && c.labelEn.split('/').some((p: string) => normalize(p) === normVal))
+        );
+      });
+
+      if (!matchedEntry) return null;
+
+      const allTerms = new Set<string>();
+      allTerms.add(normalize(matchedEntry.id));
+      allTerms.add(normalize(matchedEntry.labelAr));
+      allTerms.add(normalize(matchedEntry.labelEn));
+      if (matchedEntry.aliases) matchedEntry.aliases.forEach((a: string) => allTerms.add(normalize(a)));
+      if (matchedEntry.labelAr.includes('/')) matchedEntry.labelAr.split('/').forEach((p: string) => allTerms.add(normalize(p)));
+      if (matchedEntry.labelEn.includes('/')) matchedEntry.labelEn.split('/').forEach((p: string) => allTerms.add(normalize(p)));
+
+      return { id: matchedEntry.id, terms: allTerms };
+    };
+
+    const matchesFilter = (itemValue: string, filterValue: string, categoryKey: keyof typeof CATEGORIES, itemName: string) => {
+      if (!filterValue) return true;
+
+      const filtInfo = getTargetInfo(filterValue, categoryKey);
+      if (!filtInfo) return true; // Shouldn't happen but fallback to match all
+
+      // Check if the filter itself is a generic "Any" or "Other" placeholder
+      const genericTerms = ['any', 'gen', 'general', 'other', 'others', 'na', 'all', 'الكل', 'اي', 'اخري', 'اخرى'];
+      if (genericTerms.includes(normalize(filtInfo.id))) return true;
+
+      const itemInfo = itemValue ? getTargetInfo(itemValue, categoryKey) : null;
+
+      // 1. STRICT CATEGORY CHECK
+      // If the item has a specific category assigned (e.g. SLC) and it's DIFFERENT from the filter (e.g. Pre)
+      // we reject it immediately. This prevents Slices appearing when selecting Raw/Pre.
+      if (itemInfo) {
+        if (itemInfo.id === filtInfo.id) return true;
+        
+        // If they are different specific categories, don't fallback to name-matching
+        const isItemGeneric = genericTerms.includes(normalize(itemInfo.id));
+        if (!isItemGeneric) return false;
+      }
+
+      // 2. NAME MATCHING FALLBACK
+      // If item property is missing or generic (like 'Any'), check the item name for indicators.
+      const nameNorm = normalize(itemName);
+      const nameWords = nameNorm.split(/\s+/).filter(Boolean);
+
+      for (const term of filtInfo.terms) {
+        if (term.length <= 2) {
+          // Word-level check for short strings (M, S, L, etc) to avoid partial matches
+          if (nameWords.includes(term)) return true;
+        } else {
+          // Substring match for longer terms
+          if (nameNorm.includes(term)) return true;
+        }
+      }
+
+      return false;
+    };
+
     return dynamicItems.filter(item => {
-      if (filters.process && item.process !== filters.process) return false;
-      if (filters.direction && item.direction !== filters.direction && item.direction !== 'Any') return false;
-      if (filters.type && item.type !== filters.type) return false;
-      if (filters.size && item.size !== filters.size) return false;
+      // 1. Check Dropdown Filters (Must match all selected)
+      if (!matchesFilter(item.process, filters.process, 'process', item.name)) return false;
+      if (!matchesFilter(item.direction, filters.direction, 'direction', item.name)) return false;
+      if (!matchesFilter(item.type, filters.type, 'type', item.name)) return false;
+      if (!matchesFilter(item.size, filters.size, 'size', item.name)) return false;
+
+      // 2. Check Global Text Search (Search against code, name, and attributes)
+      if (search) {
+        const searchWords = normalize(search).split(/\s+/).filter(Boolean);
+        const itemCodeNorm = normalize(item.code);
+        const itemNameNorm = normalize(item.name);
+        
+        // Match each word against all possible attributes of the item
+        const matchesAllSearchWords = searchWords.every(word => {
+          if (itemCodeNorm.includes(word)) return true;
+          if (itemNameNorm.includes(word)) return true;
+          
+          // Check if word matches any of the item's property categories
+          const checkWordInProperty = (propValue: string, key: keyof typeof CATEGORIES) => {
+            const info = getTargetInfo(propValue, key);
+            return info?.terms.has(word);
+          };
+
+          if (checkWordInProperty(item.process, 'process')) return true;
+          if (checkWordInProperty(item.direction, 'direction')) return true;
+          if (checkWordInProperty(item.type, 'type')) return true;
+          if (checkWordInProperty(item.size, 'size')) return true;
+          
+          return false;
+        });
+
+        if (!matchesAllSearchWords) return false;
+      }
+      
       return true;
     });
   };
 
-  const availableInputItems = getFilteredItems(inputFilters);
-  const availableOutputItems = getFilteredItems(outputFilters);
+  const [inputSearch, setInputSearch] = useState('');
+  const [outputSearch, setOutputSearch] = useState('');
+
+  const availableInputItems = getFilteredItems(inputFilters, inputSearch);
+  const availableOutputItems = getFilteredItems(outputFilters, outputSearch);
 
   // Auto-select item if only one result remains
   useEffect(() => {
@@ -514,20 +761,49 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       return;
     }
     try {
-      await addDoc(collection(db, COLLECTIONS.WAREHOUSES), {
+      const warehouseData = {
         ...newWarehouse,
-        createdAt: new Date().toISOString()
-      });
+        processingPricePerKg: newWarehouse.processingPricePerKg ? parseFloat(newWarehouse.processingPricePerKg) : 0
+      };
+
+      if (editingWarehouseId) {
+        await updateDoc(doc(db, COLLECTIONS.WAREHOUSES, editingWarehouseId), {
+          ...warehouseData,
+          updatedAt: new Date().toISOString()
+        });
+        toast.success(lang === 'ar' ? 'تم تحديث المخزن بنجاح' : 'Warehouse updated successfully');
+      } else {
+        await addDoc(collection(db, COLLECTIONS.WAREHOUSES), {
+          ...warehouseData,
+          createdAt: new Date().toISOString()
+        });
+        toast.success(lang === 'ar' ? 'تم إضافة المخزن بنجاح' : 'Warehouse added successfully');
+      }
+      
       setNewWarehouse({ 
         name: '', 
         systemCode: '', 
+        supplierCode: '',
+        processingPricePerKg: '',
         contactName: '', 
         whatsappGroup: '' 
       });
-      toast.success(lang === 'ar' ? 'تم إضافة المخزن بنجاح' : 'Warehouse added successfully');
+      setEditingWarehouseId(null);
     } catch (e) {
-      toast.error(lang === 'ar' ? 'فشل إضافة المخزن' : 'Failed to add warehouse');
+      toast.error(lang === 'ar' ? 'فشل العملية' : 'Operation failed');
     }
+  };
+
+  const startEditingWarehouse = (w: Warehouse) => {
+    setNewWarehouse({
+      name: w.name,
+      systemCode: w.systemCode,
+      supplierCode: w.supplierCode || '',
+      processingPricePerKg: w.processingPricePerKg?.toString() || '',
+      contactName: w.contactName || '',
+      whatsappGroup: w.whatsappGroup || ''
+    });
+    setEditingWarehouseId(w.id);
   };
 
   const handleDeleteWarehouse = async (id: string) => {
@@ -958,6 +1234,26 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     }
   };
 
+  const generateJobCode = async (wh: Warehouse, date: string) => {
+    const prefix = (wh.contactName || wh.systemCode || wh.name.substring(0, 2)).toUpperCase();
+    const dateParts = date.split('-'); 
+    const yy = dateParts[0].substring(2);
+    const mm = dateParts[1];
+    const dd = dateParts[2];
+    const dateStamp = `${dd}${mm}${yy}`;
+    
+    const q = query(
+      collection(db, COLLECTIONS.THIRD_PARTY_PROCESSING),
+      where('warehouseId', '==', wh.id),
+      where('date', '==', date)
+    );
+    const snap = await getDocs(q);
+    const sequence = snap.size + 1;
+    const seqString = String(sequence).padStart(3, '0');
+    
+    return `${prefix}-${dateStamp}-${seqString}`;
+  };
+
   const handleSaveJob = async () => {
     if (!newJob.warehouseId || newJob.inputs.length === 0 || newJob.outputs.length === 0) {
       toast.error(lang === 'ar' ? 'يرجى ملء جميع البيانات الأساسية والمدخلات والمخرجات' : 'Please fill all basic info, inputs, and outputs');
@@ -1006,9 +1302,15 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
     try {
       const selectedWh = warehouses.find(w => w.id === newJob.warehouseId);
+      let jobCode = '';
+      if (!editingJobId && selectedWh) {
+        jobCode = await generateJobCode(selectedWh, newJob.date);
+      }
+
       const jobData = {
         ...newJob,
-        status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? newJob.status : 'Pending Approval',
+        jobCode: editingJobId ? jobs.find(j => j.id === editingJobId)?.jobCode : jobCode,
+        status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? newJob.status : 'Pending Warehouse',
         warehouseName: selectedWh?.name || '',
         warehouseCode: selectedWh?.systemCode || '',
         updatedAt: new Date().toISOString(),
@@ -1065,7 +1367,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         warehouseCode: '',
         inputs: [],
         outputs: [],
-        status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Approval',
+        status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Warehouse',
         notes: ''
       });
     } catch (error) {
@@ -1103,39 +1405,107 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   };
 
   const filteredJobs = jobs.filter(job => {
-    // Role based visibility: 
-    // - Customer Operations only see their own jobs
-    // - Warehouse Operations see all Pending Approval and Completed jobs
-    // - Admins see everything
-    
-    if (user.role === 'Customer Operations' && job.createdBy !== user.uid) {
-      return false;
-    }
+    // Admin sees everything
+    if (user.role === 'Admin') return true;
 
-    if (user.role === 'Warehouse Operations' && job.status === 'Draft') {
-      return false;
-    }
-
-    return (
+    // Search filter
+    const matchesSearch = (
       job.warehouseName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       job.notes?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    if (!matchesSearch) return false;
+
+    // Role-based workflow visibility
+    if (user.role === 'Customer Operations') {
+      return job.createdBy === user.uid;
+    }
+
+    if (user.role === 'Warehouse Operations') {
+      return true;
+    }
+
+    if (user.role === 'Quality Operations') {
+      // Quality sees jobs waiting for their inspection and completed jobs
+      return job.status === 'Pending Quality' || job.status === 'Completed';
+    }
+
+    if (user.role === 'Purchasing Operations') {
+      // Purchasing sees jobs waiting for their price confirmation and completed jobs
+      return job.status === 'Pending Purchasing' || job.status === 'Completed';
+    }
+
+    return false;
   });
 
-  const handleApproveJob = async (job: ProcessingJob) => {
+  const handleApproveWarehouse = async (job: ProcessingJob) => {
     try {
       await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
-        status: 'Completed',
-        approvedBy: user.uid,
-        approvedAt: new Date().toISOString(),
+        status: 'Pending Quality',
+        warehouseApproverId: user.uid,
+        warehouseApprovalTime: new Date().toISOString(),
         serverTimestamp: serverTimestamp()
       });
-      toast.success(lang === 'ar' ? 'تم اعتماد التشغيلة بنجاح' : 'Job approved successfully');
-      
-      // Auto share Excel via Outlook after approval
-      handleShareExcelOutlook({ ...job, status: 'Completed' });
+      toast.success(lang === 'ar' ? 'تم اعتماد المخزن بنجاح' : 'Warehouse approval successful');
     } catch (error) {
-      toast.error(lang === 'ar' ? 'فشل اعتماد التشغيلة' : 'Failed to approve job');
+      toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
+    }
+  };
+
+  const handleApproveQuality = async (job: ProcessingJob, isAccepted: boolean) => {
+    try {
+      const comments = jobActionsState[job.id]?.qualityComments || '';
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+        status: isAccepted ? 'Pending Purchasing' : 'Rejected',
+        qualityApproverId: user.uid,
+        qualityApprovalTime: new Date().toISOString(),
+        qualityComments: comments,
+        serverTimestamp: serverTimestamp()
+      });
+      toast.success(isAccepted 
+        ? (lang === 'ar' ? 'تم اعتماد الجودة بنجاح' : 'Quality approval successful')
+        : (lang === 'ar' ? 'تم رفض التشغيلة' : 'Job rejected')
+      );
+    } catch (error) {
+      toast.error(lang === 'ar' ? 'فشل العملية' : 'Operation failed');
+    }
+  };
+
+  const handleApprovePurchasing = async (job: ProcessingJob) => {
+    try {
+      const price = jobActionsState[job.id]?.confirmedPrice || job.confirmedPrice || 0;
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+        status: 'Pending Completion',
+        purchasingApproverId: user.uid,
+        purchasingApprovalTime: new Date().toISOString(),
+        confirmedPrice: price,
+        serverTimestamp: serverTimestamp()
+      });
+      toast.success(lang === 'ar' ? 'تم اعتماد المشتريات بنجاح' : 'Purchasing approval successful');
+    } catch (error) {
+      toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
+    }
+  };
+
+  const handleCompleteJob = async (job: ProcessingJob) => {
+    try {
+      const po = jobActionsState[job.id]?.poNumber || '';
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+        status: 'Completed',
+        completerId: user.uid,
+        completionTime: new Date().toISOString(),
+        poNumber: po,
+        serverTimestamp: serverTimestamp()
+      });
+      toast.success(lang === 'ar' ? 'تم إكمال التشغيلة بنجاح' : 'Job completed successfully');
+      
+      // Auto share Excel via Outlook after completion
+      handleShareExcelOutlook({ 
+        ...job, 
+        status: 'Completed', 
+        poNumber: po 
+      });
+    } catch (error) {
+      toast.error(lang === 'ar' ? 'فشل الإكمال' : 'Completion failed');
     }
   };
 
@@ -1197,10 +1567,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const ccList = ccEmails.length > 0 ? `&cc=${ccEmails.join(',')}` : '';
       
       const recipient = toList;
-      const subjectText = isRtl ? `تقرير عملية تشغيل: ${job.warehouseName}` : `Processing Report: ${job.warehouseName}`;
+      const subjectText = isRtl ? `تقرير عملية تشغيل: ${job.warehouseName} بتاريخ ${date}` : `Processing Report: ${job.warehouseName} dated ${date}`;
       const bodyText = isRtl 
-        ? `برجاء الاطلاع على تقرير عملية التشغيل المرفق لـ ${job.warehouseName} بتاريخ ${date}. (تم تحميل الملف المرفق تلقائياً، يرجى إرفاقه في حال لم يظهر)` 
-        : `Please find the attached processing report for ${job.warehouseName} dated ${date}. (File was downloaded automatically, please attach it if not showing)`;
+        ? `برجاء الاطلاع على تقرير عملية التشغيل المرفق لـ ${job.warehouseName} بتاريخ ${date}.` 
+        : `Please find the attached processing report for ${job.warehouseName} dated ${date}.`;
 
       const subject = encodeURIComponent(subjectText);
       const body = encodeURIComponent(bodyText);
@@ -1279,6 +1649,21 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     const date = new Date(job.date).toLocaleDateString(isRtl ? 'ar-EG' : 'en-US');
     const trans = translations[lang];
 
+    // Find warehouse details matching docx export
+    const warehouse = warehouses.find(w => w.id === job.warehouseId);
+    const pricePerKg = job.confirmedPrice || warehouse?.processingPricePerKg || 0;
+    const supplierCode = warehouse?.supplierCode || job.warehouseCode || "-";
+
+    const totalIn = job.inputs.reduce((s, i) => s + i.quantity, 0);
+    const totalOut = job.outputs.reduce((s, i) => s + i.quantity, 0);
+    const totalCost = totalIn * pricePerKg;
+    const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
+    const lossWeight = totalIn - totalOut;
+    const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) : '0.0';
+
+    const maxRows = Math.max(job.inputs.length, job.outputs.length);
+    const rowsCount = Math.max(maxRows, 5);
+
     // Create a temporary container for the template
     const container = document.createElement('div');
     container.style.position = 'absolute';
@@ -1288,87 +1673,169 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     container.dir = isRtl ? 'rtl' : 'ltr';
     document.body.appendChild(container);
 
-    const totalIn = job.inputs.reduce((s, i) => s + i.quantity, 0);
-    const totalOut = job.outputs.reduce((s, i) => s + i.quantity, 0);
-    const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
-    const lossWeight = totalIn - totalOut;
-    const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) : '0.0';
-
     container.innerHTML = `
-      <div style="background: white; padding: 30px; border-radius: 20px; font-family: sans-serif; color: #1a1a1a;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #10b981; padding-bottom: 15px; margin-bottom: 20px;">
-          <div>
-            <h1 style="color: #10b981; margin: 0; font-size: 22px;">${trans.thirdPartyProcessing}</h1>
+      <div style="background: white; padding: 40px; border: 1px solid #cbd5e1; font-family: Arial, sans-serif; color: #1e293b; direction: ${isRtl ? 'rtl' : 'ltr'}; text-align: ${isRtl ? 'right' : 'left'};">
+        <!-- Top formal title -->
+        <div style="text-align: center; border-bottom: 3px double #1E3A8A; padding-bottom: 12px; margin-bottom: 25px;">
+          <h2 style="color: #1E3A8A; margin: 0; font-size: 20px; font-weight: bold; line-height: 1.5;">
+            ${isRtl 
+              ? `عملية تشغيل لدى ${job.warehouseName || job.supplierName || job.thirdPartyName || '-'} بتاريخ ${date}` 
+              : `Processing Job at ${job.warehouseName || job.supplierName || job.thirdPartyName || '-'} on ${date}`}
+          </h2>
+        </div>
+
+        <!-- Metadata tables side-by-side using Flexbox for high-fidelity html2canvas support -->
+        <div style="display: flex; gap: 20px; margin-bottom: 25px;">
+          <!-- Left Metadata Table (Pricing) -->
+          <div style="flex: 1;">
+            <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 11px;">
+              <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; width: 55%; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'سعر التشغيل للكيلو' : 'Price / KG'}</td>
+                <td style="padding: 8px; font-weight: bold; text-align: center; color: #1e293b;">${pricePerKg.toLocaleString()} EGP</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'اجمالى تكلفة التشغيل' : 'Total Processing Cost'}</td>
+                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; text-align: center; color: #1e293b;">${totalCost.toLocaleString()} EGP</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'الفرق' : 'Difference'}</td>
+                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; color: #2563EB; text-align: center;">${(totalIn - totalOut).toLocaleString()} kg</td>
+              </tr>
+              <tr>
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'نسبة الفقد' : 'Loss %'}</td>
+                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; color: #DC2626; text-align: center;">${lossPercentage}%</td>
+              </tr>
+            </table>
           </div>
-          <div style="background: #f0fdf4; color: #10b981; padding: 6px 12px; border-radius: 8px; font-weight: bold; border: 1px solid #d1fae5; font-size: 14px;">
-            ${date}
+
+          <!-- Right Metadata Table (Vendor details) -->
+          <div style="flex: 1;">
+            <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 11px;">
+              <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; width: 40%; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'كود المورد' : 'Supplier Code'}</td>
+                <td style="padding: 8px; font-weight: bold; text-align: center; font-family: monospace; color: #1e293b;">${supplierCode}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'اسم المورد' : 'Supplier Name'}</td>
+                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; text-align: center; color: #1e293b;">${job.warehouseName || job.supplierName || job.thirdPartyName || '-'}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'كود المخزن' : 'Warehouse Code'}</td>
+                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; text-align: center; font-family: monospace; color: #1e293b;">${job.warehouseCode || '-'}</td>
+              </tr>
+              <tr style="border-bottom: 1px solid #cbd5e1;">
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'رقم العملية' : 'Process Code'}</td>
+                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; color: #059669; text-align: center; font-family: monospace;">${job.jobCode || '-'}</td>
+              </tr>
+              <tr>
+                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'رقم PO' : 'PO Number'}</td>
+                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; color: #2563EB; text-align: center; font-family: monospace;">${job.poNumber || '-'}</td>
+              </tr>
+            </table>
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 25px;">
-          <div style="background: #f9fafb; padding: 10px; border-radius: 12px; border: 1px solid #f3f4f6; display: flex; flex-direction: column; justify-content: center;">
-            <span style="font-size: 7px; font-weight: 800; color: #9ca3af; text-transform: uppercase;">${isRtl ? 'المخزن' : 'Warehouse'}</span>
-            <div style="font-size: 11px; font-weight: 700; color: #1f2937; margin-top: 2px;">
-              📍 ${job.warehouseName || '-'}
-              <div style="font-size: 9px; color: #6b7280; font-weight: normal;">${job.warehouseCode || '-'}</div>
+        <!-- Side-by-side Tables for Inputs and Outputs -->
+        <div style="display: flex; gap: 20px; margin-bottom: 25px;">
+          <!-- Inputs Table -->
+          <div style="flex: 1;">
+            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: bold; color: #1E3A8A; text-align: center;">
+              ${isRtl ? 'المدخلات (Inputs)' : 'Inputs'}
+            </h4>
+            <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 11px;">
+              <thead>
+                <tr style="background: #DBEAFE; color: #1E3A8A; border-bottom: 2px solid #cbd5e1;">
+                  <th style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: center;">${isRtl ? 'كود ساب' : 'SAP Code'}</th>
+                  <th style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'}; width: 55%;">${isRtl ? 'اسم الصنف' : 'Item Name'}</th>
+                  <th style="padding: 8px; text-align: center;">${isRtl ? 'الكمية' : 'Qty'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Array.from({ length: rowsCount }).map((_, idx) => {
+                  const item = job.inputs[idx];
+                  return `
+                    <tr style="border-bottom: 1px solid #e2e8f0; height: 32px;">
+                      <td style="padding: 6px; border-right: 1px solid #cbd5e1; text-align: center; font-family: monospace; font-weight: bold; color: #64748b;">
+                        ${item ? item.itemCode : '&nbsp;'}
+                      </td>
+                      <td style="padding: 6px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'}; font-weight: 500; color: #334155;">
+                        ${item ? item.itemName : '&nbsp;'}
+                      </td>
+                      <td style="padding: 6px; text-align: center; font-weight: bold; color: #0284c7;">
+                        ${item ? item.quantity.toLocaleString() : '&nbsp;'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+                <tr style="background: #FACC15; font-weight: bold; border-top: 2px solid #cbd5e1;">
+                  <td colspan="2" style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'left' : 'right'};">
+                    ${isRtl ? 'إجمالي المدخلات' : 'Total Inputs'}
+                  </td>
+                  <td style="padding: 8px; text-align: center; color: #1e293b;">
+                    ${totalIn.toLocaleString()}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Outputs Table -->
+          <div style="flex: 1;">
+            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: bold; color: #7C2D12; text-align: center;">
+              ${isRtl ? 'المخرجات (Outputs)' : 'Outputs'}
+            </h4>
+            <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 11px;">
+              <thead>
+                <tr style="background: #FFEDD5; color: #7C2D12; border-bottom: 2px solid #cbd5e1;">
+                  <th style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: center;">${isRtl ? 'كود ساب مخرج' : 'SAP Code Out'}</th>
+                  <th style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'}; width: 55%;">${isRtl ? 'اسم الصنف مخرج' : 'Item Name Out'}</th>
+                  <th style="padding: 8px; text-align: center; background: #FBBF24; color: #000000;">${isRtl ? 'الكمية مخرج' : 'Qty Out'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Array.from({ length: rowsCount }).map((_, idx) => {
+                  const item = job.outputs[idx];
+                  return `
+                    <tr style="border-bottom: 1px solid #e2e8f0; height: 32px;">
+                      <td style="padding: 6px; border-right: 1px solid #cbd5e1; text-align: center; font-family: monospace; font-weight: bold; color: #64748b;">
+                        ${item ? item.itemCode : '&nbsp;'}
+                      </td>
+                      <td style="padding: 6px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'}; font-weight: 500; color: #334155;">
+                        ${item ? item.itemName : '&nbsp;'}
+                      </td>
+                      <td style="padding: 6px; text-align: center; font-weight: bold; background: ${item ? '#FEF3C7' : 'transparent'}; color: #1e293b;">
+                        ${item ? item.quantity.toLocaleString() : '&nbsp;'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+                <tr style="background: #FACC15; font-weight: bold; border-top: 2px solid #cbd5e1;">
+                  <td colspan="2" style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'left' : 'right'};">
+                    ${isRtl ? 'إجمالي المخرجات' : 'Total Outputs'}
+                  </td>
+                  <td style="padding: 8px; text-align: center; color: #1e293b;">
+                    ${totalOut.toLocaleString()}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Notes / Comments -->
+        ${job.notes ? `
+          <div style="padding: 15px; border: 1px solid #fef3c7; background: #fffbeb; border-radius: 12px; margin-bottom: 25px;">
+            <div style="font-[10px]; font-weight: bold; color: #92400e; text-transform: uppercase; margin-bottom: 5px;">
+              ${isRtl ? 'ملاحظات:' : 'Notes:'}
+            </div>
+            <div style="font-size: 12px; color: #78350f; font-style: italic; line-height: 1.5;">
+              "${job.notes}"
             </div>
           </div>
-          <div style="background: #ecfdf5; padding: 8px; border-radius: 12px; text-align: center; border: 1px solid #d1fae5; display: flex; flex-direction: column; justify-content: center;">
-            <span style="font-size: 7px; font-weight: 800; color: #065f46; text-transform: uppercase;">${lang === 'ar' ? 'إجمالي المدخلات' : 'Total Inputs'}</span>
-            <span style="display: block; font-size: 12px; font-weight: 800; margin-top: 2px; color: #065f46;">${totalIn.toLocaleString()} <small style="font-size: 7px;">kg</small></span>
-          </div>
-          <div style="background: #eff6ff; padding: 8px; border-radius: 12px; text-align: center; border: 1px solid #dbeafe; display: flex; flex-direction: column; justify-content: center;">
-            <span style="font-size: 7px; font-weight: 800; color: #1e40af; text-transform: uppercase;">${lang === 'ar' ? 'إجمالي المخرجات' : 'Total Outputs'}</span>
-            <span style="display: block; font-size: 12px; font-weight: 800; margin-top: 2px; color: #1e40af;">${totalOut.toLocaleString()} <small style="font-size: 7px;">kg</small></span>
-          </div>
-          <div style="background: #f8fafc; padding: 8px; border-radius: 12px; text-align: center; border: 1px solid #e2e8f0; display: flex; flex-direction: column; justify-content: center;">
-            <span style="font-size: 7px; font-weight: 800; color: #475569; text-transform: uppercase;">${lang === 'ar' ? 'نسبة التشغيل' : 'Yield'}</span>
-            <span style="display: block; font-size: 12px; font-weight: 800; margin-top: 2px; color: #1e293b;">${yieldPercentage}%</span>
-          </div>
-          <div style="background: #fff1f2; padding: 8px; border-radius: 12px; text-align: center; border: 1px solid #ffe4e6; display: flex; flex-direction: column; justify-content: center;">
-            <span style="font-size: 7px; font-weight: 800; color: #9f1239; text-transform: uppercase;">${lang === 'ar' ? 'نسبة الفقد' : 'Loss %'}</span>
-            <span style="display: block; font-size: 12px; font-weight: 800; margin-top: 2px; color: #9f1239;">${lossPercentage}%</span>
-          </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
-          <div>
-            <h3 style="font-size: 12px; font-weight: 800; color: #9ca3af; text-transform: uppercase; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 10px;">${trans.inputs}</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              ${job.inputs.map(i => `
-                <tr style="border-bottom: 1px solid #f3f4f6;">
-                  <td style="padding: 10px 0; font-size: 13px;">
-                    <div style="font-weight: bold;">${i.itemName}</div>
-                    <div style="font-size: 10px; color: #9ca3af; font-family: monospace;">${i.itemCode}</div>
-                  </td>
-                  <td style="padding: 10px 0; font-size: 13px; text-align: ${isRtl ? 'left' : 'right'}; font-weight: 700; color: #059669;">${i.quantity} ${i.unit}</td>
-                </tr>
-              `).join('')}
-            </table>
-          </div>
-          <div>
-            <h3 style="font-size: 12px; font-weight: 800; color: #9ca3af; text-transform: uppercase; border-bottom: 2px solid #e5e7eb; padding-bottom: 5px; margin-bottom: 10px;">${trans.outputs}</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              ${job.outputs.map(o => `
-                <tr style="border-bottom: 1px solid #f3f4f6;">
-                  <td style="padding: 10px 0; font-size: 13px;">
-                    <div style="font-weight: bold;">${o.itemName}</div>
-                    <div style="font-size: 10px; color: #9ca3af; font-family: monospace;">${o.itemCode}</div>
-                  </td>
-                  <td style="padding: 10px 0; font-size: 13px; text-align: ${isRtl ? 'left' : 'right'}; font-weight: 700; color: #2563eb;">${o.quantity} ${o.unit}</td>
-                </tr>
-              `).join('')}
-            </table>
-          </div>
-        </div>
-
-        ${job.notes ? `
-          <div style="margin-top: 30px; padding: 20px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 16px; font-style: italic; color: #92400e;">
-            <strong>${trans.comments}:</strong> ${job.notes}
-          </div>
         ` : ''}
-        
-        <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #9ca3af;">
+
+        <!-- Footer stamp -->
+        <div style="text-align: center; font-size: 10px; color: #9ca3af; border-top: 1px solid #cbd5e1; padding-top: 15px; margin-top: 15px;">
           ${isRtl ? 'تم الإنشاء بواسطة نظام إدارة المخازن' : 'Generated by Warehouse Management System'} • ${new Date().toLocaleString()}
         </div>
       </div>
@@ -1761,8 +2228,13 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     const isRtl = lang === 'ar';
     const toastId = toast.loading(isRtl ? 'جاري تحضير ملف Word...' : 'Preparing Word file...');
     try {
+      const warehouse = warehouses.find(w => w.id === job.warehouseId);
+      const pricePerKg = job.confirmedPrice || warehouse?.processingPricePerKg || 0;
+      const supplierCode = warehouse?.supplierCode || job.warehouseCode || "-";
+
       const totalIn = job.inputs.reduce((sum, i) => sum + i.quantity, 0);
       const totalOut = job.outputs.reduce((sum, i) => sum + i.quantity, 0);
+      const totalCost = totalIn * pricePerKg;
       const lossPercent = totalIn > 0 ? (((totalIn - totalOut) / totalIn) * 100).toFixed(1) + '%' : '0%';
 
       const maxRows = Math.max(job.inputs.length, job.outputs.length);
@@ -1807,19 +2279,19 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                     width: { size: 100, type: WidthType.PERCENTAGE },
                     rows: [
                       new TableRow({ children: [
-                        createCell("سعر التشغيل", { bg: "F1F5F9", bold: true, width: 55 }),
-                        createCell("0.00", { width: 45, bold: true })
+                        createCell(isRtl ? "سعر التشغيل للكيلو" : "Price / KG", { bg: "F1F5F9", bold: true, width: 55 }),
+                        createCell(`${pricePerKg.toLocaleString()} EGP`, { width: 45, bold: true })
                       ]}),
                       new TableRow({ children: [
-                        createCell("اجمالى سعر التشغيل", { bg: "F1F5F9", bold: true }),
-                        createCell("0.00", { bg: "F8FAFC", bold: true })
+                        createCell(isRtl ? "اجمالى تكلفة التشغيل" : "Total Processing Cost", { bg: "F1F5F9", bold: true }),
+                        createCell(`${totalCost.toLocaleString()} EGP`, { bg: "F8FAFC", bold: true })
                       ]}),
                       new TableRow({ children: [
-                        createCell("الفرق", { bg: "F1F5F9", bold: true }),
+                        createCell(isRtl ? "الفرق" : "Difference", { bg: "F1F5F9", bold: true }),
                         createCell(`${(totalIn - totalOut).toLocaleString()} kg`, { bg: "F8FAFC", bold: true, color: "2563EB" })
                       ]}),
                       new TableRow({ children: [
-                        createCell("نسبة الفقد", { bg: "F1F5F9", bold: true }),
+                        createCell(isRtl ? "نسبة الفقد" : "Loss %", { bg: "F1F5F9", bold: true }),
                         createCell(lossPercent, { bg: "F8FAFC", bold: true, color: "DC2626" })
                       ]}),
                     ]
@@ -1836,16 +2308,24 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                     width: { size: 100, type: WidthType.PERCENTAGE },
                     rows: [
                       new TableRow({ children: [
-                        createCell("كود المورد", { bg: "F1F5F9", bold: true, width: 40 }),
-                        createCell(job.warehouseCode || "-", { width: 60, bold: true })
+                        createCell(isRtl ? "كود المورد" : "Supplier Code", { bg: "F1F5F9", bold: true, width: 40 }),
+                        createCell(supplierCode, { width: 60, bold: true })
                       ]}),
                       new TableRow({ children: [
-                        createCell("اسم المورد", { bg: "F1F5F9", bold: true }),
+                        createCell(isRtl ? "اسم المورد" : "Supplier Name", { bg: "F1F5F9", bold: true }),
                         createCell(job.warehouseName || job.supplierName || job.thirdPartyName || "-", { bg: "F8FAFC", bold: true })
                       ]}),
                       new TableRow({ children: [
-                        createCell("كود المخزن", { bg: "F1F5F9", bold: true }),
+                        createCell(isRtl ? "كود المخزن" : "Warehouse Code", { bg: "F1F5F9", bold: true }),
                         createCell(job.warehouseCode || "-", { bg: "F8FAFC", bold: true })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "رقم العملية" : "Process Code", { bg: "F1F5F9", bold: true }),
+                        createCell(job.jobCode || "-", { bg: "F8FAFC", bold: true, color: "059669" })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "رقم PO" : "PO Number", { bg: "F1F5F9", bold: true }),
+                        createCell(job.poNumber || "-", { bg: "F8FAFC", bold: true, color: "2563EB" })
                       ]}),
                     ]
                   })
@@ -2104,13 +2584,15 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                 {lang === 'ar' ? 'ضبط التشغيلات' : 'Processing Settings'}
               </button>
             )}
-            <button 
-              onClick={() => setIsAdding(true)}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-emerald-500/20"
-            >
-              <Plus size={20} />
-              {t.addJob}
-            </button>
+            {(user.role === 'Admin' || user.role === 'Customer Operations') && (
+              <button 
+                onClick={() => setIsAdding(true)}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-emerald-500/20"
+              >
+                <Plus size={20} />
+                {t.addJob}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -2267,12 +2749,33 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'اسم مسؤول التواصل' : 'Contact Person'}</label>
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'كود المورد' : 'Supplier Code'}</label>
+                  <input 
+                    type="text" 
+                    value={newWarehouse.supplierCode}
+                    onChange={e => setNewWarehouse({...newWarehouse, supplierCode: e.target.value})}
+                    placeholder="e.g. SUP-001"
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 font-medium font-mono"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'سعر التشغيل للكيلو' : 'Processing Price / KG'}</label>
+                  <input 
+                    type="number" 
+                    value={newWarehouse.processingPricePerKg}
+                    onChange={e => setNewWarehouse({...newWarehouse, processingPricePerKg: e.target.value})}
+                    placeholder="0.00"
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 font-medium font-mono"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'رمز المخزن' : 'Warehouse Code'}</label>
                   <input 
                     type="text" 
                     value={newWarehouse.contactName}
                     onChange={e => setNewWarehouse({...newWarehouse, contactName: e.target.value})}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                    placeholder={lang === 'ar' ? 'مثل Bcl' : 'e.g. WH'}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 font-medium font-mono uppercase"
                   />
                 </div>
                 <div className="space-y-2">
@@ -2285,12 +2788,34 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                       placeholder="https://chat.whatsapp.com/..."
                       className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500 flex-1 font-medium text-xs"
                     />
-                    <button 
-                      onClick={handleAddWarehouse}
-                      className="bg-emerald-600 text-white px-5 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
-                    >
-                      <Plus size={20} />
-                    </button>
+                    {editingWarehouseId ? (
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={handleAddWarehouse}
+                          title={lang === 'ar' ? 'تحديث' : 'Update'}
+                          className="bg-emerald-600 text-white px-5 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
+                        >
+                          <Save size={20} />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setEditingWarehouseId(null);
+                            setNewWarehouse({ name: '', systemCode: '', supplierCode: '', processingPricePerKg: '', contactName: '', whatsappGroup: '' });
+                          }}
+                          title={lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                          className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-5 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={handleAddWarehouse}
+                        className="bg-emerald-600 text-white px-5 rounded-xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20"
+                      >
+                        <Plus size={20} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2302,27 +2827,48 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                    </p>
                 ) : (
                   warehouses.map(w => (
-                    <div key={w.id} className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm relative group hover:ring-2 hover:ring-emerald-500/20 transition-all">
+                    <div key={w.id} className={`p-5 rounded-2xl border ${editingWarehouseId === w.id ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-zinc-200 dark:border-zinc-800'} bg-white dark:bg-zinc-900 shadow-sm relative group hover:ring-2 hover:ring-emerald-500/20 transition-all`}>
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:scale-110 transition-transform">
                           <Database size={24} />
                         </div>
                         <div>
                           <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{w.name}</h4>
-                          <p className="text-[10px] text-zinc-500 font-mono font-bold tracking-wider">{w.systemCode}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <p className="text-[10px] text-zinc-500 font-mono font-bold tracking-wider">{w.systemCode}</p>
+                            {w.supplierCode && (
+                              <p className="text-[10px] text-emerald-500 font-mono font-bold tracking-wider">[{w.supplierCode}]</p>
+                            )}
+                            {w.processingPricePerKg !== undefined && (
+                              <p className="text-[10px] bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-1.5 rounded font-bold">
+                                {w.processingPricePerKg} EGP/kg
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => handleDeleteWarehouse(w.id)}
-                        className="absolute top-4 right-4 p-2 text-zinc-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <button 
+                          onClick={() => startEditingWarehouse(w)}
+                          title={lang === 'ar' ? 'تعديل' : 'Edit'}
+                          className="p-2 text-zinc-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-all"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteWarehouse(w.id)}
+                          title={lang === 'ar' ? 'حذف' : 'Delete'}
+                          className="p-2 text-zinc-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                       <div className="mt-4 pt-4 border-t border-zinc-50 dark:border-zinc-800/50 flex flex-col gap-2">
                         {w.contactName && (
                           <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-                             <Users size={12} />
-                             {w.contactName}
+                             <Tag size={12} className="text-emerald-500" />
+                             <span className="font-bold">{lang === 'ar' ? 'رمز المخزن:' : 'Warehouse Code:'}</span>
+                             <span className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-bold">{w.contactName}</span>
                           </div>
                         )}
                         {w.whatsappGroup && (
@@ -2531,7 +3077,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   warehouseCode: '',
                   inputs: [],
                   outputs: [],
-                  status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Approval',
+                  status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Warehouse',
                   notes: ''
                 });
               }}
@@ -2670,6 +3216,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                     availableItems={availableInputItems}
                     lang={lang}
                     themeColor="emerald"
+                    searchTerm={inputSearch}
+                    setSearchTerm={setInputSearch}
                   />
                 
                 <div className="p-4 rounded-2xl bg-emerald-50/10 dark:bg-emerald-900/5 border border-emerald-100/50 dark:border-emerald-900/20 space-y-4">
@@ -2725,6 +3273,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                     lang={lang}
                     themeColor="blue"
                     enforcedType={enforcedType}
+                    searchTerm={outputSearch}
+                    setSearchTerm={setOutputSearch}
                   />
                 
                 <div className="p-4 rounded-2xl bg-blue-50/10 dark:bg-blue-900/5 border border-blue-100/50 dark:border-blue-900/20 space-y-4">
@@ -2833,214 +3383,373 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                 </p>
               </div>
             ) : (
-              filteredJobs.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((job) => (
-                <div 
-                  key={job.id}
-                  className="group bg-white dark:bg-zinc-900 rounded-[32px] border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-xl transition-all duration-300"
-                >
-                    <div className="p-6">
-                      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 pb-6 border-b border-zinc-100 dark:border-zinc-800">
-                        {/* Left: Job Info */}
-                        <div className="flex gap-4">
-                          <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex flex-col items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 border border-emerald-100 dark:border-emerald-800/50">
-                            <span className="text-xs font-bold uppercase leading-none opacity-60 mb-1">
-                              {new Date(job.date).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { month: 'short' })}
-                            </span>
-                            <span className="text-xl font-black leading-none">{new Date(job.date).getDate()}</span>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-black text-lg text-zinc-900 dark:text-white leading-tight">
-                                {job.warehouseName}
-                              </h4>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                                job.status === 'Completed' 
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
-                                  : job.status === 'Pending Approval'
-                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                                  : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
-                              }`}>
-                                {job.status === 'Completed' 
-                                  ? (lang === 'ar' ? 'معتمد' : 'Approved') 
-                                  : job.status === 'Pending Approval'
-                                  ? (lang === 'ar' ? 'قيد المراجعة' : 'Pending Approval')
-                                  : (lang === 'ar' ? 'مسودة' : 'Draft')}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 text-xs font-bold text-zinc-500">
-                              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                                <Building2 size={14} className="opacity-70" />
-                                {job.warehouseCode}
-                              </span>
-                              <span className="w-1 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full" />
-                              <span className="flex items-center gap-1">
-                                <Clock size={14} className="opacity-70" />
-                                {new Date(job.date).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { dateStyle: 'medium' })}
-                              </span>
-                            </div>
-                          </div>
+              filteredJobs.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((job) => {
+                const isExpanded = !!expandedJobs[job.id];
+                return (
+                  <div 
+                    key={job.id}
+                    className="group bg-white dark:bg-zinc-900 rounded-[32px] border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-xl transition-all duration-300"
+                  >
+                    {/* Collapsible Header Summary Block */}
+                    <div 
+                      onClick={() => toggleJobExpanded(job.id)}
+                      className="p-6 cursor-pointer select-none flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/10 transition-all rounded-[32px]"
+                    >
+                      {/* Left: Job Info */}
+                      <div className="flex gap-4 items-center">
+                        <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex flex-col items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 border border-emerald-100 dark:border-emerald-800/50">
+                          <span className="text-xs font-bold uppercase leading-none opacity-60 mb-1">
+                            {new Date(job.date).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { month: 'short' })}
+                          </span>
+                          <span className="text-xl font-black leading-none">{new Date(job.date).getDate()}</span>
                         </div>
-
-                        {/* Top Summary Stats */}
-                        <div className="grid grid-cols-4 gap-2 flex-1">
-                          <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
-                            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'المدخلات' : 'Inputs'}</span>
-                            <span className="text-xs font-black text-zinc-900 dark:text-white leading-none">
-                              {job.inputs.reduce((s, i) => s + i.quantity, 0).toLocaleString()} <span className="text-[9px] opacity-40">kg</span>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-black text-lg text-zinc-900 dark:text-white leading-tight">
+                              {job.warehouseName}
+                            </h4>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 select-text ${
+                              job.status === 'Completed' 
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                                : job.status === 'Rejected'
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+                                : job.status.startsWith('Pending')
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+                            }`}>
+                              {job.status === 'Completed' 
+                                ? (lang === 'ar' ? 'مكتمل' : 'Completed') 
+                                : job.status === 'Pending Warehouse'
+                                ? (lang === 'ar' ? 'قيد اعتماد المخزن' : 'Pending Warehouse')
+                                : job.status === 'Pending Quality'
+                                ? (lang === 'ar' ? 'قيد الجودة' : 'Pending Quality')
+                                : job.status === 'Pending Purchasing'
+                                ? (lang === 'ar' ? 'قيد المشتريات' : 'Pending Purchasing')
+                                : job.status === 'Pending Completion'
+                                ? (lang === 'ar' ? 'قيد الإكمال' : 'Pending Completion')
+                                : job.status === 'Rejected'
+                                ? (lang === 'ar' ? 'مرفوض' : 'Rejected')
+                                : (lang === 'ar' ? 'مسودة' : 'Draft')}
                             </span>
                           </div>
-                          <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
-                            <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'المخرجات' : 'Outputs'}</span>
-                            <span className="text-xs font-black text-zinc-900 dark:text-white leading-none">
-                              {job.outputs.reduce((s, i) => s + i.quantity, 0).toLocaleString()} <span className="text-[9px] opacity-40">kg</span>
+                          <div className="flex items-center gap-3 text-xs font-bold text-zinc-500">
+                            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono">
+                              <Building2 size={14} className="opacity-70" />
+                              {job.warehouseCode}
+                              {job.jobCode && (
+                                <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
+                                  {job.jobCode}
+                                </span>
+                              )}
                             </span>
-                          </div>
-                          <div className="p-2 rounded-xl bg-emerald-100/50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50">
-                            <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'التشغيل' : 'Yield'}</span>
-                            <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                              {(job.inputs.reduce((s, i) => s + i.quantity, 0) > 0 
-                                ? (job.outputs.reduce((s, i) => s + i.quantity, 0) / job.inputs.reduce((s, i) => s + i.quantity, 0) * 100).toFixed(1)
-                                : '0.0')}%
-                            </span>
-                          </div>
-                          <div className="p-2 rounded-xl bg-rose-100/50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50">
-                            <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'الفقد' : 'Loss'}</span>
-                            <span className="text-xs font-black text-rose-600 dark:text-rose-400 leading-none">
-                              {(job.inputs.reduce((s, i) => s + i.quantity, 0) > 0 
-                                ? (((job.inputs.reduce((s, i) => s + i.quantity, 0) - job.outputs.reduce((s, i) => s + i.quantity, 0)) / job.inputs.reduce((s, i) => s + i.quantity, 0)) * 100).toFixed(1)
-                                : '0.0')}%
+                            <span className="w-1 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full" />
+                            <span className="flex items-center gap-1">
+                              <Clock size={14} className="opacity-70" />
+                              {new Date(job.date).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { dateStyle: 'medium' })}
                             </span>
                           </div>
                         </div>
+                      </div>
 
-                        {/* Right: Actions */}
-                        <div className="flex lg:flex-col items-center gap-1 bg-zinc-50 dark:bg-zinc-800 p-1 rounded-[20px] border border-zinc-100 dark:border-zinc-800 w-fit">
-                          {(user.role === 'Admin' || user.role === 'Warehouse Operations') && job.status === 'Pending Approval' && (
+                      {/* Top Summary Stats */}
+                      <div className="grid grid-cols-4 gap-2 flex-1 max-w-lg">
+                        <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-center">
+                          <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'المدخلات' : 'Inputs'}</span>
+                          <span className="text-xs font-black text-zinc-900 dark:text-white leading-none">
+                            {job.inputs.reduce((s, i) => s + i.quantity, 0).toLocaleString()} <span className="text-[9px] opacity-40">kg</span>
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-center">
+                          <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'المخرجات' : 'Outputs'}</span>
+                          <span className="text-xs font-black text-zinc-900 dark:text-white leading-none">
+                            {job.outputs.reduce((s, i) => s + i.quantity, 0).toLocaleString()} <span className="text-[9px] opacity-40">kg</span>
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-emerald-100/50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-center">
+                          <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'التشغيل' : 'Yield'}</span>
+                          <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 leading-none">
+                            {(job.inputs.reduce((s, i) => s + i.quantity, 0) > 0 
+                              ? (job.outputs.reduce((s, i) => s + i.quantity, 0) / job.inputs.reduce((s, i) => s + i.quantity, 0) * 100).toFixed(1)
+                              : '0.0')}%
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-rose-100/50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50 text-center">
+                          <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'الفقد' : 'Loss'}</span>
+                          <span className="text-xs font-black text-rose-600 dark:text-rose-400 leading-none">
+                            {(job.inputs.reduce((s, i) => s + i.quantity, 0) > 0 
+                              ? (((job.inputs.reduce((s, i) => s + i.quantity, 0) - job.outputs.reduce((s, i) => s + i.quantity, 0)) / job.inputs.reduce((s, i) => s + i.quantity, 0)) * 100).toFixed(1)
+                              : '0.0')}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Chevron Trigger */}
+                      <div className="flex items-center justify-center p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 shrink-0">
+                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      </div>
+                    </div>
+
+                    {/* Collapsible Details Content */}
+                    {isExpanded && (
+                      <div className="p-6 pt-0 border-t border-zinc-100 dark:border-zinc-800/80 space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                        
+                        {/* Actions row */}
+                        <div className="mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-4 rounded-3xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100/80 dark:border-zinc-800/80">
+                          {/* Role Specific Actions */}
+                          <div className="flex flex-wrap items-center gap-3">
+                            {/* Warehouse Step 1 Actions */}
+                            {(user.role === 'Admin' || user.role === 'Warehouse Operations') && job.status === 'Pending Warehouse' && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleApproveWarehouse(job); }}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10"
+                              >
+                                <CheckCircle2 size={16} />
+                                {lang === 'ar' ? 'اعتماد المخزن' : 'Warehouse Approve'}
+                              </button>
+                            )}
+
+                            {/* Quality Actions */}
+                            {(user.role === 'Admin' || user.role === 'Quality Operations') && job.status === 'Pending Quality' && (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2 rounded-2xl w-full sm:w-auto">
+                                <textarea
+                                  placeholder={lang === 'ar' ? 'إضافة تعليق...' : 'Add comment...'}
+                                  value={jobActionsState[job.id]?.qualityComments || ''}
+                                  onChange={(e) => handleUpdateJobActionState(job.id, 'qualityComments', e.target.value)}
+                                  className="w-full sm:w-48 p-2 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none h-8 resize-none py-1.5"
+                                />
+                                <div className="flex gap-2 shrink-0">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleApproveQuality(job, true); }}
+                                    className="px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all"
+                                  >
+                                    {lang === 'ar' ? 'اعتماد' : 'Approve'}
+                                  </button>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleApproveQuality(job, false); }}
+                                    className="px-3 py-1.5 bg-rose-500 text-white rounded-xl text-xs font-bold hover:bg-rose-600 transition-all"
+                                  >
+                                    {lang === 'ar' ? 'رفض' : 'Reject'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Purchasing Actions */}
+                            {(user.role === 'Admin' || user.role === 'Purchasing Operations') && job.status === 'Pending Purchasing' && (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2 rounded-2xl w-full sm:w-auto">
+                                <input
+                                  type="number"
+                                  placeholder={lang === 'ar' ? 'سعر الكيلو' : 'Price/kg'}
+                                  value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || '')}
+                                  onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', parseFloat(e.target.value))}
+                                  className="w-full sm:w-28 p-1.5 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-bold text-center"
+                                />
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleApprovePurchasing(job); }}
+                                  className="py-1.5 px-3 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all"
+                                >
+                                  {lang === 'ar' ? 'اعتماد المشتريات' : 'Approve Purchasing'}
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Warehouse Completion Actions */}
+                            {(user.role === 'Admin' || user.role === 'Warehouse Operations') && job.status === 'Pending Completion' && (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2 rounded-2xl w-full sm:w-auto">
+                                <input
+                                  type="text"
+                                  placeholder={lang === 'ar' ? 'رقم PO' : 'PO Number'}
+                                  value={jobActionsState[job.id]?.poNumber || ''}
+                                  onChange={(e) => handleUpdateJobActionState(job.id, 'poNumber', e.target.value)}
+                                  className="w-full sm:w-36 p-1.5 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-mono font-bold text-center"
+                                />
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleCompleteJob(job); }}
+                                  className="py-1.5 px-4 bg-blue-500 text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition-all"
+                                >
+                                  {lang === 'ar' ? 'مكتمل' : 'Complete'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Utilities and Export buttons */}
+                          <div className="flex flex-wrap items-center gap-1 bg-white dark:bg-zinc-900 p-1.5 rounded-2xl border border-zinc-100 dark:border-zinc-800 shrink-0">
                             <button 
-                              onClick={() => handleApproveJob(job)}
-                              className="p-2.5 text-emerald-600 hover:bg-white dark:hover:bg-zinc-700 rounded-2xl transition-all shadow-sm shadow-transparent hover:shadow-black/5"
-                              title={lang === 'ar' ? 'اعتماد' : 'Approve'}
-                            >
-                              <CheckCircle2 size={18} />
-                            </button>
-                          )}
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={() => handleShareWhatsApp(job)}
-                              className="p-2.5 text-emerald-500 hover:bg-white dark:hover:bg-zinc-700 rounded-2xl transition-all"
+                              onClick={(e) => { e.stopPropagation(); handleShareWhatsApp(job); }}
+                              className="p-2 text-emerald-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
                               title={lang === 'ar' ? 'مشاركة واتساب' : 'Share WhatsApp'}
                             >
                               <MessageCircle size={18} />
                             </button>
                             <button 
-                              onClick={() => handleShareExcelOutlook(job)}
-                              className="p-2.5 text-blue-600 hover:bg-white dark:hover:bg-zinc-700 rounded-2xl transition-all"
+                              onClick={(e) => { e.stopPropagation(); handleShareExcelOutlook(job); }}
+                              className="p-2 text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
                               title={lang === 'ar' ? 'مشاركة أوتلوك' : 'Share Outlook'}
                             >
                               <Mail size={18} />
                             </button>
                             <button 
-                              onClick={() => handlePrint(job)}
-                              className="p-2.5 text-zinc-400 hover:bg-white dark:hover:bg-zinc-700 rounded-2xl transition-all hover:text-blue-500"
-                              title={lang === 'ar' ? 'طباعة / PDF' : 'Print / PDF'}
-                            >
-                              <Printer size={18} />
-                            </button>
-                            <button 
-                              onClick={() => exportSingleJobToWord(job)}
-                              className="p-2.5 text-blue-500 hover:bg-white dark:hover:bg-zinc-700 rounded-2xl transition-all"
+                              onClick={(e) => { e.stopPropagation(); exportSingleJobToWord(job); }}
+                              className="p-2 text-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
                               title={lang === 'ar' ? 'تصدير Word' : 'Export Word'}
                             >
                               <FileText size={18} />
                             </button>
-                            <button 
-                              onClick={() => exportSingleJobToExcel(job)}
-                              className="p-2.5 text-emerald-600 hover:bg-white dark:hover:bg-zinc-700 rounded-2xl transition-all"
-                              title={lang === 'ar' ? 'تصدير اكسيل' : 'Export Excel'}
-                            >
-                              <FileSpreadsheet size={18} />
-                            </button>
-                          </div>
-                          <div className="h-[1px] w-full bg-zinc-200 dark:bg-zinc-700 my-0.5 hidden lg:block" />
-                          <div className="flex items-center gap-1">
-                            {(user.role === 'Admin' || user.role === 'Warehouse Operations' || job.createdBy === user.uid) && (
-                              <button 
-                                onClick={() => handleEditJob(job)}
-                                className="p-2.5 text-blue-500 hover:bg-white dark:hover:bg-zinc-700 rounded-2xl transition-all"
-                                title={lang === 'ar' ? 'تعديل' : 'Edit'}
-                              >
-                                <Save size={18} />
-                              </button>
-                            )}
-                            {user.role === 'Admin' && (
-                              <button 
-                                onClick={() => handleDeleteJob(job.id)}
-                                className="p-2.5 text-rose-500 hover:bg-white dark:hover:bg-zinc-700 rounded-2xl transition-all"
-                                title={lang === 'ar' ? 'حذف' : 'Delete'}
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                            )}
+                            <div className="h-6 w-[1px] bg-zinc-200 dark:bg-zinc-700 mx-1 xl:block" />
+                            <div className="flex items-center gap-1">
+                              {(user.role === 'Admin' || (user.role === 'Warehouse Operations' && job.status === 'Pending Warehouse') || (user.role === 'Purchasing Operations' && job.status === 'Pending Purchasing') || job.createdBy === user.uid) && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
+                                  className="p-2 text-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
+                                  title={lang === 'ar' ? 'تعديل' : 'Edit'}
+                                >
+                                  <Pencil size={18} />
+                                </button>
+                              )}
+                              {user.role === 'Admin' && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteJob(job.id); }}
+                                  className="p-2 text-rose-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
+                                  title={lang === 'ar' ? 'حذف' : 'Delete'}
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Details section */}
-                    <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* Inputs details */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between px-1">
-                            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">{t.inputs}</label>
-                            <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-md">{job.inputs.length} {lang === 'ar' ? 'أصناف' : 'items'}</span>
-                          </div>
-                          <div className="grid gap-2">
-                        {job.inputs.map((input, i) => (
-                              <div key={i} className="group/item flex items-center justify-between p-3 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all">
-                                <div className="flex flex-col">
-                                  <span className="text-[10px] text-zinc-400 font-mono leading-none mb-1 opacity-0 group-hover/item:opacity-100 transition-opacity">{input.itemCode}</span>
-                                  <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{input.itemName}</span>
-                                </div>
-                                <span className="text-sm font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-xl">
-                                  {input.quantity} {input.unit}
-                                </span>
+                        {/* Workflow Info section */}
+                        {(job.qualityComments || (job.confirmedPrice && job.confirmedPrice > 0) || job.poNumber) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-zinc-50/50 dark:bg-zinc-800/20 p-4 rounded-3xl border border-zinc-100/50 dark:border-zinc-800/50">
+                            {job.qualityComments && (
+                              <div className="p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
+                                 <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-1">{lang === 'ar' ? 'تعليقات الجودة' : 'Quality Comments'}</span>
+                                 <p className="text-xs text-zinc-700 dark:text-zinc-300 italic">"{job.qualityComments}"</p>
                               </div>
-                        ))}
-                      </div>
-                    </div>
+                            )}
+                            {(job.confirmedPrice > 0 || user.role === 'Admin' || user.role === 'Purchasing Operations') && (
+                              <div className="p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
+                                 <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-1">{lang === 'ar' ? 'السعر المؤكد' : 'Confirmed Price'}</span>
+                                 {(user.role === 'Admin' || user.role === 'Purchasing Operations') ? (
+                                   <div className="flex items-center gap-2">
+                                     <input 
+                                       type="number"
+                                       className="text-xs font-black text-emerald-600 bg-transparent border-b border-emerald-500/30 outline-none w-20"
+                                       value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || 0)}
+                                       onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', parseFloat(e.target.value))}
+                                     />
+                                     <button 
+                                       onClick={(e) => { e.stopPropagation(); handleUpdateManualPrice(job.id, jobActionsState[job.id]?.confirmedPrice || 0); }}
+                                       className="p-1 text-emerald-600 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-all"
+                                       title={lang === 'ar' ? 'حفظ السعر' : 'Save Price'}
+                                     >
+                                       <Save size={14} />
+                                     </button>
+                                   </div>
+                                 ) : (
+                                   <p className="text-xs font-black text-emerald-600">{job.confirmedPrice} <span className="text-[10px] font-normal opacity-60">per kg</span></p>
+                                 )}
+                              </div>
+                            )}
+                            {job.poNumber && (
+                              <div className="p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
+                                 <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-1">{lang === 'ar' ? 'رقم PO' : 'PO Number'}</span>
+                                 <p className="text-xs font-mono font-bold text-blue-600">{job.poNumber}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between px-1">
-                            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">{t.outputs}</label>
-                            <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-md">{job.outputs.length} {lang === 'ar' ? 'أصناف' : 'items'}</span>
-                          </div>
-                          <div className="grid gap-2">
-                        {job.outputs.map((output, i) => (
-                              <div key={i} className="group/item flex items-center justify-between p-3 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 transition-all">
-                                <div className="flex flex-col">
-                                  <span className="text-[10px] text-zinc-400 font-mono leading-none mb-1 opacity-0 group-hover/item:opacity-100 transition-opacity">{output.itemCode}</span>
-                                  <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{output.itemName}</span>
+                        {/* Approvals Tracking */}
+                        <div className="flex flex-wrap gap-4 text-[10px] font-medium text-zinc-400 bg-zinc-50/50 dark:bg-zinc-800/30 p-2.5 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50">
+                          {job.warehouseApprovalTime && (
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 size={12} className="text-emerald-500" />
+                              {lang === 'ar' ? 'المخزن:' : 'WH:'} {new Date(job.warehouseApprovalTime).toLocaleDateString()}
+                            </div>
+                          )}
+                          {job.qualityApprovalTime && (
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 size={12} className="text-emerald-500" />
+                              {lang === 'ar' ? 'الجودة:' : 'Quality:'} {new Date(job.qualityApprovalTime).toLocaleDateString()}
+                            </div>
+                          )}
+                          {job.purchasingApprovalTime && (
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 size={12} className="text-emerald-500" />
+                              {lang === 'ar' ? 'المشتريات:' : 'Purchasing:'} {new Date(job.purchasingApprovalTime).toLocaleDateString()}
+                            </div>
+                          )}
+                          {job.completionTime && (
+                            <div className="flex items-center gap-1">
+                              <CheckCircle2 size={12} className="text-emerald-500" />
+                              {lang === 'ar' ? 'مكتمل:' : 'Completed:'} {new Date(job.completionTime).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Details section */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {/* Inputs details */}
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between px-1">
+                              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">{t.inputs}</label>
+                              <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-md">{job.inputs.length} {lang === 'ar' ? 'أصناف' : 'items'}</span>
+                            </div>
+                            <div className="grid gap-2">
+                              {job.inputs.map((input, i) => (
+                                <div key={i} className="group/item flex items-center justify-between p-3 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all">
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] text-zinc-400 font-mono leading-none mb-1 opacity-0 group-hover/item:opacity-100 transition-opacity">{input.itemCode}</span>
+                                    <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{input.itemName}</span>
+                                  </div>
+                                  <span className="text-sm font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-xl">
+                                    {input.quantity} {input.unit}
+                                  </span>
                                 </div>
-                                <span className="text-sm font-black text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-xl">
-                                  {output.quantity} {output.unit}
-                                </span>
-                              </div>
-                        ))}
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Outputs details */}
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between px-1">
+                              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">{t.outputs}</label>
+                              <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-md">{job.outputs.length} {lang === 'ar' ? 'أصناف' : 'items'}</span>
+                            </div>
+                            <div className="grid gap-2">
+                              {job.outputs.map((output, i) => (
+                                <div key={i} className="group/item flex items-center justify-between p-3 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 transition-all">
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] text-zinc-400 font-mono leading-none mb-1 opacity-0 group-hover/item:opacity-100 transition-opacity">{output.itemCode}</span>
+                                    <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{output.itemName}</span>
+                                  </div>
+                                  <span className="text-sm font-black text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-xl">
+                                    {output.quantity} {output.unit}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Comments/Notes section */}
+                        {job.notes && (
+                          <div className="mt-8 p-4 bg-amber-50/30 dark:bg-amber-900/10 border border-amber-100/50 dark:border-amber-900/10 rounded-2xl text-xs text-amber-700/80 dark:text-amber-400 leading-relaxed shadow-inner">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+                              <span className="text-[10px] font-black uppercase tracking-widest">{t.comments}</span>
+                            </div>
+                            "{job.notes}"
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
-
-                      {job.notes && (
-                        <div className="mt-8 p-4 bg-amber-50/30 dark:bg-amber-900/10 border border-amber-100/50 dark:border-amber-900/10 rounded-2xl text-xs text-amber-700/80 dark:text-amber-400 leading-relaxed shadow-inner">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">{t.comments}</span>
-                          </div>
-                          "{job.notes}"
-                        </div>
-                      )}
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
