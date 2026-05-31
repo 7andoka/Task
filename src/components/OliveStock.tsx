@@ -47,7 +47,7 @@ interface PivotedStockRow {
   materialCode: string;
   description: string;
   totalQuantity: number;
-  variety: 'Picual' | 'Azizi' | 'Akas' | 'Manzanilla' | 'Other';
+  variety: string;
   size: string;
   treatment: string;
   processType: string;
@@ -189,7 +189,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
   const formatNumber = (num: number) => {
     if (num === 0) return '—';
-    return new Intl.NumberFormat(lang === 'ar' ? 'ar-EG' : 'en-US', {
+    return new Intl.NumberFormat('en-US', {
       maximumFractionDigits: 0
     }).format(num);
   };
@@ -241,35 +241,51 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   };
 
   // Classify olive variety dynamically from description
-  const detectVariety = (descr: string): 'Picual' | 'Azizi' | 'Akas' | 'Manzanilla' | 'Other' => {
-    const dLower = descr.toLowerCase();
-    if (dLower.includes('picual')) return 'Picual';
-    if (dLower.includes('azizi')) return 'Azizi';
-    if (dLower.includes('akas') || dLower.includes('akass') || dLower.includes('akisi')) return 'Akas';
-    if (dLower.includes('manzanilla') || dLower.includes('manzanila')) return 'Manzanilla';
+  const detectVariety = (descr: string): string => {
+    let extracted = '';
+    // Look for text between OLV (case-insensitive) and Black/Green (case-insensitive)
+    const match = descr.match(/OLV\s+(.*?)\s+(Black|Green)/i);
+    if (match && match[1]) {
+      extracted = match[1].trim();
+    } else {
+      extracted = descr;
+    }
+
+    const eLower = extracted.toLowerCase();
+    if (eLower.includes('manzanilla') || eLower.includes('manzanila')) return 'Manzanilla';
+    if (eLower.includes('picual') || eLower.includes('pical')) return 'Picual';
+    if (eLower.includes('akas') || eLower.includes('akass') || eLower.includes('akisi') || eLower.includes('aqezi')) return 'Akas';
+    if (eLower.includes('azizi')) return 'Azizi';
+    if (eLower.includes('kobrosi') || eLower.includes('kobrosy') || eLower.includes('qobr') || eLower.includes('cyprus')) return 'Kobrosi';
+    if (eLower.includes('kalamata') || eLower.includes('kalama')) return 'Kalamata';
+    if (eLower.includes('dolsy') || eLower.includes('dolcy') || eLower.includes('dolce') || eLower.includes('dolsi')) return 'Dolsy';
+
     return 'Other';
   };
 
   const getVarietyName = (v: string) => {
-    switch (v) {
-      case 'Picual': return isRtl ? 'بيكال' : 'Picual';
-      case 'Azizi': return isRtl ? 'عزيزي' : 'Azizi';
-      case 'Akas': return isRtl ? 'عجيزي/أكاس' : 'Akas/Aqezi';
-      case 'Manzanilla': return isRtl ? 'منزانيللا' : 'Manzanilla';
-      default: return isRtl ? 'آخر / مشكل' : 'Other / mixed';
+    if (v === 'Other') {
+      return isRtl ? 'آخر / مشكل' : 'Other / mixed';
     }
+    return v;
   };
 
   const getVarietyColor = (v: string) => {
     switch (v) {
-      case 'Picual':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50';
-      case 'Azizi':
-        return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-900/50';
-      case 'Akas':
-        return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-900/50';
       case 'Manzanilla':
         return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/50';
+      case 'Picual':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50';
+      case 'Akas':
+        return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-900/50';
+      case 'Azizi':
+        return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-900/50';
+      case 'Kobrosi':
+        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900/50';
+      case 'Kalamata':
+        return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50';
+      case 'Dolsy':
+        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50';
       default:
         return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800/30 dark:text-zinc-400 dark:border-zinc-700/50';
     }
@@ -310,6 +326,15 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     const cat = categories.find(c => c.id === id);
     if (!cat) return id;
     return isRtl ? cat.labelAr : cat.labelEn;
+  };
+
+  const getLocationName = (loc: string) => {
+    if (isRtl) {
+      if (loc === 'Richland') return 'ريتشلاند (Richland)';
+      if (loc === 'Olive Land') return 'أوليف لاند (Olive Land)';
+      return loc;
+    }
+    return loc;
   };
 
   const loadData = async (isManual = false) => {
@@ -362,7 +387,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
       const formatTime = (date: Date) => {
         if (isNaN(date.getTime())) return '';
-        return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-US', {
+        return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG-u-nu-latn' : 'en-US', {
           day: 'numeric',
           month: 'short',
           year: 'numeric',
@@ -530,7 +555,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   }, [dataset]);
 
   const varieties = useMemo(() => {
-    return ['Picual', 'Azizi', 'Akas', 'Manzanilla', 'Other'];
+    return ['Manzanilla', 'Picual', 'Akas', 'Azizi', 'Kobrosi', 'Kalamata', 'Dolsy', 'Other'];
   }, []);
 
   // Filtered dataset
@@ -621,10 +646,13 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   }, [stats.varietyBreakdown, stats.totalQty, lang]);
 
   const VARIETY_COLORS: Record<string, string> = {
-    Picual: '#10b981',    // Emerald
-    Azizi: '#06b6d4',     // Cyan
-    Akas: '#8b5cf6',      // Violet
     Manzanilla: '#f59e0b', // Amber
+    Picual: '#10b981',    // Emerald
+    Akas: '#8b5cf6',      // Violet
+    Azizi: '#06b6d4',     // Cyan
+    Kobrosi: '#3b82f6',   // Blue
+    Kalamata: '#6366f1',  // Indigo
+    Dolsy: '#f43f5e',     // Rose
     Other: '#64748b'       // Slate
   };
 
@@ -735,66 +763,6 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         </div>
       ) : (
         <>
-          {/* Statistics summary */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-             {/* Stats Cards - Keeping the same style for consistency */}
-             <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  {isRtl ? 'إجمالي رصيد الزيتون' : 'Total Olive Stock'}
-                </p>
-                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
-                  {formatNumber(stats.totalQty)} <span className="text-xs text-zinc-400 font-medium">kg</span>
-                </h3>
-              </div>
-              <div className="p-2.5 bg-emerald-500/5 text-emerald-500 rounded-xl">
-                <TrendingUp size={20} />
-              </div>
-            </div>
-
-            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  {isRtl ? 'عدد الأصناف المتاحة' : 'Distinct Olive Varieties'}
-                </p>
-                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
-                  {stats.uniqueItems}
-                </h3>
-              </div>
-              <div className="p-2.5 bg-teal-500/5 text-teal-500 rounded-xl">
-                <Layers size={20} />
-              </div>
-            </div>
-
-            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  {isRtl ? 'نطاقات التخزين المفعلة' : 'Active Storage Stages'}
-                </p>
-                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
-                  {stats.uniqueLocs}
-                </h3>
-              </div>
-              <div className="p-2.5 bg-indigo-500/5 text-indigo-500 rounded-xl">
-                <MapPin size={20} />
-              </div>
-            </div>
-
-            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  {isRtl ? 'الصنف الأكثر توفراً' : 'Most Abundant Variety'}
-                </p>
-                <h3 className="text-lg font-black font-sans text-zinc-900 dark:text-white truncate">
-                  {getVarietyName(stats.topVariety)}
-                </h3>
-              </div>
-              <div className="p-2.5 bg-amber-500/5 text-amber-500 rounded-xl">
-                <Percent size={20} />
-              </div>
-            </div>
-          </div>
-
           {/* Charts & Reports Section */}
           <div className="bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl p-5 flex flex-col md:flex-row items-center gap-8">
             <div className="flex flex-col items-center">
@@ -875,6 +843,97 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Storage Locations Balances Section */}
+          <div className="mt-4">
+            <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-1.5 px-2">
+              <MapPin size={12} className="text-emerald-500" />
+              {isRtl ? 'أرصدة المخازن' : 'Warehouse Inventory Balances'}
+            </h3>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 px-1">
+              {Object.entries(stats.locationBreakdown)
+                .filter(([_, qty]) => qty > 0)
+                .map(([location, qty]) => (
+                  <div 
+                    key={location} 
+                    className="p-2.5 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-xl shadow-xs flex items-center justify-between hover:border-emerald-500/30 dark:hover:border-emerald-500/30 transition-all group"
+                  >
+                    <div>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">
+                        {getLocationName(location)}
+                      </p>
+                      <h4 className="text-base font-bold font-sans text-emerald-600 dark:text-emerald-400 leading-tight">
+                        {formatNumber(qty)} <span className="text-[10px] text-zinc-400 font-medium font-sans animate-pulse">kg</span>
+                      </h4>
+                    </div>
+                    <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover:bg-emerald-500/20 transition-colors shrink-0">
+                      <Database size={14} />
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          {/* Statistics summary */}
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+             {/* Stats Cards - Keeping the same style for consistency */}
+             <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  {isRtl ? 'إجمالي رصيد الزيتون' : 'Total Olive Stock'}
+                </p>
+                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
+                  {formatNumber(stats.totalQty)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                </h3>
+              </div>
+              <div className="p-2.5 bg-emerald-500/5 text-emerald-500 rounded-xl">
+                <TrendingUp size={20} />
+              </div>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  {isRtl ? 'عدد الأصناف المتاحة' : 'Distinct Olive Varieties'}
+                </p>
+                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
+                  {stats.uniqueItems}
+                </h3>
+              </div>
+              <div className="p-2.5 bg-teal-500/5 text-teal-500 rounded-xl">
+                <Layers size={20} />
+              </div>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  {isRtl ? 'نطاقات التخزين المفعلة' : 'Active Storage Stages'}
+                </p>
+                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
+                  {stats.uniqueLocs}
+                </h3>
+              </div>
+              <div className="p-2.5 bg-indigo-500/5 text-indigo-500 rounded-xl">
+                <MapPin size={20} />
+              </div>
+            </div>
+
+            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  {isRtl ? 'الصنف الأكثر توفراً' : 'Most Abundant Variety'}
+                </p>
+                <h3 className="text-lg font-black font-sans text-zinc-900 dark:text-white truncate">
+                  {getVarietyName(stats.topVariety)}
+                </h3>
+              </div>
+              <div className="p-2.5 bg-amber-500/5 text-amber-500 rounded-xl">
+                <Percent size={20} />
+              </div>
             </div>
           </div>
 
