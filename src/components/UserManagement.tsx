@@ -42,6 +42,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     username: "",
     password: "",
     role: "Worker" as UserRole,
+    roles: ["Worker"] as UserRole[],
     managerId: "",
     phone: "",
     permissions: ['supplyTracking', 'tasks', 'settings'] as string[]
@@ -71,6 +72,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     { id: 'coldStorage', label: t.coldStorage },
     { id: 'rawMaterial', label: t.rawMaterial },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing },
+    { id: 'oliveStock', label: t.oliveStock },
     { id: 'tasks', label: t.tasks },
     { id: 'team', label: t.team },
     { id: 'users', label: t.userManagement },
@@ -87,7 +89,8 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
           uid: createForm.username, // Use username as UID for simplicity in this mode
           displayName: createForm.displayName,
           username: createForm.username,
-          role: createForm.role,
+          role: createForm.roles[0] || createForm.role,
+          roles: createForm.roles,
           managerId: createForm.managerId,
           phone: createForm.phone,
           password: createForm.password, // Store password directly
@@ -103,7 +106,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
         return [...prev, newUser];
       });
       setIsCreateModalOpen(false);
-      setCreateForm({ displayName: "", username: "", password: "", role: "Worker", managerId: "", phone: "", permissions: ['supplyTracking', 'tasks', 'settings'] });
+      setCreateForm({ displayName: "", username: "", password: "", role: "Worker", roles: ["Worker"], managerId: "", phone: "", permissions: ['supplyTracking', 'tasks', 'settings'] });
     } catch (err: any) {
       console.error("User Creation Error:", err);
       alert(lang === 'ar' ? `خطأ في إنشاء المستخدم: ${err.message}` : `Error creating user: ${err.message}`);
@@ -136,6 +139,40 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
         ? currentPermissions.filter(p => p !== pageId)
         : [...currentPermissions, pageId];
       setEditForm({ ...editForm, permissions: newPermissions });
+    }
+  };
+
+  const toggleRole = (formType: 'create' | 'edit', role: UserRole) => {
+    if (formType === 'create') {
+      const currentRoles = createForm.roles || [createForm.role];
+      const isSelected = currentRoles.includes(role);
+      const newRoles = isSelected
+        ? currentRoles.filter(r => r !== role)
+        : [...currentRoles, role];
+      
+      // Don't allow empty roles
+      if (newRoles.length === 0) return;
+
+      setCreateForm({ 
+        ...createForm, 
+        roles: newRoles,
+        role: newRoles[0]
+      });
+    } else if (formType === 'edit' && editForm) {
+      const currentRoles = editForm.roles || [editForm.role];
+      const isSelected = currentRoles.includes(role);
+      const newRoles = isSelected
+        ? currentRoles.filter(r => r !== role)
+        : [...currentRoles, role];
+
+      // Don't allow empty roles
+      if (newRoles.length === 0) return;
+
+      setEditForm({ 
+        ...editForm, 
+        roles: newRoles,
+        role: newRoles[0]
+      });
     }
   };
 
@@ -227,20 +264,33 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-zinc-500">{t.role}</label>
-                  <select 
-                    value={createForm.role}
-                    onChange={(e) => setCreateForm({...createForm, role: e.target.value as UserRole})}
-                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
-                  >
+                  <p className="text-[10px] text-zinc-400 mb-2">{lang === 'ar' ? 'اختر دوراً واحداً أو أكثر' : 'Select one or more roles'}</p>
+                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 border border-zinc-200 dark:border-zinc-800 rounded-xl">
                     {roles.map(r => {
                       const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
                       const translatedLabel = t[translationKey as keyof typeof t] || r;
-                      return <option key={r} value={r}>{translatedLabel}</option>;
+                      const isSelected = (createForm.roles || [createForm.role]).includes(r);
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => toggleRole('create', r)}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg border text-xs font-medium transition-all flex items-center gap-2",
+                            isSelected
+                              ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                              : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 text-zinc-500"
+                          )}
+                        >
+                          {isSelected && <Check size={12} />}
+                          {translatedLabel}
+                        </button>
+                      );
                     })}
-                  </select>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-zinc-500">{t.manager}</label>
@@ -250,7 +300,10 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                     className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
                   >
                     <option value="">{t.selectManager}</option>
-                    {users.filter(m => m.role !== 'Worker').map(m => (
+                    {users.filter(m => {
+                      const mRoles = m.roles || [m.role];
+                      return !mRoles.includes('Worker');
+                    }).map(m => (
                       <option key={m.uid} value={m.uid}>{m.displayName}</option>
                     ))}
                   </select>
@@ -340,20 +393,33 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-zinc-500">{t.role}</label>
-                  <select 
-                    value={editForm.role}
-                    onChange={(e) => setEditForm({...editForm, role: e.target.value as UserRole})}
-                    className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
-                  >
+                  <p className="text-[10px] text-zinc-400 mb-2">{lang === 'ar' ? 'اختر دوراً واحداً أو أكثر' : 'Select one or more roles'}</p>
+                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 border border-zinc-200 dark:border-zinc-800 rounded-xl">
                     {roles.map(r => {
                       const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
                       const translatedLabel = t[translationKey as keyof typeof t] || r;
-                      return <option key={r} value={r}>{translatedLabel}</option>;
+                      const isSelected = (editForm.roles || [editForm.role]).includes(r);
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => toggleRole('edit', r)}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg border text-xs font-medium transition-all flex items-center gap-2",
+                            isSelected
+                              ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                              : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 text-zinc-500"
+                          )}
+                        >
+                          {isSelected && <Check size={12} />}
+                          {translatedLabel}
+                        </button>
+                      );
                     })}
-                  </select>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-zinc-500">{t.manager}</label>
@@ -363,7 +429,10 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                     className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
                   >
                     <option value="">{t.selectManager}</option>
-                    {users.filter(m => m.uid !== editForm.uid && m.role !== 'Worker').map(m => (
+                    {users.filter(m => {
+                      const mRoles = m.roles || [m.role];
+                      return m.uid !== editForm.uid && !mRoles.includes('Worker');
+                    }).map(m => (
                       <option key={m.uid} value={m.uid}>{m.displayName}</option>
                     ))}
                   </select>
@@ -428,12 +497,17 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5">
                       <h3 className="font-bold text-base truncate">{u.displayName}</h3>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-tighter">
-                        {(() => {
-                          const translationKey = u.role.charAt(0).toLowerCase() + u.role.slice(1).replace(/\s+/g, '');
-                          return t[translationKey as keyof typeof t] || u.role;
-                        })()}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {(u.roles || [u.role]).map((r, idx) => {
+                          const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
+                          const label = t[translationKey as keyof typeof t] || r;
+                          return (
+                            <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-tighter">
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-zinc-500 text-xs font-medium">
                       <span className="flex items-center gap-1">@{u.username}</span>

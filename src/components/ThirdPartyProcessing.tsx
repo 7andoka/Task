@@ -410,10 +410,27 @@ const ShortcutSelector = ({
 };
 
 export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessingProps) {
+  const hasRole = (rolesToCheck: string | string[]) => {
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    if (Array.isArray(rolesToCheck)) {
+      return rolesToCheck.some(r => userRoles.includes(r as any));
+    }
+    return userRoles.includes(rolesToCheck as any);
+  };
   const t = translations[lang];
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [dynamicItems, setDynamicItems] = useState<ProcessItem[]>(PROCESS_ITEMS_LIST);
+
+  useEffect(() => {
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const usersData = snapshot.docs.map(doc => ({ uid: doc.id, id: doc.id, ...doc.data() })) as UserProfile[];
+      setUsers(usersData);
+    });
+    return () => unsubscribe();
+  }, []);
   const [isAdding, setIsAdding] = useState(false);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -446,7 +463,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     warehouseCode: '',
     inputs: [],
     outputs: [],
-    status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Warehouse',
+    status: hasRole('Admin') ? 'Completed' : (hasRole('Warehouse Operations') ? 'Pending Quality' : 'Pending Warehouse'),
     notes: '',
     qualityComments: '',
     poNumber: '',
@@ -1310,7 +1327,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const jobData = {
         ...newJob,
         jobCode: editingJobId ? jobs.find(j => j.id === editingJobId)?.jobCode : jobCode,
-        status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? newJob.status : 'Pending Warehouse',
+        status: hasRole(['Admin', 'Warehouse Operations']) ? newJob.status : 'Pending Warehouse',
         warehouseName: selectedWh?.name || '',
         warehouseCode: selectedWh?.systemCode || '',
         updatedAt: new Date().toISOString(),
@@ -1323,18 +1340,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         });
         toast.success(lang === 'ar' ? 'تم تحديث عملية التشغيل بنجاح' : 'Processing job updated successfully');
         
-        // Auto share after edit if it is "Completed"
+        // Auto share after edit
         const updatedJob: ProcessingJob = {
           id: editingJobId,
           ...newJob,
           warehouseName: selectedWh?.name || '',
           warehouseCode: selectedWh?.systemCode || '',
-          createdBy: user.uid, // Keep original or update? Usually keep original
-          createdAt: new Date().toISOString() // This is not quite right for edit but handleShareWhatsApp only needs basic info
+          createdBy: jobs.find(j => j.id === editingJobId)?.createdBy || user.uid,
+          createdAt: jobs.find(j => j.id === editingJobId)?.createdAt || new Date().toISOString()
         };
-        if (updatedJob.status === 'Completed') {
-          handleShareExcelOutlook(updatedJob);
-        }
+        handleShareExcelOutlook(updatedJob);
       } else {
         const docRef = await addDoc(collection(db, COLLECTIONS.THIRD_PARTY_PROCESSING), {
           ...jobData,
@@ -1344,7 +1359,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         });
         toast.success(lang === 'ar' ? 'تم حفظ عملية التشغيل بنجاح' : 'Processing job saved successfully');
         
-        // Auto share after new job if it is "Completed"
+        // Auto share after new job
         const createdJob: ProcessingJob = {
           id: docRef.id,
           ...newJob,
@@ -1353,9 +1368,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           createdBy: user.uid,
           createdAt: new Date().toISOString()
         };
-        if (createdJob.status === 'Completed') {
-          handleShareExcelOutlook(createdJob);
-        }
+        handleShareExcelOutlook(createdJob);
       }
       
       setIsAdding(false);
@@ -1367,7 +1380,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         warehouseCode: '',
         inputs: [],
         outputs: [],
-        status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Warehouse',
+        status: hasRole('Admin') ? 'Completed' : (hasRole('Warehouse Operations') ? 'Pending Quality' : 'Pending Warehouse'),
         notes: ''
       });
     } catch (error) {
@@ -1406,7 +1419,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
   const filteredJobs = jobs.filter(job => {
     // Admin sees everything
-    if (user.role === 'Admin') return true;
+    if (hasRole('Admin')) return true;
 
     // Search filter
     const matchesSearch = (
@@ -1415,37 +1428,47 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     );
     if (!matchesSearch) return false;
 
-    // Role-based workflow visibility
-    if (user.role === 'Customer Operations') {
-      return job.createdBy === user.uid;
+    // Role-based workflow visibility logic
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    
+    // If user has multiple roles, they should see everything relevant to any of them
+    let isVisible = false;
+
+    if (userRoles.includes('Customer Operations')) {
+      if (job.createdBy === user.uid || job.status === 'Completed') isVisible = true;
     }
 
-    if (user.role === 'Warehouse Operations') {
-      return true;
+    if (userRoles.includes('Warehouse Operations')) {
+      // Warehouse sees everything they need to approve or complete
+      isVisible = true;
     }
 
-    if (user.role === 'Quality Operations') {
+    if (userRoles.includes('Quality Operations')) {
       // Quality sees jobs waiting for their inspection and completed jobs
-      return job.status === 'Pending Quality' || job.status === 'Completed';
+      if (job.status === 'Pending Quality' || job.status === 'Completed') isVisible = true;
     }
 
-    if (user.role === 'Purchasing Operations') {
+    if (userRoles.includes('Purchasing Operations')) {
       // Purchasing sees jobs waiting for their price confirmation and completed jobs
-      return job.status === 'Pending Purchasing' || job.status === 'Completed';
+      if (job.status === 'Pending Purchasing' || job.status === 'Completed') isVisible = true;
     }
 
-    return false;
+    return isVisible;
   });
 
   const handleApproveWarehouse = async (job: ProcessingJob) => {
     try {
-      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+      const updateData = {
         status: 'Pending Quality',
         warehouseApproverId: user.uid,
         warehouseApprovalTime: new Date().toISOString(),
         serverTimestamp: serverTimestamp()
-      });
+      };
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
       toast.success(lang === 'ar' ? 'تم اعتماد المخزن بنجاح' : 'Warehouse approval successful');
+      
+      // Auto share after warehouse approval
+      handleShareExcelOutlook({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
     }
@@ -1454,17 +1477,21 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   const handleApproveQuality = async (job: ProcessingJob, isAccepted: boolean) => {
     try {
       const comments = jobActionsState[job.id]?.qualityComments || '';
-      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+      const updateData = {
         status: isAccepted ? 'Pending Purchasing' : 'Rejected',
         qualityApproverId: user.uid,
         qualityApprovalTime: new Date().toISOString(),
         qualityComments: comments,
         serverTimestamp: serverTimestamp()
-      });
+      };
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
       toast.success(isAccepted 
         ? (lang === 'ar' ? 'تم اعتماد الجودة بنجاح' : 'Quality approval successful')
         : (lang === 'ar' ? 'تم رفض التشغيلة' : 'Job rejected')
       );
+
+      // Auto share after quality approval
+      handleShareExcelOutlook({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل العملية' : 'Operation failed');
     }
@@ -1473,14 +1500,18 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   const handleApprovePurchasing = async (job: ProcessingJob) => {
     try {
       const price = jobActionsState[job.id]?.confirmedPrice || job.confirmedPrice || 0;
-      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+      const updateData = {
         status: 'Pending Completion',
         purchasingApproverId: user.uid,
         purchasingApprovalTime: new Date().toISOString(),
         confirmedPrice: price,
         serverTimestamp: serverTimestamp()
-      });
+      };
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
       toast.success(lang === 'ar' ? 'تم اعتماد المشتريات بنجاح' : 'Purchasing approval successful');
+
+      // Auto share after purchasing approval
+      handleShareExcelOutlook({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
     }
@@ -1509,6 +1540,54 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     }
   };
 
+  const handleShareWhatsApp = (job: ProcessingJob) => {
+    const isRtl = lang === 'ar';
+    const totalIn = job.inputs.reduce((sum, i) => sum + i.quantity, 0);
+    const totalOut = job.outputs.reduce((sum, i) => sum + i.quantity, 0);
+    const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
+    const lossPercentage = totalIn > 0 ? (((totalIn - totalOut) / totalIn) * 100).toFixed(1) : '0.0';
+
+    const text = isRtl
+      ? `📋 *تقرير عملية تشغيل (Third Party Job)*\n\n` +
+        `• *رقم العملية:* ${job.jobCode || '-'}\n` +
+        `• *التاريخ:* ${job.date}\n` +
+        `• *المخزن:* ${job.warehouseName || '-'}\n` +
+        `• *الحالة:* ${job.status}\n\n` +
+        `📥 *المدخلات:* ${totalIn.toLocaleString()} kg\n` +
+        `📤 *المخرجات:* ${totalOut.toLocaleString()} kg\n` +
+        `📊 *نسبة التشغيل:* ${yieldPercentage}%\n` +
+        `📉 *نسبة الفقد:* ${lossPercentage}%\n\n` +
+        (job.notes ? `*ملاحظات:* ${job.notes}\n` : '') +
+        (job.qualityComments ? `*تعليقات الجودة:* ${job.qualityComments}\n` : '')
+      : `📋 *Processing Job Report*\n\n` +
+        `• *Job Code:* ${job.jobCode || '-'}\n` +
+        `• *Date:* ${job.date}\n` +
+        `• *Warehouse:* ${job.warehouseName || '-'}\n` +
+        `• *Status:* ${job.status}\n\n` +
+        `📥 *Inputs:* ${totalIn.toLocaleString()} kg\n` +
+        `📤 *Outputs:* ${totalOut.toLocaleString()} kg\n` +
+        `📊 *Yield:* ${yieldPercentage}%\n` +
+        `📉 *Loss:* ${lossPercentage}%\n\n` +
+        (job.notes ? `*Notes:* ${job.notes}\n` : '') +
+        (job.qualityComments ? `*Quality Comments:* ${job.qualityComments}\n` : '');
+
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success(isRtl ? 'تم نسخ تفاصيل التشغيلة وجاري فتح الواتساب' : 'Job details copied and opening WhatsApp');
+      
+      const wh = warehouses.find(w => w.id === job.warehouseId);
+      const whatsappGroupUrl = wh?.whatsappGroup || 'https://web.whatsapp.com/';
+      
+      try {
+        window.open(whatsappGroupUrl, '_blank');
+      } catch (e) {
+        window.location.href = whatsappGroupUrl;
+      }
+    }).catch(err => {
+      console.error('Could not copy text: ', err);
+      toast.error(isRtl ? 'فشل نسخ التفاصيل' : 'Failed to copy details');
+    });
+  };
+
   const handleShareExcelOutlook = async (job: ProcessingJob) => {
     try {
       const isRtl = lang === 'ar';
@@ -1517,390 +1596,157 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
       const totalIn = job.inputs.reduce((sum, i) => sum + i.quantity, 0);
       const totalOut = job.outputs.reduce((sum, i) => sum + i.quantity, 0);
-      const efficiency = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) + '%' : '0%';
-      const lossWeight = totalIn - totalOut;
-      const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) + '%' : '0%';
-
-      const reportRows = [
-        [isRtl ? 'نموذج عملية تشغيل لدى الغير' : 'Third-Party Processing Report'],
-        [],
-        [isRtl ? 'بيانات العملية' : 'Job Details'],
-        [trans.processDate, date],
-        [isRtl ? 'المخزن' : 'Warehouse', `${job.warehouseName || '-'} (${job.warehouseCode || '-'})`],
-        [],
-        [isRtl ? 'ملخص الكميات' : 'Quantities Summary'],
-        [isRtl ? 'إجمالي المدخلات' : 'Total Inputs', `${totalIn} kg`],
-        [isRtl ? 'إجمالي المخرجات' : 'Total Outputs', `${totalOut} kg`],
-        [isRtl ? 'نسبة التشغيل' : 'Yield', efficiency],
-        [isRtl ? 'نسبة الفقد' : 'Loss %', lossPercentage],
-        [],
-        [trans.inputs],
-        [isRtl ? 'كود الصنف' : 'Item Code', isRtl ? 'اسم الصنف' : 'Item Name', trans.quantity],
-        ...job.inputs.map(i => [i.itemCode, i.itemName, `${i.quantity} ${i.unit}`]),
-        [],
-        [trans.outputs],
-        [isRtl ? 'كود الصنف' : 'Item Code', isRtl ? 'اسم الصنف' : 'Item Name', trans.quantity],
-        ...job.outputs.map(o => [o.itemCode, o.itemName, `${o.quantity} ${o.unit}`]),
-        [],
-        [trans.comments],
-        [job.notes || '-']
-      ];
-
-      const ws = XLSX.utils.aoa_to_sheet(reportRows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Report");
-      
-      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const filename = `Job_${job.warehouseCode || 'Report'}_${job.date}.xlsx`;
-      const file = new File([blob], filename, { type: blob.type });
-
-      // Download file automatically
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      const toList = toEmails.length > 0 ? toEmails.join(',') : 'Khaled.Shaaban@RichLandfi.com';
-      const ccList = ccEmails.length > 0 ? `&cc=${ccEmails.join(',')}` : '';
-      
-      const recipient = toList;
-      const subjectText = isRtl ? `تقرير عملية تشغيل: ${job.warehouseName} بتاريخ ${date}` : `Processing Report: ${job.warehouseName} dated ${date}`;
-      const bodyText = isRtl 
-        ? `برجاء الاطلاع على تقرير عملية التشغيل المرفق لـ ${job.warehouseName} بتاريخ ${date}.` 
-        : `Please find the attached processing report for ${job.warehouseName} dated ${date}.`;
-
-      const subject = encodeURIComponent(subjectText);
-      const body = encodeURIComponent(bodyText);
-      
-      // Open the Outlook App directly (Desktop/Mobile) with the recipients pre-filled
-      const outlookAppUrl = `ms-outlook://compose?to=${recipient}${ccList}&subject=${subject}&body=${body}`;
-      const mailtoUrl = `mailto:${recipient}?subject=${subject}&body=${body}${ccList}`;
-
-      // Create a hidden link to trigger the app protocol
-      const link = document.createElement('a');
-      link.href = outlookAppUrl;
-      link.click();
-
-      // 2. Fallback to standard mailto if Outlook app isn't the handler
-      setTimeout(() => {
-        if (document.hasFocus()) {
-          window.location.href = mailtoUrl;
-        }
-      }, 1000);
-      
-      toast.info(isRtl 
-        ? 'تم فتح Outlook وتحميل الملف. يرجى إرفاق الملف يدوياً.' 
-        : 'Outlook opened and file downloaded. Please attach the file manually.');
-
-    } catch (error) {
-      console.error("Outlook share error:", error);
-      toast.error(lang === 'ar' ? 'حدث خطأ أثناء المشاركة' : 'Error during sharing');
-    }
-  };
-
-  const exportToExcel = () => {
-    try {
-      const data = jobs.flatMap(job => {
-        const rows: any[] = [];
-        const maxLen = Math.max(job.inputs.length, job.outputs.length);
-        const totalIn = job.inputs.reduce((sum, i) => sum + i.quantity, 0);
-        const totalOut = job.outputs.reduce((sum, i) => sum + i.quantity, 0);
-        const yieldPct = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) + '%' : '0%';
-        const lossWeight = totalIn - totalOut;
-        const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) + '%' : '0%';
-        
-        for (let i = 0; i < maxLen; i++) {
-          rows.push({
-            [lang === 'ar' ? 'التاريخ' : 'Date']: job.date,
-            [lang === 'ar' ? 'المخزن' : 'Warehouse']: job.warehouseName || '',
-            [lang === 'ar' ? 'كود المخزن' : 'WH Code']: job.warehouseCode || '',
-            [lang === 'ar' ? 'مدخلات - الكود' : 'Input - Code']: job.inputs[i]?.itemCode || '',
-            [lang === 'ar' ? 'مدخلات - الصنف' : 'Input - Item']: job.inputs[i]?.itemName || '',
-            [lang === 'ar' ? 'مدخلات - الكمية' : 'Input - Qty']: job.inputs[i]?.quantity || '',
-            [lang === 'ar' ? 'مخرجات - الكود' : 'Output - Code']: job.outputs[i]?.itemCode || '',
-            [lang === 'ar' ? 'مخرجات - الصنف' : 'Output - Item']: job.outputs[i]?.itemName || '',
-            [lang === 'ar' ? 'مخرجات - الكمية' : 'Output - Qty']: job.outputs[i]?.quantity || '',
-            [lang === 'ar' ? 'إجمالي المدخلات' : 'Total In']: i === 0 ? totalIn : '',
-            [lang === 'ar' ? 'إجمالي المخرجات' : 'Total Out']: i === 0 ? totalOut : '',
-            [lang === 'ar' ? 'نسبة التشغيل' : 'Yield %']: i === 0 ? yieldPct : '',
-            [lang === 'ar' ? 'نسبة الفقد' : 'Loss %']: i === 0 ? lossPercentage : '',
-            [lang === 'ar' ? 'ملاحظات' : 'Notes']: i === 0 ? job.notes || '' : '',
-          });
-        }
-        return rows;
-      });
-
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Processing Jobs");
-      XLSX.writeFile(wb, `Processing_Jobs_${new Date().toISOString().split('T')[0]}.xlsx`);
-      toast.success(lang === 'ar' ? 'تم استخراج ملف Excel بنجاح' : 'Excel file exported successfully');
-    } catch (error) {
-      console.error("Excel export error:", error);
-      toast.error(lang === 'ar' ? 'حدث خطأ أثناء التصدير' : 'Error exporting Excel');
-    }
-  };
-
-  const handleShareWhatsApp = async (job: ProcessingJob) => {
-    const isRtl = lang === 'ar';
-    const date = new Date(job.date).toLocaleDateString(isRtl ? 'ar-EG' : 'en-US');
-    const trans = translations[lang];
-
-    // Find warehouse details matching docx export
-    const warehouse = warehouses.find(w => w.id === job.warehouseId);
-    const pricePerKg = job.confirmedPrice || warehouse?.processingPricePerKg || 0;
-    const supplierCode = warehouse?.supplierCode || job.warehouseCode || "-";
-
-    const totalIn = job.inputs.reduce((s, i) => s + i.quantity, 0);
-    const totalOut = job.outputs.reduce((s, i) => s + i.quantity, 0);
-    const totalCost = totalIn * pricePerKg;
-    const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
-    const lossWeight = totalIn - totalOut;
-    const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) : '0.0';
-
-    const maxRows = Math.max(job.inputs.length, job.outputs.length);
-    const rowsCount = Math.max(maxRows, 5);
-
-    // Create a temporary container for the template
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    container.style.width = '800px';
-    container.dir = isRtl ? 'rtl' : 'ltr';
-    document.body.appendChild(container);
-
-    container.innerHTML = `
-      <div style="background: white; padding: 40px; border: 1px solid #cbd5e1; font-family: Arial, sans-serif; color: #1e293b; direction: ${isRtl ? 'rtl' : 'ltr'}; text-align: ${isRtl ? 'right' : 'left'};">
-        <!-- Top formal title -->
-        <div style="text-align: center; border-bottom: 3px double #1E3A8A; padding-bottom: 12px; margin-bottom: 25px;">
-          <h2 style="color: #1E3A8A; margin: 0; font-size: 20px; font-weight: bold; line-height: 1.5;">
-            ${isRtl 
-              ? `عملية تشغيل لدى ${job.warehouseName || job.supplierName || job.thirdPartyName || '-'} بتاريخ ${date}` 
-              : `Processing Job at ${job.warehouseName || job.supplierName || job.thirdPartyName || '-'} on ${date}`}
-          </h2>
-        </div>
-
-        <!-- Metadata tables side-by-side using Flexbox for high-fidelity html2canvas support -->
-        <div style="display: flex; gap: 20px; margin-bottom: 25px;">
-          <!-- Left Metadata Table (Pricing) -->
-          <div style="flex: 1;">
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 11px;">
-              <tr style="border-bottom: 1px solid #cbd5e1;">
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; width: 55%; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'سعر التشغيل للكيلو' : 'Price / KG'}</td>
-                <td style="padding: 8px; font-weight: bold; text-align: center; color: #1e293b;">${pricePerKg.toLocaleString()} EGP</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #cbd5e1;">
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'اجمالى تكلفة التشغيل' : 'Total Processing Cost'}</td>
-                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; text-align: center; color: #1e293b;">${totalCost.toLocaleString()} EGP</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #cbd5e1;">
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'الفرق' : 'Difference'}</td>
-                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; color: #2563EB; text-align: center;">${(totalIn - totalOut).toLocaleString()} kg</td>
-              </tr>
-              <tr>
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'نسبة الفقد' : 'Loss %'}</td>
-                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; color: #DC2626; text-align: center;">${lossPercentage}%</td>
-              </tr>
-            </table>
-          </div>
-
-          <!-- Right Metadata Table (Vendor details) -->
-          <div style="flex: 1;">
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 11px;">
-              <tr style="border-bottom: 1px solid #cbd5e1;">
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; width: 40%; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'كود المورد' : 'Supplier Code'}</td>
-                <td style="padding: 8px; font-weight: bold; text-align: center; font-family: monospace; color: #1e293b;">${supplierCode}</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #cbd5e1;">
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'اسم المورد' : 'Supplier Name'}</td>
-                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; text-align: center; color: #1e293b;">${job.warehouseName || job.supplierName || job.thirdPartyName || '-'}</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #cbd5e1;">
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'كود المخزن' : 'Warehouse Code'}</td>
-                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; text-align: center; font-family: monospace; color: #1e293b;">${job.warehouseCode || '-'}</td>
-              </tr>
-              <tr style="border-bottom: 1px solid #cbd5e1;">
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'رقم العملية' : 'Process Code'}</td>
-                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; color: #059669; text-align: center; font-family: monospace;">${job.jobCode || '-'}</td>
-              </tr>
-              <tr>
-                <td style="background: #F1F5F9; font-weight: bold; padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'};">${isRtl ? 'رقم PO' : 'PO Number'}</td>
-                <td style="padding: 8px; font-weight: bold; background: #F8FAFC; color: #2563EB; text-align: center; font-family: monospace;">${job.poNumber || '-'}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-
-        <!-- Side-by-side Tables for Inputs and Outputs -->
-        <div style="display: flex; gap: 20px; margin-bottom: 25px;">
-          <!-- Inputs Table -->
-          <div style="flex: 1;">
-            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: bold; color: #1E3A8A; text-align: center;">
-              ${isRtl ? 'المدخلات (Inputs)' : 'Inputs'}
-            </h4>
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 11px;">
-              <thead>
-                <tr style="background: #DBEAFE; color: #1E3A8A; border-bottom: 2px solid #cbd5e1;">
-                  <th style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: center;">${isRtl ? 'كود ساب' : 'SAP Code'}</th>
-                  <th style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'}; width: 55%;">${isRtl ? 'اسم الصنف' : 'Item Name'}</th>
-                  <th style="padding: 8px; text-align: center;">${isRtl ? 'الكمية' : 'Qty'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${Array.from({ length: rowsCount }).map((_, idx) => {
-                  const item = job.inputs[idx];
-                  return `
-                    <tr style="border-bottom: 1px solid #e2e8f0; height: 32px;">
-                      <td style="padding: 6px; border-right: 1px solid #cbd5e1; text-align: center; font-family: monospace; font-weight: bold; color: #64748b;">
-                        ${item ? item.itemCode : '&nbsp;'}
-                      </td>
-                      <td style="padding: 6px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'}; font-weight: 500; color: #334155;">
-                        ${item ? item.itemName : '&nbsp;'}
-                      </td>
-                      <td style="padding: 6px; text-align: center; font-weight: bold; color: #0284c7;">
-                        ${item ? item.quantity.toLocaleString() : '&nbsp;'}
-                      </td>
-                    </tr>
-                  `;
-                }).join('')}
-                <tr style="background: #FACC15; font-weight: bold; border-top: 2px solid #cbd5e1;">
-                  <td colspan="2" style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'left' : 'right'};">
-                    ${isRtl ? 'إجمالي المدخلات' : 'Total Inputs'}
-                  </td>
-                  <td style="padding: 8px; text-align: center; color: #1e293b;">
-                    ${totalIn.toLocaleString()}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Outputs Table -->
-          <div style="flex: 1;">
-            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: bold; color: #7C2D12; text-align: center;">
-              ${isRtl ? 'المخرجات (Outputs)' : 'Outputs'}
-            </h4>
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; font-size: 11px;">
-              <thead>
-                <tr style="background: #FFEDD5; color: #7C2D12; border-bottom: 2px solid #cbd5e1;">
-                  <th style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: center;">${isRtl ? 'كود ساب مخرج' : 'SAP Code Out'}</th>
-                  <th style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'}; width: 55%;">${isRtl ? 'اسم الصنف مخرج' : 'Item Name Out'}</th>
-                  <th style="padding: 8px; text-align: center; background: #FBBF24; color: #000000;">${isRtl ? 'الكمية مخرج' : 'Qty Out'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${Array.from({ length: rowsCount }).map((_, idx) => {
-                  const item = job.outputs[idx];
-                  return `
-                    <tr style="border-bottom: 1px solid #e2e8f0; height: 32px;">
-                      <td style="padding: 6px; border-right: 1px solid #cbd5e1; text-align: center; font-family: monospace; font-weight: bold; color: #64748b;">
-                        ${item ? item.itemCode : '&nbsp;'}
-                      </td>
-                      <td style="padding: 6px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'right' : 'left'}; font-weight: 500; color: #334155;">
-                        ${item ? item.itemName : '&nbsp;'}
-                      </td>
-                      <td style="padding: 6px; text-align: center; font-weight: bold; background: ${item ? '#FEF3C7' : 'transparent'}; color: #1e293b;">
-                        ${item ? item.quantity.toLocaleString() : '&nbsp;'}
-                      </td>
-                    </tr>
-                  `;
-                }).join('')}
-                <tr style="background: #FACC15; font-weight: bold; border-top: 2px solid #cbd5e1;">
-                  <td colspan="2" style="padding: 8px; border-right: 1px solid #cbd5e1; text-align: ${isRtl ? 'left' : 'right'};">
-                    ${isRtl ? 'إجمالي المخرجات' : 'Total Outputs'}
-                  </td>
-                  <td style="padding: 8px; text-align: center; color: #1e293b;">
-                    ${totalOut.toLocaleString()}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Notes / Comments -->
-        ${job.notes ? `
-          <div style="padding: 15px; border: 1px solid #fef3c7; background: #fffbeb; border-radius: 12px; margin-bottom: 25px;">
-            <div style="font-[10px]; font-weight: bold; color: #92400e; text-transform: uppercase; margin-bottom: 5px;">
-              ${isRtl ? 'ملاحظات:' : 'Notes:'}
-            </div>
-            <div style="font-size: 12px; color: #78350f; font-style: italic; line-height: 1.5;">
-              "${job.notes}"
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Footer stamp -->
-        <div style="text-align: center; font-size: 10px; color: #9ca3af; border-top: 1px solid #cbd5e1; padding-top: 15px; margin-top: 15px;">
-          ${isRtl ? 'تم الإنشاء بواسطة نظام إدارة المخازن' : 'Generated by Warehouse Management System'} • ${new Date().toLocaleString()}
-        </div>
-      </div>
-    `;
-
-    try {
-      toast.loading(isRtl ? 'جاري تحضير النموذج...' : 'Preparing template...');
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true
-      });
-      
-      if (document.body.contains(container)) {
-        document.body.removeChild(container);
-      }
-      
-      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-      if (!blob) throw new Error('Failed to create image');
-
-      const textFallback = `📦 *${trans.thirdPartyProcessing}*\n🗓️ ${date}\n🏢 ${job.warehouseName} (${job.warehouseCode})\n\n📊 ${lang === 'ar' ? 'نسبة التشغيل' : 'Yield'}: ${yieldPercentage}%\n📉 ${lang === 'ar' ? 'نسبة الفقد' : 'Loss'}: ${lossPercentage}%\n📥 ${lang === 'ar' ? 'المدخلات' : 'Inputs'}: ${totalIn}kg\n📤 ${lang === 'ar' ? 'المخرجات' : 'Outputs'}: ${totalOut}kg`;
-
-      // Copy image to clipboard
-      try {
-        const item = new ClipboardItem({ 'image/png': blob });
-        await navigator.clipboard.write([item]);
-        toast.success(isRtl ? 'تم نسخ صورة التقرير! يمكنك لصقها في واتساب' : 'Report image copied! You can paste it in WhatsApp');
-      } catch (err) {
-        console.warn('Clipboard copy failed, downloading report', err);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Job_Report_${job.warehouseCode}_${job.date}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-
-      // Directly open WhatsApp
-      const warehouse = warehouses.find(w => w.id === job.warehouseId);
-      const whatsappUrl = warehouse?.whatsappGroup 
-        ? (warehouse.whatsappGroup.startsWith('http') ? warehouse.whatsappGroup : `https://wa.me/${warehouse.whatsappGroup.replace(/\D/g, '')}?text=${encodeURIComponent(textFallback)}`)
-        : `https://wa.me/?text=${encodeURIComponent(textFallback)}`;
-
-      window.open(whatsappUrl, '_blank');
-      toast.dismiss();
-    } catch (error) {
-      console.error('Share error:', error);
-      if (document.body.contains(container)) {
-        document.body.removeChild(container);
-      }
-      toast.dismiss();
-      toast.error(isRtl ? 'حدث خطأ أثناء المشاركة' : 'Error during sharing');
-      
-      // Final fallback to text version
-      const totalIn = job.inputs.reduce((s, i) => s + i.quantity, 0);
-      const totalOut = job.outputs.reduce((s, i) => s + i.quantity, 0);
       const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
-      const lossWeight = totalIn - totalOut;
-      const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) : '0.0';
+      const lossPercentage = totalIn > 0 ? (((totalIn - totalOut) / totalIn) * 100).toFixed(1) : '0.0';
+
+      let workbook;
+      let worksheet;
+      let loadedFromTemplate = false;
+
+      try {
+        const response = await fetch('/sub.xlsx');
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          worksheet = workbook.Sheets[sheetName];
+          loadedFromTemplate = true;
+        }
+      } catch (e) {
+        console.warn("Template sub.xlsx not found, using clean sheet");
+      }
+
+      if (loadedFromTemplate && worksheet) {
+        const setCellValue = (ws: any, r: number, c: number, val: any) => {
+          const cellRef = XLSX.utils.encode_cell({ r, c });
+          if (!ws[cellRef]) ws[cellRef] = { t: 's', v: '' };
+          if (typeof val === 'number') {
+            ws[cellRef].v = val;
+            ws[cellRef].t = 'n';
+          } else {
+            ws[cellRef].v = String(val);
+            ws[cellRef].t = 's';
+          }
+        };
+
+        const setCellFormula = (ws: any, r: number, c: number, formula: string) => {
+          const cellRef = XLSX.utils.encode_cell({ r, c });
+          if (!ws[cellRef]) ws[cellRef] = {};
+          ws[cellRef].t = 'n';
+          ws[cellRef].f = formula;
+          delete ws[cellRef].v;
+        };
+
+        setCellValue(worksheet, 1, 3, job.supplierName || job.thirdPartyName || '');
+        setCellValue(worksheet, 2, 3, job.supplierName || job.thirdPartyName || '');
+        setCellValue(worksheet, 3, 3, job.warehouseCode || '');
+        setCellValue(worksheet, 1, 7, job.confirmedPrice || 0);
+        setCellFormula(worksheet, 2, 7, 'H2*H27');
+        setCellFormula(worksheet, 3, 7, 'D27-H27');
+        setCellFormula(worksheet, 4, 7, 'IF(D27>0,H4/D27,0)');
+
+        const maxItems = Math.max(job.inputs.length, job.outputs.length);
+        for (let i = 0; i < 18; i++) {
+          const rowNum = 8 + i;
+          if (i < maxItems) setCellValue(worksheet, rowNum, 0, job.date);
+          if (i < job.inputs.length) {
+            const input = job.inputs[i];
+            setCellValue(worksheet, rowNum, 1, input.itemCode);
+            setCellValue(worksheet, rowNum, 2, input.itemName);
+            setCellValue(worksheet, rowNum, 3, input.quantity);
+          }
+          if (i < job.outputs.length) {
+            const output = job.outputs[i];
+            setCellValue(worksheet, rowNum, 5, output.itemCode);
+            setCellValue(worksheet, rowNum, 6, output.itemName);
+            setCellValue(worksheet, rowNum, 7, output.quantity);
+          }
+        }
+        worksheet['!ref'] = 'A1:H27';
+      } else {
+        const reportRows = [
+          [isRtl ? 'تقرير عملية تشغيل' : 'Processing Report'],
+          [trans.processDate, job.date],
+          [`${isRtl ? 'المخزن' : 'Warehouse'}: ${job.warehouseName} (${job.warehouseCode})`],
+          [isRtl ? 'إجمالي المدخلات' : 'Total Inputs', `${totalIn} kg`],
+          [isRtl ? 'إجمالي المخرجات' : 'Total Outputs', `${totalOut} kg`],
+          [isRtl ? 'نسبة التشغيل' : 'Yield', `${yieldPercentage}%`],
+          [isRtl ? 'نسبة الفقد' : 'Loss %', `${lossPercentage}%`],
+          [],
+          [trans.inputs],
+          ['Code', 'Name', 'Qty'],
+          ...job.inputs.map(i => [i.itemCode, i.itemName, i.quantity]),
+          [],
+          [trans.outputs],
+          ['Code', 'Name', 'Qty'],
+          ...job.outputs.map(i => [i.itemCode, i.itemName, i.quantity])
+        ];
+        worksheet = XLSX.utils.aoa_to_sheet(reportRows);
+        workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
+      }
+
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const fileName = `Job_${job.warehouseCode || 'Report'}_${job.date}.xlsx`;
+
+      // Compose Email Body
+      const commentsText = [
+        job.notes && `${isRtl ? 'ملاحظات:' : 'Notes:'} ${job.notes}`,
+        job.qualityComments && `${isRtl ? 'تعليقات الجودة:' : 'Quality Comments:'} ${job.qualityComments}`
+      ].filter(Boolean).join('\n');
+
+      const findUserName = (uid: string | undefined) => {
+        if (!uid) return "...";
+        const u = users.find(u => u.id === uid || u.uid === uid);
+        return u?.displayName || u?.email?.split('@')[0] || "...";
+      };
+
+      const recipient = toEmails.join(',') || 'Khaled.Shaaban@RichLandfi.com';
+      const ccList = ccEmails.join(',');
+      const subject = encodeURIComponent(`${isRtl ? 'تشغيلة جديدة / محدثة - ' : 'New / Updated Job - '} ${job.warehouseName} - ${job.date}`);
+      const body = encodeURIComponent(
+        `${isRtl ? 'تحية طيبة،\n\nيرجى العلم بأنه تم تحديث التشغيلة التالية:' : 'Hello,\n\nPlease be informed that the following job has been updated:'}\n\n` +
+        `${isRtl ? 'المخزن:' : 'Warehouse:'} ${job.warehouseName} (${job.warehouseCode})\n` +
+        `${isRtl ? 'التاريخ:' : 'Date:'} ${job.date}\n` +
+        `${isRtl ? 'الحالة:' : 'Status:'} ${job.status}\n` +
+        `${isRtl ? 'رقم العملية:' : 'Job Code:'} ${job.jobCode || '-'}\n` +
+        `${isRtl ? 'رقم PO:' : 'PO Number:'} ${job.poNumber || '-'}\n\n` +
+        `${isRtl ? 'إجمالي المدخلات:' : 'Total Inputs:'} ${totalIn} kg\n` +
+        `${isRtl ? 'إجمالي المخرجات:' : 'Total Outputs:'} ${totalOut} kg\n` +
+        `${isRtl ? 'نسبة الهالك:' : 'Loss %:'} ${lossPercentage}%\n\n` +
+        (commentsText ? `${commentsText}\n\n` : '') +
+        `${isRtl ? 'التوقيعات:' : 'Signatures:'}\n` +
+        `- ${isRtl ? 'العميل:' : 'Customer:'} ${findUserName(job.createdBy)}\n` +
+        `- ${isRtl ? 'المخزن:' : 'Warehouse:'} ${findUserName(job.warehouseApproverId)}\n` +
+        `- ${isRtl ? 'الجودة:' : 'Quality:'} ${findUserName(job.qualityApproverId)}\n` +
+        `- ${isRtl ? 'المشتريات:' : 'Purchasing:'} ${findUserName(job.purchasingApproverId)}\n\n` +
+        `${isRtl ? 'يرجى مراجعة الملف المرفق.' : 'Please review the attached file.'}`
+      );
+
+      const mailtoUrl = `mailto:${recipient}?cc=${ccList}&subject=${subject}&body=${body}`;
+      window.location.href = mailtoUrl;
+
+      // Also trigger download
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
       
-      const absoluteFallback = `📦 *${trans.thirdPartyProcessing}*\n🗓️ ${new Date(job.date).toLocaleDateString()}\n🏢 ${job.warehouseName}\n\n📊 ${lang === 'ar' ? 'نسبة التشغيل' : 'Yield'}: ${yieldPercentage}%\n📉 ${lang === 'ar' ? 'نسبة الفقد' : 'Loss'}: ${lossPercentage}%\n📥 In: ${totalIn}kg\n📤 Out: ${totalOut}kg`;
-      window.open(`https://wa.me/?text=${encodeURIComponent(absoluteFallback)}`, '_blank');
+      toast.success(isRtl ? 'تم تجهيز الإيميل وبدء التحميل' : 'Email prepared and download started');
+    } catch (error) {
+      console.error("Share error:", error);
+      toast.error(lang === 'ar' ? 'فشل التجهيز' : 'Preparation failed');
     }
   };
+
+  // Deduplicated section
+
+  // Deleting duplicate...
+
+  // Deleting duplicate part 2...
 
   const handlePrint = (job: ProcessingJob) => {
     const printWindow = window.open('', '_blank');
@@ -2167,60 +2013,51 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             setCellValue(worksheet, rowNum, 7, '');
           }
         }
-
-        // Keep original ref block so formulas like SUM(D9:D26) are respected
         worksheet['!ref'] = 'A1:H27';
-
-        XLSX.writeFile(workbook, `Job_${job.warehouseCode || 'Report'}_${job.date}.xlsx`);
-        toast.success(isRtl ? 'تم تصدير ملف Excel بنجاح' : 'Excel file exported successfully', { id: toastId });
       } else {
         const totalIn = job.inputs.reduce((sum, i) => sum + i.quantity, 0);
         const totalOut = job.outputs.reduce((sum, i) => sum + i.quantity, 0);
-        const efficiency = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) + '%' : '0%';
-        const lossWeight = totalIn - totalOut;
-        const lossPercentage = totalIn > 0 ? ((lossWeight / totalIn) * 100).toFixed(1) + '%' : '0%';
-
+        const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
+        const lossPercentage = totalIn > 0 ? (((totalIn - totalOut) / totalIn) * 100).toFixed(1) : '0.0';
         const reportRows = [
-          [isRtl ? 'نموذج عملية تشغيل لدى الغير' : 'Third-Party Processing Report'],
-          [],
-          [isRtl ? 'بيانات العملية' : 'Job Details'],
+          [isRtl ? 'تقرير عملية تشغيل' : 'Processing Report'],
           [trans.processDate, job.date],
-          [isRtl ? 'المخزن' : 'Warehouse', `${job.warehouseName || '-'} (${job.warehouseCode || '-'})`],
-          [],
-          [isRtl ? 'ملخص الكميات' : 'Quantities Summary'],
+          [`${isRtl ? 'المخزن' : 'Warehouse'}: ${job.warehouseName} (${job.warehouseCode})`],
           [isRtl ? 'إجمالي المدخلات' : 'Total Inputs', `${totalIn} kg`],
           [isRtl ? 'إجمالي المخرجات' : 'Total Outputs', `${totalOut} kg`],
-          [isRtl ? 'نسبة التشغيل' : 'Yield', efficiency],
-          [isRtl ? 'نسبة الفقد' : 'Loss %', lossPercentage],
+          [isRtl ? 'نسبة التشغيل' : 'Yield', `${yieldPercentage}%`],
+          [isRtl ? 'نسبة الفقد' : 'Loss %', `${lossPercentage}%`],
           [],
           [trans.inputs],
-          [isRtl ? 'كود الصنف' : 'Item Code', isRtl ? 'اسم الصنف' : 'Item Name', trans.quantity],
-          ...job.inputs.map(i => [i.itemCode, i.itemName, `${i.quantity} ${i.unit}`]),
+          ['Code', 'Name', 'Qty'],
+          ...job.inputs.map(i => [i.itemCode, i.itemName, i.quantity]),
           [],
           [trans.outputs],
-          [isRtl ? 'كود الصنف' : 'Item Code', isRtl ? 'اسم الصنف' : 'Item Name', trans.quantity],
-          ...job.outputs.map(i => [i.itemCode, i.itemName, `${i.quantity} ${i.unit}`]),
-          [],
-          [trans.comments],
-          [job.notes || '-']
+          ['Code', 'Name', 'Qty'],
+          ...job.outputs.map(i => [i.itemCode, i.itemName, i.quantity])
         ];
-
-        const ws = XLSX.utils.aoa_to_sheet(reportRows);
-        const wscols = [
-          { wch: 25 },
-          { wch: 40 },
-          { wch: 15 }
-        ];
-        ws['!cols'] = wscols;
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Report");
-        XLSX.writeFile(wb, `Job_${job.warehouseCode || 'Report'}_${job.date}.xlsx`);
-        toast.success(isRtl ? 'تم تصدير ملف Excel بنجاح' : 'Excel file exported successfully', { id: toastId });
+        worksheet = XLSX.utils.aoa_to_sheet(reportRows);
+        workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
       }
+
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const fileName = `Job_${job.warehouseCode || 'Report'}_${job.date}.xlsx`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(isRtl ? 'تم تحميل ملف Excel بنجاح' : 'Excel file downloaded successfully', { id: toastId });
     } catch (error) {
-      console.error("Single excel export error:", error);
-      toast.error(lang === 'ar' ? 'فشل التصدير' : 'Export failed', { id: toastId });
+      console.error("Excel export error:", error);
+      toast.error(isRtl ? 'فشل تصدير Excel' : 'Excel export failed', { id: toastId });
     }
   };
 
@@ -2240,10 +2077,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const maxRows = Math.max(job.inputs.length, job.outputs.length);
       const rowsCount = Math.max(maxRows, 5);
 
+      const findUserName = (uid: string | undefined) => {
+        if (!uid) return ".............";
+        const u = users.find(u => u.id === uid || u.uid === uid);
+        return u?.displayName || u?.email?.split('@')[0] || ".............";
+      };
+
       // Helper for creating centered bold cells
       const createCell = (text: string, options: any = {}) => new TableCell({
         children: [new Paragraph({
-          children: [new TextRun({ text, size: options.size || 18, bold: options.bold, color: options.color || "000000" })],
+          children: [new TextRun({ text: String(text), size: options.size || 18, bold: options.bold, color: options.color || "000000" })],
           alignment: options.align || AlignmentType.CENTER,
         })],
         shading: options.bg ? { fill: options.bg, type: ShadingType.CLEAR } : undefined,
@@ -2257,7 +2100,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         } : undefined,
       });
 
-      // 1. Metadata Table (Pricing and Vendor split)
+      // 1. Metadata Table
       const metadataTable = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
         borders: {
@@ -2271,7 +2114,6 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         rows: [
           new TableRow({
             children: [
-              // Left: Pricing
               new TableCell({
                 width: { size: 47, type: WidthType.PERCENTAGE },
                 children: [
@@ -2298,9 +2140,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   })
                 ]
               }),
-              // Spacer
-              new TableCell({ width: { size: 6, type: WidthType.PERCENTAGE }, children: [], borders: { top: { style: BorderStyle.NONE, size: 0 }, bottom: { style: BorderStyle.NONE, size: 0 }, left: { style: BorderStyle.NONE, size: 0 }, right: { style: BorderStyle.NONE, size: 0 } } }),
-              // Right: Vendor
+              new TableCell({ width: { size: 6, type: WidthType.PERCENTAGE }, children: [] }),
               new TableCell({
                 width: { size: 47, type: WidthType.PERCENTAGE },
                 children: [
@@ -2336,7 +2176,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         ]
       });
 
-      // 2. Main Tables (Inputs and Outputs)
+      // 2. Main Tables
       const inputsRowsList = [
         new TableRow({
           children: [
@@ -2360,14 +2200,6 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
       inputsRowsList.push(new TableRow({
         children: [
-          createCell("إجمالي المدخلات", { bg: "FACC15", bold: true, width: 80, align: AlignmentType.RIGHT }),
-          createCell(totalIn.toLocaleString(), { bg: "FACC15", bold: true, width: 20 }),
-        ],
-        // Merge the first two cells manually since createCell creates a single cell
-      }));
-      // Adjusting the last row merge logic: docx requires column spans
-      const lastInputRow = new TableRow({
-        children: [
           new TableCell({
             columnSpan: 2,
             children: [new Paragraph({ children: [new TextRun({ text: "إجمالي المدخلات", bold: true })], alignment: AlignmentType.RIGHT })],
@@ -2376,9 +2208,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           }),
           createCell(totalIn.toLocaleString(), { bg: "FACC15", bold: true }),
         ]
-      });
-      inputsRowsList.pop();
-      inputsRowsList.push(lastInputRow);
+      }));
 
       const outputsRowsList = [
         new TableRow({
@@ -2401,7 +2231,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         }));
       }
 
-      const lastOutputRow = new TableRow({
+      outputsRowsList.push(new TableRow({
         children: [
           new TableCell({
             columnSpan: 2,
@@ -2411,8 +2241,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           }),
           createCell(totalOut.toLocaleString(), { bg: "FACC15", bold: true }),
         ]
-      });
-      outputsRowsList.push(lastOutputRow);
+      }));
 
       const mainTables = new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
@@ -2427,7 +2256,6 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         rows: [
           new TableRow({
             children: [
-              // Inputs Table
               new TableCell({
                 width: { size: 48.5, type: WidthType.PERCENTAGE },
                 children: [
@@ -2439,9 +2267,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: inputsRowsList })
                 ]
               }),
-              // Spacer
               new TableCell({ width: { size: 3, type: WidthType.PERCENTAGE }, children: [] }),
-              // Outputs Table
               new TableCell({
                 width: { size: 48.5, type: WidthType.PERCENTAGE },
                 children: [
@@ -2458,12 +2284,17 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         ]
       });
 
+      // Assemble all comments
+      const allComments = [];
+      if (job.notes) allComments.push({ label: isRtl ? "ملاحظات العميل: " : "Customer Notes: ", text: job.notes });
+      if (job.qualityComments) allComments.push({ label: isRtl ? "تعليقات الجودة: " : "Quality Comments: ", text: job.qualityComments });
+
       const doc = new Document({
         sections: [{
           properties: {
             page: {
               size: { orientation: PageOrientation.PORTRAIT },
-              margin: { top: 720, bottom: 720, left: 720, right: 720 }, // 0.5 inch
+              margin: { top: 720, bottom: 720, left: 720, right: 720 },
             }
           },
           children: [
@@ -2481,35 +2312,14 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             metadataTable,
             new Paragraph({ text: "", spacing: { after: 200 } }),
             mainTables,
-            ...(job.notes ? [
-              new Paragraph({ text: "", spacing: { before: 300 } }),
-              new Table({
-                width: { size: 100, type: WidthType.PERCENTAGE },
-                rows: [
-                  new TableRow({
-                    children: [
-                      new TableCell({
-                        children: [new Paragraph({
-                          children: [
-                            new TextRun({ text: isRtl ? "ملاحظات: " : "Notes: ", bold: true }),
-                            new TextRun({ text: job.notes })
-                          ]
-                        })],
-                        shading: { fill: "FEF3C7", type: ShadingType.CLEAR },
-                        borders: {
-                          top: { style: BorderStyle.SINGLE, size: 6, color: "FBBF24" },
-                          bottom: { style: BorderStyle.SINGLE, size: 6, color: "FBBF24" },
-                          left: { style: BorderStyle.SINGLE, size: 6, color: "FBBF24" },
-                          right: { style: BorderStyle.SINGLE, size: 6, color: "FBBF24" },
-                        },
-                        margins: { top: 120, bottom: 120, left: 120, right: 120 }
-                      })
-                    ]
-                  })
-                ]
-              })
-            ] : []),
-            new Paragraph({ text: "", spacing: { before: 800 } }), // Space before signatures
+            ...allComments.map(comment => new Paragraph({
+              children: [
+                new TextRun({ text: comment.label, bold: true }),
+                new TextRun({ text: comment.text })
+              ],
+              spacing: { before: 200 }
+            })),
+            new Paragraph({ text: "", spacing: { before: 800 } }),
             new Table({
               width: { size: 100, type: WidthType.PERCENTAGE },
               borders: {
@@ -2531,10 +2341,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                 }),
                 new TableRow({
                   children: [
-                    createCell(isRtl ? "اسم المستخدم: ............." : "User: .............", { noBorder: true, size: 18 }),
-                    createCell(isRtl ? "اسم المستخدم: ............." : "User: .............", { noBorder: true, size: 18 }),
-                    createCell(isRtl ? `بواسطة: ${user.displayName || "............."}` : `By: ${user.displayName || "............."}`, { noBorder: true, size: 18 }),
-                    createCell(isRtl ? "اسم المستخدم: ............." : "User: .............", { noBorder: true, size: 18 }),
+                    createCell(isRtl ? `بواسطة: ${findUserName(job.purchasingApproverId)}` : `By: ${findUserName(job.purchasingApproverId)}`, { noBorder: true, size: 18 }),
+                    createCell(isRtl ? `بواسطة: ${findUserName(job.qualityApproverId)}` : `By: ${findUserName(job.qualityApproverId)}`, { noBorder: true, size: 18 }),
+                    createCell(isRtl ? `بواسطة: ${findUserName(job.warehouseApproverId)}` : `By: ${findUserName(job.warehouseApproverId)}`, { noBorder: true, size: 18 }),
+                    createCell(isRtl ? `بواسطة: ${findUserName(job.createdBy)}` : `By: ${findUserName(job.createdBy)}`, { noBorder: true, size: 18 }),
                   ]
                 })
               ]
@@ -2547,7 +2357,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Job_${job.warehouseCode || 'Report'}_${job.date}.docx`;
+      link.download = `JobReport_${job.warehouseCode || 'Report'}_${job.date}.docx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -2575,7 +2385,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
         {!isAdding && !isSettingsOpen && (
           <div className="flex gap-2">
-            {user.role === 'Admin' && (
+            {hasRole('Admin') && (
               <button 
                 onClick={() => setIsSettingsOpen(true)}
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-2xl font-bold transition-all"
@@ -2584,7 +2394,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                 {lang === 'ar' ? 'ضبط التشغيلات' : 'Processing Settings'}
               </button>
             )}
-            {(user.role === 'Admin' || user.role === 'Customer Operations') && (
+            {hasRole(['Admin', 'Customer Operations', 'Warehouse Operations']) && (
               <button 
                 onClick={() => setIsAdding(true)}
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-emerald-500/20"
@@ -3077,7 +2887,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   warehouseCode: '',
                   inputs: [],
                   outputs: [],
-                  status: (user.role === 'Admin' || user.role === 'Warehouse Operations') ? 'Completed' : 'Pending Warehouse',
+                  status: hasRole('Admin') ? 'Completed' : 'Pending Warehouse',
                   notes: ''
                 });
               }}
@@ -3178,31 +2988,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
               </div>
             </div>
 
-            {/* Excel Import for Job Components */}
-            <div className="p-5 bg-orange-50/10 dark:bg-orange-950/5 border border-dashed border-orange-200 dark:border-orange-900/40 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-4">
-              <div className="text-right flex-1">
-                <h4 className="text-sm font-extrabold text-orange-650 dark:text-orange-400 flex items-center gap-2">
-                  <FileSpreadsheet size={16} />
-                  <span>{lang === 'ar' ? 'تعبئة العملية تلقائياً من ملف Excel' : 'Auto-fill Job from Excel File'}</span>
-                </h4>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
-                  {lang === 'ar'
-                    ? 'يمكنك رفع ملف Excel التشغيل ليقوم النظام تلقائياً باستخراج "المدخلات" و"المخرجات" ونسب الهالك وتعبئتها بالكامل بدلاً من إدخالها يدوياً.'
-                    : 'Upload the processing Excel file to automatically extract all inputs and outputs for this job, replacing any manually added list items.'
-                  }
-                </p>
-              </div>
-              <label className="flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-lg shadow-orange-500/20 shrink-0">
-                <Download size={16} />
-                {lang === 'ar' ? 'اختر ملف Excel للتشغيل' : 'Select Job Excel File'}
-                <input 
-                  type="file" 
-                  accept=".xlsx, .xls" 
-                  onChange={handleImportJobDetailsExcel}
-                  className="hidden"
-                />
-              </label>
-            </div>
+
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Inputs Section */}
@@ -3357,15 +3143,6 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             </div>
 
             <div className="flex items-center gap-4 bg-white dark:bg-zinc-900 p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-              <button 
-                onClick={exportToExcel}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 dark:text-emerald-400 rounded-xl transition-all text-sm font-bold"
-                title={lang === 'ar' ? 'استخراج اكسيل' : 'Export to Excel'}
-              >
-                <FileSpreadsheet size={18} />
-                <span className="hidden sm:inline">{lang === 'ar' ? 'تصدير' : 'Export'}</span>
-              </button>
-              <div className="h-6 w-[1px] bg-zinc-200 dark:bg-zinc-800" />
               <div className="px-4 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm font-medium">
                 {lang === 'ar' ? 'إجمالي العمليات:' : 'Total Jobs:'} {filteredJobs.length}
               </div>
@@ -3388,27 +3165,27 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                 return (
                   <div 
                     key={job.id}
-                    className="group bg-white dark:bg-zinc-900 rounded-[32px] border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-xl transition-all duration-300"
+                    className="group bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-xl transition-all duration-300"
                   >
                     {/* Collapsible Header Summary Block */}
                     <div 
                       onClick={() => toggleJobExpanded(job.id)}
-                      className="p-6 cursor-pointer select-none flex flex-col lg:flex-row lg:items-center justify-between gap-6 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/10 transition-all rounded-[32px]"
+                      className="p-4 cursor-pointer select-none flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/10 transition-all rounded-3xl"
                     >
                       {/* Left: Job Info */}
-                      <div className="flex gap-4 items-center">
-                        <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl flex flex-col items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 border border-emerald-100 dark:border-emerald-800/50">
-                          <span className="text-xs font-bold uppercase leading-none opacity-60 mb-1">
+                      <div className="flex gap-3 items-center">
+                        <div className="w-11 h-11 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex flex-col items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 border border-emerald-100 dark:border-emerald-800/50">
+                          <span className="text-[10px] font-bold uppercase leading-none opacity-60 mb-0.5">
                             {new Date(job.date).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { month: 'short' })}
                           </span>
-                          <span className="text-xl font-black leading-none">{new Date(job.date).getDate()}</span>
+                          <span className="text-base font-black leading-none">{new Date(job.date).getDate()}</span>
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-black text-lg text-zinc-900 dark:text-white leading-tight">
+                            <h4 className="font-black text-base text-zinc-900 dark:text-white leading-tight">
                               {job.warehouseName}
                             </h4>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 select-text ${
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-lg font-bold uppercase tracking-wider shrink-0 select-text ${
                               job.status === 'Completed' 
                                 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
                                 : job.status === 'Rejected'
@@ -3452,30 +3229,30 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                       </div>
 
                       {/* Top Summary Stats */}
-                      <div className="grid grid-cols-4 gap-2 flex-1 max-w-lg">
-                        <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-center">
-                          <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'المدخلات' : 'Inputs'}</span>
-                          <span className="text-xs font-black text-zinc-900 dark:text-white leading-none">
-                            {job.inputs.reduce((s, i) => s + i.quantity, 0).toLocaleString()} <span className="text-[9px] opacity-40">kg</span>
+                      <div className="grid grid-cols-4 gap-1.5 flex-1 max-w-lg">
+                        <div className="p-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-center">
+                          <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5 leading-none">{lang === 'ar' ? 'المدخلات' : 'Inputs'}</span>
+                          <span className="text-[11px] font-black text-zinc-900 dark:text-white leading-none">
+                            {job.inputs.reduce((s, i) => s + i.quantity, 0).toLocaleString()} <span className="text-[8px] opacity-40">kg</span>
                           </span>
                         </div>
-                        <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-center">
-                          <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'المخرجات' : 'Outputs'}</span>
-                          <span className="text-xs font-black text-zinc-900 dark:text-white leading-none">
-                            {job.outputs.reduce((s, i) => s + i.quantity, 0).toLocaleString()} <span className="text-[9px] opacity-40">kg</span>
+                        <div className="p-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-center">
+                          <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5 leading-none">{lang === 'ar' ? 'المخرجات' : 'Outputs'}</span>
+                          <span className="text-[11px] font-black text-zinc-900 dark:text-white leading-none">
+                            {job.outputs.reduce((s, i) => s + i.quantity, 0).toLocaleString()} <span className="text-[8px] opacity-40">kg</span>
                           </span>
                         </div>
-                        <div className="p-2 rounded-xl bg-emerald-100/50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-center">
-                          <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'التشغيل' : 'Yield'}</span>
-                          <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 leading-none">
+                        <div className="p-1.5 rounded-xl bg-emerald-100/50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-center">
+                          <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block mb-0.5 leading-none">{lang === 'ar' ? 'التشغيل' : 'Yield'}</span>
+                          <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 leading-none">
                             {(job.inputs.reduce((s, i) => s + i.quantity, 0) > 0 
                               ? (job.outputs.reduce((s, i) => s + i.quantity, 0) / job.inputs.reduce((s, i) => s + i.quantity, 0) * 100).toFixed(1)
                               : '0.0')}%
                           </span>
                         </div>
-                        <div className="p-2 rounded-xl bg-rose-100/50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50 text-center">
-                          <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest block mb-1 leading-none">{lang === 'ar' ? 'الفقد' : 'Loss'}</span>
-                          <span className="text-xs font-black text-rose-600 dark:text-rose-400 leading-none">
+                        <div className="p-1.5 rounded-xl bg-rose-100/50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50 text-center">
+                          <span className="text-[8px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest block mb-0.5 leading-none">{lang === 'ar' ? 'الفقد' : 'Loss'}</span>
+                          <span className="text-[11px] font-black text-rose-600 dark:text-rose-400 leading-none">
                             {(job.inputs.reduce((s, i) => s + i.quantity, 0) > 0 
                               ? (((job.inputs.reduce((s, i) => s + i.quantity, 0) - job.outputs.reduce((s, i) => s + i.quantity, 0)) / job.inputs.reduce((s, i) => s + i.quantity, 0)) * 100).toFixed(1)
                               : '0.0')}%
@@ -3484,49 +3261,49 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                       </div>
 
                       {/* Chevron Trigger */}
-                      <div className="flex items-center justify-center p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 shrink-0">
-                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      <div className="flex items-center justify-center p-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 shrink-0">
+                        {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </div>
                     </div>
 
                     {/* Collapsible Details Content */}
                     {isExpanded && (
-                      <div className="p-6 pt-0 border-t border-zinc-100 dark:border-zinc-800/80 space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
+                      <div className="p-4 pt-0 border-t border-zinc-100 dark:border-zinc-800/80 space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
                         
                         {/* Actions row */}
-                        <div className="mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-4 rounded-3xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100/80 dark:border-zinc-800/80">
+                        <div className="mt-4 flex flex-col xl:flex-row xl:items-center justify-between gap-3 p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100/80 dark:border-zinc-800/80">
                           {/* Role Specific Actions */}
-                          <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
                             {/* Warehouse Step 1 Actions */}
-                            {(user.role === 'Admin' || user.role === 'Warehouse Operations') && job.status === 'Pending Warehouse' && (
+                            {hasRole(['Admin', 'Warehouse Operations']) && job.status === 'Pending Warehouse' && (
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleApproveWarehouse(job); }}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10"
+                                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10 h-9"
                               >
-                                <CheckCircle2 size={16} />
+                                <CheckCircle2 size={14} />
                                 {lang === 'ar' ? 'اعتماد المخزن' : 'Warehouse Approve'}
                               </button>
                             )}
 
                             {/* Quality Actions */}
-                            {(user.role === 'Admin' || user.role === 'Quality Operations') && job.status === 'Pending Quality' && (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2 rounded-2xl w-full sm:w-auto">
+                            {hasRole(['Admin', 'Quality Operations']) && job.status === 'Pending Quality' && (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-1.5 rounded-xl w-full sm:w-auto shadow-sm">
                                 <textarea
                                   placeholder={lang === 'ar' ? 'إضافة تعليق...' : 'Add comment...'}
                                   value={jobActionsState[job.id]?.qualityComments || ''}
                                   onChange={(e) => handleUpdateJobActionState(job.id, 'qualityComments', e.target.value)}
-                                  className="w-full sm:w-48 p-2 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none h-8 resize-none py-1.5"
+                                  className="w-full sm:w-40 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none h-9 resize-none"
                                 />
-                                <div className="flex gap-2 shrink-0">
+                                <div className="flex gap-1.5 shrink-0">
                                   <button 
                                     onClick={(e) => { e.stopPropagation(); handleApproveQuality(job, true); }}
-                                    className="px-3 py-1.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all"
+                                    className="px-3 py-2 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all h-9"
                                   >
                                     {lang === 'ar' ? 'اعتماد' : 'Approve'}
                                   </button>
                                   <button 
                                     onClick={(e) => { e.stopPropagation(); handleApproveQuality(job, false); }}
-                                    className="px-3 py-1.5 bg-rose-500 text-white rounded-xl text-xs font-bold hover:bg-rose-600 transition-all"
+                                    className="px-3 py-2 bg-rose-500 text-white rounded-lg text-[10px] font-bold hover:bg-rose-600 transition-all h-9"
                                   >
                                     {lang === 'ar' ? 'رفض' : 'Reject'}
                                   </button>
@@ -3535,18 +3312,18 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                             )}
 
                             {/* Purchasing Actions */}
-                            {(user.role === 'Admin' || user.role === 'Purchasing Operations') && job.status === 'Pending Purchasing' && (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2 rounded-2xl w-full sm:w-auto">
+                            {hasRole(['Admin', 'Purchasing Operations']) && job.status === 'Pending Purchasing' && (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-1.5 rounded-xl w-full sm:w-auto shadow-sm">
                                 <input
                                   type="number"
                                   placeholder={lang === 'ar' ? 'سعر الكيلو' : 'Price/kg'}
                                   value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || '')}
                                   onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', parseFloat(e.target.value))}
-                                  className="w-full sm:w-28 p-1.5 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-bold text-center"
+                                  className="w-full sm:w-24 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-bold text-center h-8"
                                 />
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleApprovePurchasing(job); }}
-                                  className="py-1.5 px-3 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all"
+                                  className="py-1.5 px-3 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all h-8"
                                 >
                                   {lang === 'ar' ? 'اعتماد المشتريات' : 'Approve Purchasing'}
                                 </button>
@@ -3554,18 +3331,18 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                             )}
 
                             {/* Warehouse Completion Actions */}
-                            {(user.role === 'Admin' || user.role === 'Warehouse Operations') && job.status === 'Pending Completion' && (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2 rounded-2xl w-full sm:w-auto">
+                            {hasRole(['Admin', 'Warehouse Operations']) && job.status === 'Pending Completion' && (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-1.5 rounded-xl w-full sm:w-auto shadow-sm">
                                 <input
                                   type="text"
                                   placeholder={lang === 'ar' ? 'رقم PO' : 'PO Number'}
                                   value={jobActionsState[job.id]?.poNumber || ''}
                                   onChange={(e) => handleUpdateJobActionState(job.id, 'poNumber', e.target.value)}
-                                  className="w-full sm:w-36 p-1.5 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-mono font-bold text-center"
+                                  className="w-full sm:w-32 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-mono font-bold text-center h-9"
                                 />
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleCompleteJob(job); }}
-                                  className="py-1.5 px-4 bg-blue-500 text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition-all"
+                                  className="py-1.5 px-4 bg-blue-500 text-white rounded-lg text-[10px] font-bold hover:bg-blue-600 transition-all h-9"
                                 >
                                   {lang === 'ar' ? 'مكتمل' : 'Complete'}
                                 </button>
@@ -3576,19 +3353,21 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                           {/* Utilities and Export buttons */}
                           <div className="flex flex-wrap items-center gap-1 bg-white dark:bg-zinc-900 p-1.5 rounded-2xl border border-zinc-100 dark:border-zinc-800 shrink-0">
                             <button 
+                              onClick={(e) => { e.stopPropagation(); handleShareExcelOutlook(job); }}
+                              className="p-2 text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
+                              title={lang === 'ar' ? 'مشاركة عبر الإيميل' : 'Share via Email'}
+                            >
+                              <Mail size={18} />
+                            </button>
+
+                            <button 
                               onClick={(e) => { e.stopPropagation(); handleShareWhatsApp(job); }}
                               className="p-2 text-emerald-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
                               title={lang === 'ar' ? 'مشاركة واتساب' : 'Share WhatsApp'}
                             >
                               <MessageCircle size={18} />
                             </button>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleShareExcelOutlook(job); }}
-                              className="p-2 text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
-                              title={lang === 'ar' ? 'مشاركة أوتلوك' : 'Share Outlook'}
-                            >
-                              <Mail size={18} />
-                            </button>
+
                             <button 
                               onClick={(e) => { e.stopPropagation(); exportSingleJobToWord(job); }}
                               className="p-2 text-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
@@ -3598,7 +3377,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                             </button>
                             <div className="h-6 w-[1px] bg-zinc-200 dark:bg-zinc-700 mx-1 xl:block" />
                             <div className="flex items-center gap-1">
-                              {(user.role === 'Admin' || (user.role === 'Warehouse Operations' && job.status === 'Pending Warehouse') || (user.role === 'Purchasing Operations' && job.status === 'Pending Purchasing') || job.createdBy === user.uid) && (
+                              {(hasRole('Admin') || (hasRole('Warehouse Operations') && job.status === 'Pending Warehouse') || (hasRole('Purchasing Operations') && job.status === 'Pending Purchasing') || job.createdBy === user.uid) && (
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
                                   className="p-2 text-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
@@ -3607,7 +3386,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                                   <Pencil size={18} />
                                 </button>
                               )}
-                              {user.role === 'Admin' && (
+                              {hasRole('Admin') && (
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleDeleteJob(job.id); }}
                                   className="p-2 text-rose-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
@@ -3629,10 +3408,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                                  <p className="text-xs text-zinc-700 dark:text-zinc-300 italic">"{job.qualityComments}"</p>
                               </div>
                             )}
-                            {(job.confirmedPrice > 0 || user.role === 'Admin' || user.role === 'Purchasing Operations') && (
+                            {(job.confirmedPrice > 0 || hasRole(['Admin', 'Purchasing Operations'])) && (
                               <div className="p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
                                  <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-1">{lang === 'ar' ? 'السعر المؤكد' : 'Confirmed Price'}</span>
-                                 {(user.role === 'Admin' || user.role === 'Purchasing Operations') ? (
+                                 {hasRole(['Admin', 'Purchasing Operations']) ? (
                                    <div className="flex items-center gap-2">
                                      <input 
                                        type="number"
@@ -3691,21 +3470,21 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                         </div>
 
                         {/* Details section */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* Inputs details */}
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             <div className="flex items-center justify-between px-1">
-                              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">{t.inputs}</label>
-                              <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-md">{job.inputs.length} {lang === 'ar' ? 'أصناف' : 'items'}</span>
+                              <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest leading-none">{t.inputs}</label>
+                              <span className="text-[9px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-1.5 py-0.5 rounded-md">{job.inputs.length} {lang === 'ar' ? 'أصناف' : 'items'}</span>
                             </div>
-                            <div className="grid gap-2">
+                            <div className="grid gap-1.5">
                               {job.inputs.map((input, i) => (
-                                <div key={i} className="group/item flex items-center justify-between p-3 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all">
+                                <div key={i} className="group/item flex items-center justify-between p-2 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/30 transition-all">
                                   <div className="flex flex-col">
-                                    <span className="text-[10px] text-zinc-400 font-mono leading-none mb-1 opacity-0 group-hover/item:opacity-100 transition-opacity">{input.itemCode}</span>
-                                    <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{input.itemName}</span>
+                                    <span className="text-[8px] text-zinc-400 font-mono leading-none mb-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">{input.itemCode}</span>
+                                    <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">{input.itemName}</span>
                                   </div>
-                                  <span className="text-sm font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1 rounded-xl">
+                                  <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-lg">
                                     {input.quantity} {input.unit}
                                   </span>
                                 </div>
@@ -3714,19 +3493,19 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                           </div>
 
                           {/* Outputs details */}
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             <div className="flex items-center justify-between px-1">
-                              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">{t.outputs}</label>
-                              <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-md">{job.outputs.length} {lang === 'ar' ? 'أصناف' : 'items'}</span>
+                              <label className="text-[9px] font-black text-zinc-400 uppercase tracking-widest leading-none">{t.outputs}</label>
+                              <span className="text-[9px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-1.5 py-0.5 rounded-md">{job.outputs.length} {lang === 'ar' ? 'أصناف' : 'items'}</span>
                             </div>
-                            <div className="grid gap-2">
+                            <div className="grid gap-1.5">
                               {job.outputs.map((output, i) => (
-                                <div key={i} className="group/item flex items-center justify-between p-3 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-2xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 transition-all">
+                                <div key={i} className="group/item flex items-center justify-between p-2 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 transition-all">
                                   <div className="flex flex-col">
-                                    <span className="text-[10px] text-zinc-400 font-mono leading-none mb-1 opacity-0 group-hover/item:opacity-100 transition-opacity">{output.itemCode}</span>
-                                    <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">{output.itemName}</span>
+                                    <span className="text-[8px] text-zinc-400 font-mono leading-none mb-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">{output.itemCode}</span>
+                                    <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">{output.itemName}</span>
                                   </div>
-                                  <span className="text-sm font-black text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-xl">
+                                  <span className="text-[11px] font-black text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg">
                                     {output.quantity} {output.unit}
                                   </span>
                                 </div>
@@ -3737,10 +3516,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
                         {/* Comments/Notes section */}
                         {job.notes && (
-                          <div className="mt-8 p-4 bg-amber-50/30 dark:bg-amber-900/10 border border-amber-100/50 dark:border-amber-900/10 rounded-2xl text-xs text-amber-700/80 dark:text-amber-400 leading-relaxed shadow-inner">
-                            <div className="flex items-center gap-2 mb-2">
+                          <div className="mt-4 p-3 bg-amber-50/30 dark:bg-amber-900/10 border border-amber-100/50 dark:border-amber-900/10 rounded-xl text-[11px] text-amber-700/80 dark:text-amber-400 leading-relaxed shadow-inner">
+                            <div className="flex items-center gap-2 mb-1.5">
                               <div className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
-                              <span className="text-[10px] font-black uppercase tracking-widest">{t.comments}</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest">{t.comments}</span>
                             </div>
                             "{job.notes}"
                           </div>

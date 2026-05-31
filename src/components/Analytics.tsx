@@ -107,13 +107,7 @@ export default function Analytics({ lang, user, tasks, users }: AnalyticsProps) 
             <FileText size={18} />
             <span>PDF</span>
           </button>
-          <button 
-            onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors"
-          >
-            <Table size={18} />
-            <span>Excel</span>
-          </button>
+
         </div>
       </div>
 

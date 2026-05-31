@@ -38,6 +38,13 @@ interface SupplyTrackingProps {
 }
 
 export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingProps) {
+  const hasRole = (rolesToCheck: string | string[]) => {
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    if (Array.isArray(rolesToCheck)) {
+      return rolesToCheck.some(r => userRoles.includes(r as any));
+    }
+    return userRoles.includes(rolesToCheck as any);
+  };
   const t = translations[lang];
   const [movements, setMovements] = useState<SupplyMovement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -246,13 +253,14 @@ ${header}
     
     // Role-based filtering
     let isRelevant = true;
-    if (user.role === 'Quality') {
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    if (userRoles.includes('Quality')) {
       isRelevant = m.status === 'Security Entry' || m.status === 'Quality Inspection';
-    } else if (user.role === 'Warehouse') {
+    } else if (userRoles.includes('Warehouse')) {
       isRelevant = m.status === 'Warehouse Unloading';
-    } else if (user.role === 'Security') {
+    } else if (userRoles.includes('Security')) {
       isRelevant = m.status !== 'Completed';
-    } else if (user.role !== 'Admin') {
+    } else if (!userRoles.includes('Admin')) {
       isRelevant = false; // Other roles don't see movements
     }
 
@@ -296,7 +304,7 @@ ${header}
           </p>
         </div>
 
-        {user.role === 'Security' || user.role === 'Admin' ? (
+        {hasRole(['Security', 'Admin']) ? (
           <button
             onClick={() => setIsAdding(true)}
             className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-all shadow-lg shadow-emerald-500/20"
@@ -334,13 +342,7 @@ ${header}
               <option value="Completed">{t.status_completed}</option>
             </select>
           </div>
-          <button
-            onClick={exportToExcel}
-            className="flex items-center justify-center px-3 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-medium transition-all"
-            title={lang === 'ar' ? 'تصدير لإكسيل' : 'Export to Excel'}
-          >
-            <Download size={20} />
-          </button>
+
         </div>
       </div>
 
@@ -388,7 +390,7 @@ ${header}
 
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Quality Actions */}
-                  {(movement.status === 'Quality Inspection' || movement.status === 'Security Entry') && (user.role === 'Quality' || user.role === 'Admin') && (
+                  {(movement.status === 'Quality Inspection' || movement.status === 'Security Entry') && hasRole(['Quality', 'Admin']) && (
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                       <button
                         onClick={() => handleUpdateStatus(movement, 'Warehouse Unloading', { 
@@ -424,7 +426,7 @@ ${header}
                   )}
 
                   {/* Start Unloading Action */}
-                  {movement.status === 'Quality Inspection' && movement.qualityDecision === 'Accepted' && (user.role === 'Warehouse' || user.role === 'Admin') && (
+                  {movement.status === 'Quality Inspection' && movement.qualityDecision === 'Accepted' && hasRole(['Warehouse', 'Admin']) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Warehouse Unloading', { 
                         warehouseOperatorId: user.uid,
@@ -437,7 +439,7 @@ ${header}
                   )}
 
                   {/* Warehouse Actions */}
-                  {movement.status === 'Warehouse Unloading' && (user.role === 'Warehouse' || user.role === 'Admin') && (
+                  {movement.status === 'Warehouse Unloading' && hasRole(['Warehouse', 'Admin']) && (
                     <div className="flex gap-2">
                       {movement.qualityDecision === 'Rejected' ? (
                         <>
@@ -469,7 +471,7 @@ ${header}
                   )}
 
                   {/* Security Exit Actions */}
-                  {movement.status === 'Security Exit' && (user.role === 'Security' || user.role === 'Admin') && (
+                  {movement.status === 'Security Exit' && hasRole(['Security', 'Admin']) && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleUpdateStatus(movement, 'Completed', { 
                         securityExitId: user.uid,
@@ -524,7 +526,7 @@ ${header}
                     </div>
 
                     {/* Admin Actions */}
-                    {user.role === 'Admin' && (
+                    {hasRole('Admin') && (
                       <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3">
                         <button
                           onClick={(e) => { 

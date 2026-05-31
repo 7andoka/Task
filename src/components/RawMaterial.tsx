@@ -13,6 +13,13 @@ interface RawMaterialProps {
 }
 
 export default function RawMaterial({ lang, user }: RawMaterialProps) {
+  const hasRole = (rolesToCheck: string | string[]) => {
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    if (Array.isArray(rolesToCheck)) {
+      return rolesToCheck.some(r => userRoles.includes(r as any));
+    }
+    return userRoles.includes(rolesToCheck as any);
+  };
   const t = translations[lang];
   const [movements, setMovements] = useState<BarrelMovement[]>([]);
   const [isAdding, setIsAdding] = useState(false);
@@ -310,7 +317,7 @@ export default function RawMaterial({ lang, user }: RawMaterialProps) {
                   <td className="p-3">{m.driverName}</td>
                   <td className="p-3">{m.vehicleNumber}</td>
                   <td className="p-3">{new Date(m.movementTime).toLocaleDateString()}</td>
-                  {user.role === 'Admin' && (
+                  {hasRole('Admin') && (
                     <td className="p-3">
                       <button onClick={() => setEditingMovement(m)} className="text-blue-500 hover:text-blue-700">
                         {t.edit}

@@ -34,6 +34,13 @@ interface TaskListProps {
 }
 
 export default function TaskList({ lang, user, tasks, subordinates, allUsers }: TaskListProps) {
+  const hasRole = (rolesToCheck: string | string[]) => {
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    if (Array.isArray(rolesToCheck)) {
+      return rolesToCheck.some(r => userRoles.includes(r as any));
+    }
+    return userRoles.includes(rolesToCheck as any);
+  };
   const t = translations[lang];
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -338,7 +345,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers }: 
             ))}
           </select>
           
-          {user.role !== 'Worker' && (
+          {!hasRole('Worker') && (
             <button 
               onClick={() => setIsModalOpen(true)}
               className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-white rounded-xl font-semibold hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20"
@@ -541,7 +548,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers }: 
               <div className="flex items-center justify-between mb-8">
                 <h3 className="text-2xl font-bold">{selectedTask.title}</h3>
                 <div className="flex items-center gap-2">
-                  {(user.role === 'Admin' || user.role === 'Warehouse Manager' || user.role === 'Department Head' || user.role === 'Supervisor') && (
+                  {hasRole(['Admin', 'Warehouse Manager', 'Department Head', 'Supervisor']) && (
                     <>
                       <button 
                         onClick={(e) => handleSendReminder(selectedTask.id, e)}
@@ -729,7 +736,7 @@ export default function TaskList({ lang, user, tasks, subordinates, allUsers }: 
                 )}
 
                 {/* Manager Review Section */}
-                {(selectedTask.managerId === user.uid || user.role === 'Admin' || user.role === 'Warehouse Manager') && selectedTask.status === 'Pending Review' && (
+                {(selectedTask.managerId === user.uid || hasRole(['Admin', 'Warehouse Manager'])) && selectedTask.status === 'Pending Review' && (
                   <div className="space-y-4 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30">
                     <h5 className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">{t.rateTask}</h5>
                     

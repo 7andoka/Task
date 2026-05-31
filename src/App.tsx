@@ -13,6 +13,7 @@ import SupplyTracking from './components/SupplyTracking';
 import ColdStorage from './components/ColdStorage';
 import RawMaterial from './components/RawMaterial';
 import ThirdPartyProcessing from './components/ThirdPartyProcessing';
+import OliveStock from './components/OliveStock';
 import OfflineScreen from './components/OfflineScreen';
 import { Language, UserProfile, Task } from './types';
 import { storageService } from './services/storageService';
@@ -22,6 +23,13 @@ import { notifyUser } from './services/notificationService';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const hasRole = (rolesToCheck: string | string[]) => {
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    if (Array.isArray(rolesToCheck)) {
+      return rolesToCheck.some(r => userRoles.includes(r as any));
+    }
+    return userRoles.includes(rolesToCheck as any);
+  };
   const [loading, setLoading] = useState(true);
   const [lang, setLang] = useState<Language>('ar');
   const [isDark, setIsDark] = useState(true);
@@ -187,7 +195,7 @@ export default function App() {
   const subordinates = React.useMemo(() => {
     if (!user || allUsers.length === 0) return [];
     
-    if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+    if (hasRole(['Warehouse Manager', 'Admin'])) {
       return allUsers.filter(u => u.uid !== user.uid);
     }
     
@@ -211,11 +219,11 @@ export default function App() {
   const tasks = React.useMemo(() => {
     if (!user) return [];
     
-    if (user.role === 'Warehouse Manager' || user.role === 'Admin') {
+    if (hasRole(['Warehouse Manager', 'Admin'])) {
       return allTasks;
     }
     
-    if (user.role === 'Worker') {
+    if (hasRole('Worker')) {
       return allTasks.filter(t => t.assigneeId === user.uid);
     }
     
@@ -231,7 +239,9 @@ export default function App() {
   useEffect(() => {
     if (!user || allUsers.length === 0) return;
     const updatedUser = allUsers.find(u => u.uid === user.uid);
-    if (updatedUser && (updatedUser.displayName !== user.displayName || updatedUser.role !== user.role)) {
+    if (updatedUser && (updatedUser.displayName !== user.displayName || 
+        JSON.stringify(updatedUser.roles) !== JSON.stringify(user.roles) ||
+        updatedUser.role !== user.role)) {
       setUser(updatedUser);
     }
   }, [allUsers, user]);
@@ -257,7 +267,7 @@ export default function App() {
           if (
             (task.status === 'Completed' || task.status === 'Pending Review') && 
             prevTask.status !== task.status &&
-            (task.managerId === user.uid || user.role === 'Admin') &&
+            (task.managerId === user.uid || hasRole('Admin')) &&
             task.assigneeId !== user.uid
           ) {
              notifyUser(lang === 'ar' ? `تم إنجاز المهمة: ${task.title}` : `Task completed: ${task.title}`, false);
@@ -307,7 +317,7 @@ export default function App() {
             hasUpdates = true;
             
             // Only alert if the user is the assignee or manager
-            if (task.assigneeId === user.uid || task.managerId === user.uid || user.role === 'Admin') {
+            if (task.assigneeId === user.uid || task.managerId === user.uid || hasRole('Admin')) {
               notifyUser(
                 lang === 'ar' 
                   ? `تنبيه: المهمة "${task.title}" متأخرة عن الوقت المحدد!` 
@@ -340,7 +350,7 @@ export default function App() {
 
   // Check if current tab is allowed for user
   useEffect(() => {
-    if (!user || user.role === 'Admin') return;
+    if (!user || hasRole('Admin')) return;
     
     const allowedPages = user.permissions || [];
     if (allowedPages.length > 0 && !allowedPages.includes(activeTab)) {
@@ -394,6 +404,8 @@ export default function App() {
         return <RawMaterial lang={lang} user={user} />;
       case 'thirdPartyProcessing':
         return <ThirdPartyProcessing lang={lang} user={user} />;
+      case 'oliveStock':
+        return <OliveStock lang={lang} user={user} />;
       case 'tasks':
         return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':

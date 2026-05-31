@@ -21,7 +21,8 @@ import {
   Package,
   Download,
   Share,
-  PlusSquare
+  PlusSquare,
+  Database
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -98,6 +99,7 @@ export default function Layout({
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing, icon: ClipboardList },
+    { id: 'oliveStock', label: t.oliveStock, icon: Database },
     { id: 'tasks', label: t.tasks, icon: CheckSquare },
     { id: 'team', label: t.team, icon: Users, roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
     { id: 'users', label: t.userManagement, icon: Users, roles: ['Warehouse Manager', 'Admin'] },
@@ -108,7 +110,8 @@ export default function Layout({
     if (user?.permissions && user.permissions.length > 0) {
       return user.permissions.includes(item.id);
     }
-    return !item.roles || (user && item.roles.includes(user.role));
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    return !item.roles || (user && item.roles.some(r => userRoles.includes(r as any)));
   });
 
   return (

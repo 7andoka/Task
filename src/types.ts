@@ -75,10 +75,12 @@ export interface NotificationPreferences {
 
 export interface UserProfile {
   uid: string;
+  id?: string;
   username?: string;
   email?: string;
   displayName: string;
   role: UserRole;
+  roles?: UserRole[];
   managerId?: string;
   department?: string;
   photoURL?: string;
