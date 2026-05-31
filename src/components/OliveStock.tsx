@@ -323,25 +323,45 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     const toastId = isManual ? toast.loading(isRtl ? 'جاري تحديث البيانات من شيت جوجل...' : 'Refreshing from Google Sheet...') : null;
 
     try {
-      // Use internal proxy to get access to Last-Modified header which is blocked by CORS in direct fetch
-      const response = await fetch('/api/stock-data');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+      let text = '';
+      let lastModHeader: string | null = null;
+
+      // 1. Try fetching from internal proxy
+      try {
+        const response = await fetch('/api/stock-data');
+        if (response.ok) {
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const result = await response.json();
+            if (result && !result.error && result.data) {
+              text = result.data;
+              lastModHeader = result.lastModified || null;
+            } else if (result && result.error) {
+              console.warn('Proxy returned error, will fallback:', result.error);
+            }
+          }
+        }
+      } catch (proxyErr) {
+        console.warn('Proxy fetch failed, falling back to direct fetch:', proxyErr);
       }
 
-      const result = await response.json();
-      
-      if (result.error) {
-        throw new Error(result.error);
+      // 2. Fallback to direct client-side fetch from Google Sheet (supports CORS)
+      if (!text) {
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTOGkYpf6hSa20PDIE2BxZ0ClH7vXd9aA7yrAOxO4nN-afVgi8RdqY8EDbzD_hRHR9A8kYr34RRndv3/pub?gid=801884526&single=true&output=csv';
+        const directResp = await fetch(csvUrl);
+        if (!directResp.ok) {
+          throw new Error(`Google Sheet direct fetch failed: ${directResp.status} ${directResp.statusText}`);
+        }
+        text = await directResp.text();
+        lastModHeader = directResp.headers.get('last-modified') || directResp.headers.get('Date') || null;
       }
-
-      const { data: text, lastModified: lastModHeader } = result;
 
       if (!text) {
         throw new Error('Data is empty');
       }
 
       const formatTime = (date: Date) => {
+        if (isNaN(date.getTime())) return '';
         return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-EG' : 'en-US', {
           day: 'numeric',
           month: 'short',
@@ -352,24 +372,59 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         }).format(date);
       };
 
-      if (lastModHeader) {
-        try {
-          const date = new Date(lastModHeader);
-          setLastModified(formatTime(date));
-          console.log('Timestamp set:', formatTime(date));
-        } catch (e) {
-          console.error('Error parsing Last-Modified header:', e);
-          setLastModified(null);
+      const parseSheetDate = (str: string): Date | null => {
+        if (!str) return null;
+        // Format: DD/MM/YYYY HH:mm:ss
+        const match = str.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+        if (match) {
+          const [_, day, month, year, hour, minute, second] = match.map(Number);
+          return new Date(year, month - 1, day, hour, minute, second);
         }
-      } else {
-        console.warn('No Last-Modified or Date header found in response');
-        setLastModified(null);
-      }
+        const simpleMatch = str.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (simpleMatch) {
+          const [_, day, month, year] = simpleMatch.map(Number);
+          return new Date(year, month - 1, day);
+        }
+        const d = new Date(str);
+        return isNaN(d.getTime()) ? null : d;
+      };
 
       const parsed = parseCSV(text);
       
       if (parsed.length === 0) {
         throw new Error('Retrieved CSV is empty');
+      }
+
+      // Try extraction of update time from cell I2 (row 1, column 8 in parsed data)
+      let matchedDate = false;
+      if (parsed.length > 1 && parsed[1] && parsed[1][8]) {
+        try {
+          const dateStr = parsed[1][8].trim();
+          const parsedDate = parseSheetDate(dateStr);
+          if (parsedDate) {
+            setLastModified(formatTime(parsedDate));
+            console.log('Timestamp set from sheet cell I2:', dateStr);
+            matchedDate = true;
+          }
+        } catch (e) {
+          console.error('Error parsing sheet cell I2 metadata date:', e);
+        }
+      }
+
+      // Fallback if cell extraction didn't work
+      if (!matchedDate) {
+        if (lastModHeader) {
+          try {
+            const date = new Date(lastModHeader);
+            setLastModified(formatTime(date) || null);
+            console.log('Timestamp set from fallback header:', formatTime(date));
+          } catch (e) {
+            console.error('Error parsing Last-Modified fallback header:', e);
+            setLastModified(null);
+          }
+        } else {
+          setLastModified(null);
+        }
       }
 
       setRawData(parsed);
