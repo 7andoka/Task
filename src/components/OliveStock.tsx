@@ -558,6 +558,13 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     return ['Manzanilla', 'Picual', 'Akas', 'Azizi', 'Kobrosi', 'Kalamata', 'Dolsy', 'Other'];
   }, []);
 
+  const visibleLocations = useMemo(() => {
+    if (selectedLocations.length === 0) {
+      return storageLocations;
+    }
+    return storageLocations.filter(loc => selectedLocations.includes(loc));
+  }, [storageLocations, selectedLocations]);
+
   // Filtered dataset
   const filteredDataset = useMemo(() => {
     return dataset.filter(row => {
@@ -671,8 +678,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       };
       
       // Add location columns
-      storageLocations.forEach(loc => {
-        row[loc] = item.locationQuantities[loc] || 0;
+      visibleLocations.forEach(loc => {
+        row[getLocationName(loc)] = item.locationQuantities[loc] || 0;
       });
 
       return row;
@@ -1031,15 +1038,15 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
               <table className="w-full text-sm text-right" dir={isRtl ? 'rtl' : 'ltr'}>
                 <thead className="text-[10px] uppercase bg-zinc-50/50 dark:bg-zinc-800/30 border-b border-zinc-100 dark:border-zinc-800 text-zinc-400 font-bold sticky top-0 z-10 backdrop-blur-md">
                   <tr>
-                    <th scope="col" className="px-5 py-4 whitespace-nowrap min-w-[100px]">{isRtl ? 'كود الخام' : 'Material Code'}</th>
-                    <th scope="col" className="px-5 py-4 whitespace-nowrap min-w-[200px]">{isRtl ? 'وصف الصنف' : 'Material Description'}</th>
-                    <th scope="col" className="px-5 py-4 whitespace-nowrap">{isRtl ? 'صنف/حجم/تشغيل' : 'Details'}</th>
-                    <th scope="col" className="px-5 py-4 whitespace-nowrap bg-zinc-100/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-white border-x border-zinc-200 dark:border-zinc-700">{isRtl ? 'الإجمالي (كجم)' : 'Total Qty (Kg)'}</th>
+                    <th scope="col" className="px-4 py-2 whitespace-nowrap min-w-[100px]">{isRtl ? 'كود الخام' : 'Material Code'}</th>
+                    <th scope="col" className="px-4 py-2 whitespace-nowrap min-w-[200px]">{isRtl ? 'وصف الصنف' : 'Material Description'}</th>
+                    <th scope="col" className="px-4 py-2 whitespace-nowrap">{isRtl ? 'صنف/حجم/تشغيل' : 'Details'}</th>
+                    <th scope="col" className="px-4 py-2 whitespace-nowrap bg-zinc-100/50 dark:bg-zinc-800/50 text-zinc-900 dark:text-white border-x border-zinc-200 dark:border-zinc-700">{isRtl ? 'الإجمالي (كجم)' : 'Total Qty (Kg)'}</th>
                     
                     {/* Dynamic Location Columns */}
-                    {storageLocations.map(loc => (
-                      <th key={loc} scope="col" className="px-5 py-4 whitespace-nowrap text-center border-l border-zinc-100 dark:border-zinc-800/50">
-                        {loc}
+                    {visibleLocations.map(loc => (
+                      <th key={loc} scope="col" className="px-4 py-2 whitespace-nowrap text-center border-l border-zinc-100 dark:border-zinc-800/50">
+                        {getLocationName(loc)}
                       </th>
                     ))}
                   </tr>
@@ -1047,7 +1054,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
                   {filteredDataset.length === 0 ? (
                     <tr>
-                      <td colSpan={storageLocations.length + 4} className="text-center py-12 text-zinc-400 dark:text-zinc-500 font-bold bg-zinc-50/10">
+                      <td colSpan={visibleLocations.length + 4} className="text-center py-12 text-zinc-400 dark:text-zinc-500 font-bold bg-zinc-50/10">
                         {isRtl ? 'لا توجد نتائج مطابقة لبحثك الحالي' : 'No stocks match your search variables'}
                       </td>
                     </tr>
@@ -1057,14 +1064,14 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                         key={row.materialCode} 
                         className="hover:bg-zinc-50/40 dark:hover:bg-zinc-800/10 transition-colors"
                       >
-                        <td className="px-5 py-4 font-mono font-bold text-[11px] text-zinc-400 dark:text-zinc-500">
+                        <td className="px-4 py-1.5 font-mono font-bold text-[11px] text-zinc-400 dark:text-zinc-500">
                           {row.materialCode}
                         </td>
-                        <td className="px-5 py-4 font-bold text-zinc-800 dark:text-zinc-200 text-[13px]">
+                        <td className="px-4 py-1.5 font-bold text-zinc-800 dark:text-zinc-200 text-[13px]">
                           {row.description || '—'}
                         </td>
-                        <td className="px-5 py-4 whitespace-nowrap">
-                          <div className="flex flex-col gap-1">
+                        <td className="px-4 py-1.5 whitespace-nowrap">
+                          <div className="flex flex-col gap-0.5">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit ${getVarietyColor(row.variety)}`}>
                               {getVarietyName(row.variety)}
                             </span>
@@ -1087,17 +1094,17 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-4 font-black font-sans text-right text-emerald-600 dark:text-emerald-400 text-sm bg-emerald-50/20 dark:bg-emerald-900/10 border-x border-zinc-100 dark:border-zinc-800">
+                        <td className="px-4 py-1.5 font-black font-sans text-right text-emerald-600 dark:text-emerald-400 text-sm bg-emerald-50/20 dark:bg-emerald-900/10 border-x border-zinc-100 dark:border-zinc-800">
                           {formatNumber(row.totalQuantity)}
                         </td>
                         
                         {/* Values for each location */}
-                        {storageLocations.map(loc => {
+                        {visibleLocations.map(loc => {
                           const val = row.locationQuantities[loc] || 0;
                           return (
                             <td 
                               key={loc} 
-                              className={`px-5 py-4 text-center font-mono text-xs border-l border-zinc-50 dark:border-zinc-800/40 ${val > 0 ? 'text-zinc-900 dark:text-zinc-100 font-bold' : 'text-zinc-300 dark:text-zinc-700'}`}
+                              className={`px-4 py-1.5 text-center font-mono text-xs border-l border-zinc-50 dark:border-zinc-800/40 ${val > 0 ? 'text-zinc-900 dark:text-zinc-100 font-bold' : 'text-zinc-300 dark:text-zinc-700'}`}
                             >
                               {formatNumber(val)}
                             </td>
