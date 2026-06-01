@@ -128,7 +128,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     }
     
     const updatedUsers = users.map(u => u.uid === editForm.uid ? updatedForm : u);
-    await storageService.saveUsers(updatedUsers);
+    await storageService.saveUser(updatedForm);
     setUsers(updatedUsers);
     setIsEditModalOpen(false);
     setEditForm(null);

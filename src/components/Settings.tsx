@@ -48,10 +48,8 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
   const handleSave = async () => {
     const updatedUser = { ...user, notificationPreferences: prefs };
     
-    // Update in local storage
-    const allUsers = await storageService.getUsers();
-    const updatedUsers = allUsers.map(u => u.uid === user.uid ? updatedUser : u);
-    await storageService.saveUsers(updatedUsers);
+    // Update directly in firestore
+    await storageService.saveUser(updatedUser);
     
     // Update current user state
     setUser(updatedUser);

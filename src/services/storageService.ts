@@ -95,9 +95,9 @@ export const storageService = {
   },
   saveUsers: async (users: UserProfile[]) => {
     try {
-      for (const user of users) {
-        await setDoc(doc(db, COLLECTIONS.USERS, user.username), user);
-      }
+      await Promise.all(
+        users.map(user => setDoc(doc(db, COLLECTIONS.USERS, user.username), user))
+      );
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, COLLECTIONS.USERS);
     }
@@ -125,14 +125,47 @@ export const storageService = {
   },
   getUserByUsername: async (username: string): Promise<UserProfile | undefined> => {
     try {
-      // For pre-created users, the username is the document ID
-      const docSnap = await getDoc(doc(db, COLLECTIONS.USERS, username));
+      const cleanUsername = (username || '').trim();
+      if (!cleanUsername) return undefined;
+
+      // 1. First try direct match on exact trimmed username
+      let docSnap = await getDoc(doc(db, COLLECTIONS.USERS, cleanUsername));
       if (docSnap.exists()) {
         return docSnap.data() as UserProfile;
       }
 
+      // 2. Try match on trimmed lowercase username
+      docSnap = await getDoc(doc(db, COLLECTIONS.USERS, cleanUsername.toLowerCase()));
+      if (docSnap.exists()) {
+        return docSnap.data() as UserProfile;
+      }
+
+      // 3. Try match using an indexed field query
+      const q = query(collection(db, COLLECTIONS.USERS), where('username', '==', cleanUsername));
+      const qSnap = await getDocs(q);
+      if (!qSnap.empty) {
+        return qSnap.docs[0].data() as UserProfile;
+      }
+
+      // 4. Try match using a lowercase field query
+      const qLower = query(collection(db, COLLECTIONS.USERS), where('username', '==', cleanUsername.toLowerCase()));
+      const qLowerSnap = await getDocs(qLower);
+      if (!qLowerSnap.empty) {
+        return qLowerSnap.docs[0].data() as UserProfile;
+      }
+
+      // 5. Fallback as absolute last resort: Query all users and do case-insensitive comparison
+      const snapshot = await getDocs(collection(db, COLLECTIONS.USERS));
+      for (const d of snapshot.docs) {
+        const u = d.data() as UserProfile;
+        const uName = (u.username || d.id || '').trim().toLowerCase();
+        if (uName === cleanUsername.toLowerCase()) {
+          return u;
+        }
+      }
+
       // If 'admin' is not found, bootstrap it (first run)
-      if (username === 'admin') {
+      if (cleanUsername.toLowerCase() === 'admin') {
         const defaultAdmin: UserProfile = {
           uid: 'admin',
           username: 'admin',
