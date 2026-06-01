@@ -31,6 +31,43 @@ export default function App() {
     }
     return userRoles.includes(rolesToCheck as any);
   };
+
+  const getAllowedTabs = (u: UserProfile | null): string[] => {
+    if (!u) return [];
+    
+    const menuItems = [
+      { id: 'supplyTracking', roles: undefined },
+      { id: 'coldStorage', roles: undefined },
+      { id: 'rawMaterial', roles: undefined },
+      { id: 'thirdPartyProcessing', roles: undefined },
+      { id: 'oliveStock', roles: undefined },
+      { id: 'tasks', roles: undefined },
+      { id: 'team', roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
+      { id: 'users', roles: ['Warehouse Manager', 'Admin'] },
+      { id: 'settings', roles: undefined },
+    ];
+
+    if (u.permissions && u.permissions.length > 0) {
+      return menuItems
+        .filter(item => u.permissions!.includes(item.id))
+        .map(item => item.id);
+    }
+
+    const userRoles = u.roles || (u.role ? [u.role] : []);
+    return menuItems
+      .filter(item => !item.roles || item.roles.some(r => userRoles.includes(r as any)))
+      .map(item => item.id);
+  };
+
+  const getDefaultTab = (u: UserProfile | null): string => {
+    if (!u) return 'supplyTracking';
+    const allowed = getAllowedTabs(u);
+    if (allowed.includes('oliveStock')) {
+      return 'oliveStock';
+    }
+    return allowed.length > 0 ? allowed[0] : 'settings';
+  };
+
   const [loading, setLoading] = useState(true);
   const [lang, setLang] = useState<Language>('ar');
   const [isDark, setIsDark] = useState(true);
@@ -107,6 +144,7 @@ export default function App() {
           const savedUser = await storageService.getUserByUsername(savedUsername);
           if (savedUser) {
             setUser(savedUser);
+            setActiveTab(getDefaultTab(savedUser));
           } else {
             localStorage.removeItem('task_manager_username');
           }
@@ -351,11 +389,11 @@ export default function App() {
 
   // Check if current tab is allowed for user
   useEffect(() => {
-    if (!user || hasRole('Admin')) return;
+    if (!user) return;
     
-    const allowedPages = user.permissions || [];
-    if (allowedPages.length > 0 && !allowedPages.includes(activeTab)) {
-      setActiveTab(allowedPages[0]);
+    const allowed = getAllowedTabs(user);
+    if (!allowed.includes(activeTab)) {
+      setActiveTab(getDefaultTab(user));
     }
   }, [user, activeTab]);
 
@@ -372,6 +410,7 @@ export default function App() {
     console.log("User logged in:", u.username, "Role:", u.role);
     localStorage.setItem('task_manager_username', u.username);
     setUser(u);
+    setActiveTab(getDefaultTab(u));
   };
 
   if (loading) {
@@ -410,6 +449,11 @@ export default function App() {
   }
 
   const renderContent = () => {
+    const allowed = getAllowedTabs(user);
+    if (user && !allowed.includes(activeTab)) {
+      return null;
+    }
+
     switch (activeTab) {
       case 'supplyTracking':
         return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
@@ -430,7 +474,7 @@ export default function App() {
       case 'settings':
         return <Settings lang={lang} user={user} setUser={setUser} />;
       default:
-        return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
+        return null;
     }
   };
 
