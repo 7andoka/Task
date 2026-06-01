@@ -48,6 +48,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     permissions: ['supplyTracking', 'tasks', 'settings'] as string[]
   });
   const [createLoading, setCreateLoading] = React.useState(false);
+  const [adminNewPassword, setAdminNewPassword] = React.useState("");
 
   const roles: UserRole[] = [
     'Admin', 
@@ -119,11 +120,19 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     e.preventDefault();
     if (!editForm) return;
     
-    const updatedUsers = users.map(u => u.uid === editForm.uid ? editForm : u);
+    let updatedForm = { ...editForm };
+    if (adminNewPassword.trim() !== "") {
+      updatedForm.password = adminNewPassword;
+      updatedForm.initialPassword = adminNewPassword;
+      updatedForm.needsPasswordChange = false;
+    }
+    
+    const updatedUsers = users.map(u => u.uid === editForm.uid ? updatedForm : u);
     await storageService.saveUsers(updatedUsers);
     setUsers(updatedUsers);
     setIsEditModalOpen(false);
     setEditForm(null);
+    setAdminNewPassword("");
   };
 
   const togglePermission = (formType: 'create' | 'edit', pageId: string) => {
@@ -358,7 +367,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold">{lang === 'ar' ? 'تعديل بيانات المستخدم' : 'Edit User Data'}</h3>
-              <button onClick={() => { setIsEditModalOpen(false); setEditForm(null); }} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full">
+              <button onClick={() => { setIsEditModalOpen(false); setEditForm(null); setAdminNewPassword(""); }} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full">
                 <X size={20} />
               </button>
             </div>
@@ -391,6 +400,18 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   value={editForm.phone || ''}
                   onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
                   className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-zinc-500">
+                  {lang === 'ar' ? 'تعيين كلمة مرور جديدة' : 'Set New Password'} <span className="text-[10px] text-zinc-400 font-normal">({lang === 'ar' ? 'اختياري' : 'optional'})</span>
+                </label>
+                <input 
+                  type="password"
+                  placeholder={lang === 'ar' ? 'اتركه فارغاً لعدم التغيير' : 'Leave empty to keep unchanged'}
+                  value={adminNewPassword}
+                  onChange={(e) => setAdminNewPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-transparent outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium"
                 />
               </div>
               <div className="grid grid-cols-1 gap-4">
@@ -525,6 +546,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                   <button 
                     onClick={() => {
                     setEditForm(u);
+                    setAdminNewPassword("");
                     setIsEditModalOpen(true);
                   }}
                   className="p-2 rounded-lg text-zinc-400 hover:text-emerald-500 hover:bg-emerald-500/10 transition-all bg-zinc-50 dark:bg-zinc-800/50"
