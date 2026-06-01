@@ -499,10 +499,12 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
       let locDescr = locDescrIdx !== -1 && row[locDescrIdx] ? row[locDescrIdx] : (isRtl ? 'مخزن غير محدد' : 'Unknown');
       
-      // Grouping logic: Richland & Olive Land
+      // Grouping logic: Richland & Olive Land & merged warehouses
       const normalizedLoc = locDescr.toLowerCase().trim();
       const richlandTargets = [
-        'raw material', 'wip production', 'qualtiy storage', 'quality storage', 'wip r2e', '10000 m'
+        'raw material', 'wip production', 'qualtiy storage', 'quality storage', 'wip r2e', '10000 m',
+        'pacakging', 'packaging', 'packaging warehouse', 'pacakging warehouse',
+        'unknown', 'غير محدد', 'مخزن غير محدد', 'unassigned', ''
       ];
 
       if (normalizedLoc.startsWith('ol tank')) {
@@ -510,6 +512,11 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       } else if (
         normalizedLoc.startsWith('tank') || 
         normalizedLoc.startsWith('wip tank') || 
+        normalizedLoc.startsWith('pacakging') ||
+        normalizedLoc.startsWith('packaging') ||
+        normalizedLoc.startsWith('unknown') ||
+        normalizedLoc.startsWith('غير محدد') ||
+        normalizedLoc.startsWith('مخزن غير محدد') ||
         richlandTargets.includes(normalizedLoc)
       ) {
         locDescr = 'Richland';
@@ -596,6 +603,50 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     });
   }, [dataset, searchTerm, selectedLocations, selectedVarieties, selectedSizes, selectedTreatments, selectedProcesses]);
 
+  // Unmodified totals block, independent of filters
+  const unmodifiedTotals = useMemo(() => {
+    let totalOlive = 0;
+    let totalPepper = 0;
+    let totalFarza = 0;
+    let totalXxxs = 0;
+    let totalS = 0;
+
+    dataset.forEach(row => {
+      const desc = (row.description || '').trim().toUpperCase();
+      const isPepperItem = [
+        "PEPPER, JALAPENO, GREEN, SLICED IN BRINE",
+        "PEPPER, BANANA, SLICED IN BRINE",
+        "PEPPER, PEPPERONCINI, 3-6 WHOLE IN BRINE"
+      ].includes(desc);
+
+      const isFarzaItem = [
+        "BI PRODUCTS OLV FARZA",
+        "BI PRODUCT OLV PTD",
+        "BI PRODUCT OLV SLC"
+      ].includes(desc);
+
+      if (isPepperItem) {
+        totalPepper += row.totalQuantity;
+      } else if (isFarzaItem) {
+        totalFarza += row.totalQuantity;
+      } else {
+        totalOlive += row.totalQuantity;
+      }
+
+      // Check if size is XXXS
+      if (row.size === 'XXXS') {
+        totalXxxs += row.totalQuantity;
+      }
+
+      // Check if size is S
+      if (row.size === 'S') {
+        totalS += row.totalQuantity;
+      }
+    });
+
+    return { totalOlive, totalPepper, totalFarza, totalXxxs, totalS };
+  }, [dataset]);
+
   // Statistics
   const stats = useMemo(() => {
     const totalQty = filteredDataset.reduce((sum, row) => sum + row.totalQuantity, 0);
@@ -651,6 +702,26 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       .filter(item => item.value > 0)
       .sort((a, b) => b.value - a.value);
   }, [stats.varietyBreakdown, stats.totalQty, lang]);
+
+  const locationChartData = useMemo(() => {
+    return Object.entries(stats.locationBreakdown)
+      .map(([location, qty], idx) => {
+        const percentage = stats.totalQty > 0 ? (qty / stats.totalQty) * 100 : 0;
+        return {
+          id: location,
+          name: getLocationName(location),
+          value: qty,
+          percentage,
+          color: location.toLowerCase().includes('richland') 
+            ? '#3b82f6' // Blue for Richland
+            : location.toLowerCase().includes('olive land') 
+              ? '#d946ef' // Fuchsia/Indigo for Olive Land
+              : ['#0ea5e9', '#8b5cf6', '#14b8a6', '#f43f5e', '#eab308'][idx % 5] // Multi-color rotation
+        };
+      })
+      .filter(item => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [stats.locationBreakdown, stats.totalQty, lang]);
 
   const VARIETY_COLORS: Record<string, string> = {
     Manzanilla: '#f59e0b', // Amber
@@ -716,11 +787,18 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
             </h1>
             
             <div className="flex flex-wrap items-center gap-2">
-              {lastModified ? (
+              {refreshing ? (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 dark:bg-amber-500/5 rounded-full border border-amber-500/20 dark:border-amber-500/10">
+                  <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" />
+                  <span className="text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                    {isRtl ? 'جاري التحديث والاتصال بالسرفر' : 'Connecting & updating from server...'}
+                  </span>
+                </div>
+              ) : lastModified ? (
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-full border border-emerald-500/20 dark:border-emerald-500/10">
                   <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                   <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
-                    {isRtl ? `تحديث الشيت الأصلي: ${lastModified}` : `Original Sheet Update: ${lastModified}`}
+                    {isRtl ? `تحديث الرصيد بتاريخ : ${lastModified}` : `Stock updated on: ${lastModified}`}
                   </span>
                 </div>
               ) : !loading && (
@@ -735,7 +813,15 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => loadData(true)}
+            disabled={loading || refreshing}
+            className="flex items-center justify-center p-2 rounded-2xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-650 dark:text-zinc-300 font-bold text-sm transition-all border border-zinc-200/60 dark:border-zinc-700/60 disabled:opacity-50 cursor-pointer"
+            title={isRtl ? 'تحديث البيانات' : 'Refresh Data'}
+          >
+            <RefreshCw size={16} className={refreshing || loading ? "animate-spin" : ""} />
+          </button>
           <button
             onClick={handleExportToExcel}
             className="flex items-center justify-center gap-2 px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-all shadow-md shadow-emerald-500/10"
@@ -750,7 +836,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         <div className="min-h-[400px] flex flex-col items-center justify-center p-12 bg-white dark:bg-black border border-zinc-200 dark:border-zinc-850 rounded-3xl">
           <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
           <p className="text-zinc-500 dark:text-zinc-400 font-bold animate-pulse text-sm">
-            {isRtl ? 'جاري الاتصال والتحميل من Google Sheet...' : 'Connecting & pulling from Google Sheet...'}
+            {isRtl ? 'جاري التحديث والاتصال بالسرفر...' : 'Connecting & updating from server...'}
           </p>
         </div>
       ) : error ? (
@@ -853,95 +939,184 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
             </div>
           </div>
 
-          {/* Storage Locations Balances Section */}
-          <div className="mt-4">
-            <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 flex items-center gap-1.5 px-2">
-              <MapPin size={12} className="text-emerald-500" />
-              {isRtl ? 'أرصدة المخازن' : 'Warehouse Inventory Balances'}
-            </h3>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 px-1">
-              {Object.entries(stats.locationBreakdown)
-                .filter(([_, qty]) => qty > 0)
-                .map(([location, qty]) => (
-                  <div 
-                    key={location} 
-                    className="p-2.5 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-xl shadow-xs flex items-center justify-between hover:border-emerald-500/30 dark:hover:border-emerald-500/30 transition-all group"
-                  >
-                    <div>
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">
-                        {getLocationName(location)}
-                      </p>
-                      <h4 className="text-base font-bold font-sans text-emerald-600 dark:text-emerald-400 leading-tight">
-                        {formatNumber(qty)} <span className="text-[10px] text-zinc-400 font-medium font-sans animate-pulse">kg</span>
-                      </h4>
+          {/* Storage Locations Balances Section - Styled EXACTLY like the varieties block with localized support & custom colors */}
+          <div className="mt-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl p-5 flex flex-col md:flex-row items-center gap-8">
+            <div className="flex flex-col items-center">
+              <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2 self-start px-2">
+                <MapPin size={14} className="text-blue-500" />
+                {isRtl ? 'تحليل أرصدة ونسب المخازن' : 'Warehouse Balances & Percentages'}
+              </h3>
+              <div className="w-48 h-48 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={locationChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={75}
+                      paddingAngle={4}
+                      cornerRadius={6}
+                      dataKey="value"
+                    >
+                      {locationChartData.map((entry) => (
+                        <Cell 
+                          key={`cell-${entry.id}`} 
+                          fill={entry.color} 
+                          stroke="transparent"
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => [`${formatNumber(value)} kg`, '']}
+                      contentStyle={{ 
+                        backgroundColor: '#18181b', 
+                        border: 'none', 
+                        borderRadius: '12px',
+                        fontSize: '10px',
+                        color: '#fff',
+                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                      }}
+                      itemStyle={{ color: '#fff' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                
+                {/* Center Total Metric */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                  <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter leading-none mb-1">
+                    {isRtl ? 'إجمالي المخزون' : 'Total Stock'}
+                  </p>
+                  <p className="text-lg font-black text-zinc-900 dark:text-white leading-none">
+                    {Math.round(stats.totalQty / 1000)}
+                    <span className="text-[9px] font-bold ml-0.5">T</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 w-full">
+              {locationChartData.map((item) => (
+                <div key={item.id} className="flex flex-col group py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0" dir={isRtl ? 'rtl' : 'ltr'}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase">{item.name}</span>
                     </div>
-                    <div className="p-1.5 bg-emerald-500/10 text-emerald-500 rounded-lg group-hover:bg-emerald-500/20 transition-colors shrink-0">
-                      <Database size={14} />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-black text-zinc-900 dark:text-zinc-100">{item.percentage.toFixed(1)}%</span>
+                      <span className="text-[10px] text-zinc-400 font-medium">({(item.value/1000).toFixed(1)}t)</span>
                     </div>
                   </div>
-                ))}
+                  <div className="w-full h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full transition-all duration-1000 ease-out" 
+                      style={{ 
+                        width: `${item.percentage}%`,
+                        backgroundColor: item.color
+                      }} 
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Statistics summary */}
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-             {/* Stats Cards - Keeping the same style for consistency */}
-             <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  {isRtl ? 'إجمالي رصيد الزيتون' : 'Total Olive Stock'}
-                </p>
-                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
-                  {formatNumber(stats.totalQty)} <span className="text-xs text-zinc-400 font-medium">kg</span>
-                </h3>
+          <div className="space-y-4 mt-4">
+            {/* Primary Inventory Balances (Independent of filters) */}
+            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest px-2 mb-1 flex items-center gap-1.5">
+              <Database size={13} className="text-emerald-500 animate-pulse" />
+              {isRtl ? 'إجمالي أرصدة المخزون الرئيسي (ثابت)' : 'Core Inventory Stock Totals (Fixed)'}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+              {/* Olive Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-emerald-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد الزيتون' : 'Total Olive Stock'}
+                  </span>
+                  <div className="p-1.5 bg-emerald-500/5 text-emerald-500 rounded-lg">
+                    <TrendingUp size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-emerald-600 dark:text-emerald-400">
+                    {formatNumber(unmodifiedTotals.totalOlive)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
               </div>
-              <div className="p-2.5 bg-emerald-500/5 text-emerald-500 rounded-xl">
-                <TrendingUp size={20} />
+
+              {/* Pepper Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-red-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد الفلفل' : 'Total Pepper Stock'}
+                  </span>
+                  <div className="p-1.5 bg-red-500/5 text-red-500 rounded-lg">
+                    <Database size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-red-600 dark:text-red-400">
+                    {formatNumber(unmodifiedTotals.totalPepper)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
+              </div>
+
+              {/* Farza Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-purple-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد الفرزه' : 'Total Farza Stock'}
+                  </span>
+                  <div className="p-1.5 bg-purple-500/5 text-purple-500 rounded-lg">
+                    <Layers size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-purple-600 dark:text-purple-400">
+                    {formatNumber(unmodifiedTotals.totalFarza)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
+              </div>
+
+              {/* Size S Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-amber-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد مقاس S' : 'Total Size S Stock'}
+                  </span>
+                  <div className="p-1.5 bg-amber-500/5 text-amber-500 rounded-lg">
+                    <Percent size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-amber-600 dark:text-amber-400">
+                    {formatNumber(unmodifiedTotals.totalS)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
+              </div>
+
+              {/* Size XXXS Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-blue-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد مقاس XXXS' : 'Total Size XXXS Stock'}
+                  </span>
+                  <div className="p-1.5 bg-blue-500/5 text-blue-500 rounded-lg">
+                    <Layers size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-blue-600 dark:text-blue-400">
+                    {formatNumber(unmodifiedTotals.totalXxxs)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
               </div>
             </div>
 
-            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  {isRtl ? 'عدد الأصناف المتاحة' : 'Distinct Olive Varieties'}
-                </p>
-                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
-                  {stats.uniqueItems}
-                </h3>
-              </div>
-              <div className="p-2.5 bg-teal-500/5 text-teal-500 rounded-xl">
-                <Layers size={20} />
-              </div>
-            </div>
 
-            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  {isRtl ? 'نطاقات التخزين المفعلة' : 'Active Storage Stages'}
-                </p>
-                <h3 className="text-xl font-black font-sans text-zinc-900 dark:text-white">
-                  {stats.uniqueLocs}
-                </h3>
-              </div>
-              <div className="p-2.5 bg-indigo-500/5 text-indigo-500 rounded-xl">
-                <MapPin size={20} />
-              </div>
-            </div>
-
-            <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                  {isRtl ? 'الصنف الأكثر توفراً' : 'Most Abundant Variety'}
-                </p>
-                <h3 className="text-lg font-black font-sans text-zinc-900 dark:text-white truncate">
-                  {getVarietyName(stats.topVariety)}
-                </h3>
-              </div>
-              <div className="p-2.5 bg-amber-500/5 text-amber-500 rounded-xl">
-                <Percent size={20} />
-              </div>
-            </div>
           </div>
 
           {/* Table Filters Search Bar */}
@@ -1095,7 +1270,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                           </div>
                         </td>
                         <td className="px-4 py-1.5 font-black font-sans text-right text-emerald-600 dark:text-emerald-400 text-sm bg-emerald-50/20 dark:bg-emerald-900/10 border-x border-zinc-100 dark:border-zinc-800">
-                          {formatNumber(row.totalQuantity)}
+                          {formatNumber(visibleLocations.reduce((sum, loc) => sum + (row.locationQuantities[loc] || 0), 0))}
                         </td>
                         
                         {/* Values for each location */}
@@ -1114,6 +1289,30 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                     ))
                   )}
                 </tbody>
+                {filteredDataset.length > 0 && (
+                  <tfoot className="border-t-2 border-zinc-200 dark:border-zinc-700 font-black text-sm bg-zinc-50/70 dark:bg-zinc-800/40 text-zinc-900 dark:text-white">
+                    <tr>
+                      <td colSpan={3} className="px-4 py-3 text-center md:text-right font-bold text-zinc-500 dark:text-zinc-400">
+                        {isRtl ? 'المجموع الإجمالي (كجم)' : 'Grand Total (Kg)'}
+                      </td>
+                      <td className="px-4 py-3 font-sans text-right text-emerald-600 dark:text-emerald-400 font-extrabold border-x border-zinc-200 dark:border-zinc-700 bg-emerald-500/5">
+                        {formatNumber(
+                          filteredDataset.reduce((sum, row) => 
+                            sum + visibleLocations.reduce((locSum, loc) => locSum + (row.locationQuantities[loc] || 0), 0)
+                          , 0)
+                        )}
+                      </td>
+                      {visibleLocations.map(loc => {
+                        const colSum = filteredDataset.reduce((sum, row) => sum + (row.locationQuantities[loc] || 0), 0);
+                        return (
+                          <td key={loc} className="px-4 py-3 text-center font-mono font-black text-xs border-l border-zinc-100 dark:border-zinc-800/50">
+                            {colSum > 0 ? formatNumber(colSum) : '0'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
 

@@ -15,6 +15,7 @@ import RawMaterial from './components/RawMaterial';
 import ThirdPartyProcessing from './components/ThirdPartyProcessing';
 import OliveStock from './components/OliveStock';
 import OfflineScreen from './components/OfflineScreen';
+import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
 import { storageService } from './services/storageService';
 import { translations } from './i18n';
@@ -391,6 +392,20 @@ export default function App() {
         )}
         <Auth lang={lang} onLogin={handleLogin} />
       </>
+    );
+  }
+
+  // Intercept default password '123'
+  if (user.password === '123' || user.initialPassword === '123') {
+    return (
+      <ForcePasswordChange 
+        lang={lang} 
+        user={user} 
+        onPasswordChanged={(updatedUser) => {
+          setUser(updatedUser);
+        }} 
+        onLogout={handleLogout}
+      />
     );
   }
 

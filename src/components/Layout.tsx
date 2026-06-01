@@ -22,7 +22,8 @@ import {
   Download,
   Share,
   PlusSquare,
-  Database
+  Database,
+  AlertCircle
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -60,6 +61,21 @@ export default function Layout({
   const [isDesktopMode, setIsDesktopMode] = React.useState(true);
   const [showInstallModal, setShowInstallModal] = React.useState(false);
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
+  const [isStandalone, setIsStandalone] = React.useState(false);
+  const [hideInstallPrompt, setHideInstallPrompt] = React.useState(() => {
+    return localStorage.getItem('hide_pwa_install_banner_richland') === 'true';
+  });
+  const [isInsideIframe, setIsInsideIframe] = React.useState(false);
+
+  React.useEffect(() => {
+    const isStandaloneMode = 
+      window.matchMedia('(display-mode: standalone)').matches || 
+      (navigator as any).standalone || 
+      document.referrer.includes('android-app://');
+    setIsStandalone(isStandaloneMode);
+
+    setIsInsideIframe(window.self !== window.top);
+  }, []);
 
   React.useEffect(() => {
     const handler = (e: any) => {
@@ -173,6 +189,17 @@ export default function Layout({
           >
             {isDesktopMode ? <Smartphone size={18} /> : <Monitor size={18} />}
           </button>
+          {!isStandalone && (
+            <button
+              onClick={handleInstall}
+              title={lang === 'ar' ? 'تثبيت التطبيق على جهازك' : 'Install App on Your Device'}
+              className="p-2 rounded-xl hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 transition-colors flex items-center justify-center relative group"
+            >
+              <Download size={18} className="animate-pulse" />
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-emerald-500" />
+            </button>
+          )}
           {user && (
             <button
               onClick={onLogout}
@@ -215,6 +242,55 @@ export default function Layout({
         !isDesktopMode && "pb-16"
       )}>
         <div className="p-4 md:p-6 w-full">
+          {/* Subtle PWA Notice banner */}
+          {!isStandalone && !hideInstallPrompt && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 p-3 px-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/20 text-right flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-bold"
+              dir="rtl"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-1.5 w-1.5 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-emerald-800 dark:text-emerald-400">
+                    {isRtl 
+                      ? "تنبيه: لتجربة أسرع وسلسلة والعمل بوضع عدم الاتصال، يرجى تثبيت التطبيق على جهازك."
+                      : "Notice: For the fastest app experience and offline access, please install the app on your device."}
+                  </span>
+                </div>
+                {isInsideIframe && (
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                    {isRtl 
+                      ? "(يرجى الفتح في نافذة جديدة للتثبيت)"
+                      : "(Open in a new window to install)"}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button 
+                  onClick={handleInstall}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-[10px] font-black shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Download size={11} className="animate-bounce" style={{ animationDuration: '3s' }} />
+                  <span>{isRtl ? "تثبيت الآن" : "Install Now"}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('hide_pwa_install_banner_richland', 'true');
+                    setHideInstallPrompt(true);
+                  }}
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-[11px] font-bold px-1.5 py-1"
+                >
+                  {isRtl ? "تجاهل" : "Dismiss"}
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {children}
         </div>
       </main>

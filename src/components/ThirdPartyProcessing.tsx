@@ -1349,7 +1349,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           createdBy: jobs.find(j => j.id === editingJobId)?.createdBy || user.uid,
           createdAt: jobs.find(j => j.id === editingJobId)?.createdAt || new Date().toISOString()
         };
-        handleShareExcelOutlook(updatedJob);
+        handleShareWordOutlook(updatedJob);
       } else {
         const docRef = await addDoc(collection(db, COLLECTIONS.THIRD_PARTY_PROCESSING), {
           ...jobData,
@@ -1368,7 +1368,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           createdBy: user.uid,
           createdAt: new Date().toISOString()
         };
-        handleShareExcelOutlook(createdJob);
+        handleShareWordOutlook(createdJob);
       }
       
       setIsAdding(false);
@@ -1468,7 +1468,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       toast.success(lang === 'ar' ? 'تم اعتماد المخزن بنجاح' : 'Warehouse approval successful');
       
       // Auto share after warehouse approval
-      handleShareExcelOutlook({ ...job, ...updateData } as ProcessingJob);
+      handleShareWordOutlook({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
     }
@@ -1491,7 +1491,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       );
 
       // Auto share after quality approval
-      handleShareExcelOutlook({ ...job, ...updateData } as ProcessingJob);
+      handleShareWordOutlook({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل العملية' : 'Operation failed');
     }
@@ -1511,7 +1511,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       toast.success(lang === 'ar' ? 'تم اعتماد المشتريات بنجاح' : 'Purchasing approval successful');
 
       // Auto share after purchasing approval
-      handleShareExcelOutlook({ ...job, ...updateData } as ProcessingJob);
+      handleShareWordOutlook({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
     }
@@ -1529,8 +1529,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       });
       toast.success(lang === 'ar' ? 'تم إكمال التشغيلة بنجاح' : 'Job completed successfully');
       
-      // Auto share Excel via Outlook after completion
-      handleShareExcelOutlook({ 
+      // Auto share Word via Outlook after completion
+      handleShareWordOutlook({ 
         ...job, 
         status: 'Completed', 
         poNumber: po 
@@ -1588,7 +1588,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     });
   };
 
-  const handleShareExcelOutlook = async (job: ProcessingJob) => {
+  const handleShareWordOutlook = async (job: ProcessingJob) => {
     try {
       const isRtl = lang === 'ar';
       const trans = translations[lang];
@@ -1599,96 +1599,293 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
       const lossPercentage = totalIn > 0 ? (((totalIn - totalOut) / totalIn) * 100).toFixed(1) : '0.0';
 
-      let workbook;
-      let worksheet;
-      let loadedFromTemplate = false;
+      const warehouse = warehouses.find(w => w.id === job.warehouseId);
+      const pricePerKg = job.confirmedPrice || warehouse?.processingPricePerKg || 0;
+      const supplierCode = warehouse?.supplierCode || job.warehouseCode || "-";
+      const totalCost = totalIn * pricePerKg;
+      const lossPercentStr = totalIn > 0 ? (((totalIn - totalOut) / totalIn) * 100).toFixed(1) + '%' : '0%';
 
-      try {
-        const response = await fetch('/sub.xlsx');
-        if (response.ok) {
-          const arrayBuffer = await response.arrayBuffer();
-          workbook = XLSX.read(arrayBuffer, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          worksheet = workbook.Sheets[sheetName];
-          loadedFromTemplate = true;
-        }
-      } catch (e) {
-        console.warn("Template sub.xlsx not found, using clean sheet");
+      const maxRows = Math.max(job.inputs.length, job.outputs.length);
+      const rowsCount = Math.max(maxRows, 5);
+
+      const findUserName = (uid: string | undefined) => {
+        if (!uid) return ".............";
+        const u = users.find(u => u.id === uid || u.uid === uid);
+        return u?.displayName || u?.email?.split('@')[0] || ".............";
+      };
+
+      // Helper for creating centered bold cells
+      const createCell = (text: string, options: any = {}) => new TableCell({
+        children: [new Paragraph({
+          children: [new TextRun({ text: String(text), size: options.size || 18, bold: options.bold, color: options.color || "000000" })],
+          alignment: options.align || AlignmentType.CENTER,
+        })],
+        shading: options.bg ? { fill: options.bg, type: ShadingType.CLEAR } : undefined,
+        verticalAlign: VerticalAlign.CENTER,
+        width: options.width ? { size: options.width, type: WidthType.PERCENTAGE } : undefined,
+        borders: options.noBorder ? {
+          top: { style: BorderStyle.NONE, size: 0 },
+          bottom: { style: BorderStyle.NONE, size: 0 },
+          left: { style: BorderStyle.NONE, size: 0 },
+          right: { style: BorderStyle.NONE, size: 0 },
+        } : undefined,
+      });
+
+      // 1. Metadata Table
+      const metadataTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.NONE, size: 0 },
+          bottom: { style: BorderStyle.NONE, size: 0 },
+          left: { style: BorderStyle.NONE, size: 0 },
+          right: { style: BorderStyle.NONE, size: 0 },
+          insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+          insideVertical: { style: BorderStyle.NONE, size: 0 },
+        },
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({
+                width: { size: 47, type: WidthType.PERCENTAGE },
+                children: [
+                  new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: [
+                      new TableRow({ children: [
+                        createCell(isRtl ? "سعر التشغيل للكيلو" : "Price / KG", { bg: "F1F5F9", bold: true, width: 55 }),
+                        createCell(`${pricePerKg.toLocaleString()} EGP`, { width: 45, bold: true })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "اجمالى تكلفة التشغيل" : "Total Processing Cost", { bg: "F1F5F9", bold: true }),
+                        createCell(`${totalCost.toLocaleString()} EGP`, { bg: "F8FAFC", bold: true })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "الفرق" : "Difference", { bg: "F1F5F9", bold: true }),
+                        createCell(`${(totalIn - totalOut).toLocaleString()} kg`, { bg: "F8FAFC", bold: true, color: "2563EB" })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "نسبة الفقد" : "Loss %", { bg: "F1F5F9", bold: true }),
+                        createCell(lossPercentStr, { bg: "F8FAFC", bold: true, color: "DC2626" })
+                      ]}),
+                    ]
+                  })
+                ]
+              }),
+              new TableCell({ width: { size: 6, type: WidthType.PERCENTAGE }, children: [] }),
+              new TableCell({
+                width: { size: 47, type: WidthType.PERCENTAGE },
+                children: [
+                  new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: [
+                      new TableRow({ children: [
+                        createCell(isRtl ? "كود المورد" : "Supplier Code", { bg: "F1F5F9", bold: true, width: 40 }),
+                        createCell(supplierCode, { width: 60, bold: true })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "اسم المورد" : "Supplier Name", { bg: "F1F5F9", bold: true }),
+                        createCell(job.warehouseName || job.supplierName || job.thirdPartyName || "-", { bg: "F8FAFC", bold: true })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "كود المخزن" : "Warehouse Code", { bg: "F1F5F9", bold: true }),
+                        createCell(job.warehouseCode || "-", { bg: "F8FAFC", bold: true })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "رقم العملية" : "Process Code", { bg: "F1F5F9", bold: true }),
+                        createCell(job.jobCode || "-", { bg: "F8FAFC", bold: true, color: "059669" })
+                      ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "رقم PO" : "PO Number", { bg: "F1F5F9", bold: true }),
+                        createCell(job.poNumber || "-", { bg: "F8FAFC", bold: true, color: "2563EB" })
+                      ]}),
+                    ]
+                  })
+                ]
+              })
+            ]
+          })
+        ]
+      });
+
+      // 2. Main Tables
+      const inputsRowsList = [
+        new TableRow({
+          children: [
+            createCell("كود ساب", { bg: "DBEAFE", bold: true, width: 25, color: "1E3A8A" }),
+            createCell("اسم الصنف", { bg: "DBEAFE", bold: true, width: 55, color: "1E3A8A" }),
+            createCell("الكمية", { bg: "DBEAFE", bold: true, width: 20, color: "1E3A8A" }),
+          ]
+        })
+      ];
+
+      for (let i = 0; i < rowsCount; i++) {
+        const input = job.inputs[i];
+        inputsRowsList.push(new TableRow({
+          children: [
+            createCell(input ? input.itemCode : "", { bold: true }),
+            createCell(input ? input.itemName : "", { align: AlignmentType.RIGHT }),
+            createCell(input ? input.quantity.toLocaleString() : "", { bold: true }),
+          ]
+        }));
       }
 
-      if (loadedFromTemplate && worksheet) {
-        const setCellValue = (ws: any, r: number, c: number, val: any) => {
-          const cellRef = XLSX.utils.encode_cell({ r, c });
-          if (!ws[cellRef]) ws[cellRef] = { t: 's', v: '' };
-          if (typeof val === 'number') {
-            ws[cellRef].v = val;
-            ws[cellRef].t = 'n';
-          } else {
-            ws[cellRef].v = String(val);
-            ws[cellRef].t = 's';
-          }
-        };
+      inputsRowsList.push(new TableRow({
+        children: [
+          new TableCell({
+            columnSpan: 2,
+            children: [new Paragraph({ children: [new TextRun({ text: "إجمالي المدخلات", bold: true })], alignment: AlignmentType.RIGHT })],
+            shading: { fill: "FACC15", type: ShadingType.CLEAR },
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+          createCell(totalIn.toLocaleString(), { bg: "FACC15", bold: true }),
+        ]
+      }));
 
-        const setCellFormula = (ws: any, r: number, c: number, formula: string) => {
-          const cellRef = XLSX.utils.encode_cell({ r, c });
-          if (!ws[cellRef]) ws[cellRef] = {};
-          ws[cellRef].t = 'n';
-          ws[cellRef].f = formula;
-          delete ws[cellRef].v;
-        };
+      const outputsRowsList = [
+        new TableRow({
+          children: [
+            createCell("كود ساب مخرج", { bg: "FFEDD5", bold: true, width: 25, color: "7C2D12" }),
+            createCell("اسم الصنف مخرج", { bg: "FFEDD5", bold: true, width: 55, color: "7C2D12" }),
+            createCell("الكمية مخرج", { bg: "FBBF24", bold: true, width: 20, color: "000000" }),
+          ]
+        })
+      ];
 
-        setCellValue(worksheet, 1, 3, job.supplierName || job.thirdPartyName || '');
-        setCellValue(worksheet, 2, 3, job.supplierName || job.thirdPartyName || '');
-        setCellValue(worksheet, 3, 3, job.warehouseCode || '');
-        setCellValue(worksheet, 1, 7, job.confirmedPrice || 0);
-        setCellFormula(worksheet, 2, 7, 'H2*H27');
-        setCellFormula(worksheet, 3, 7, 'D27-H27');
-        setCellFormula(worksheet, 4, 7, 'IF(D27>0,H4/D27,0)');
-
-        const maxItems = Math.max(job.inputs.length, job.outputs.length);
-        for (let i = 0; i < 18; i++) {
-          const rowNum = 8 + i;
-          if (i < maxItems) setCellValue(worksheet, rowNum, 0, job.date);
-          if (i < job.inputs.length) {
-            const input = job.inputs[i];
-            setCellValue(worksheet, rowNum, 1, input.itemCode);
-            setCellValue(worksheet, rowNum, 2, input.itemName);
-            setCellValue(worksheet, rowNum, 3, input.quantity);
-          }
-          if (i < job.outputs.length) {
-            const output = job.outputs[i];
-            setCellValue(worksheet, rowNum, 5, output.itemCode);
-            setCellValue(worksheet, rowNum, 6, output.itemName);
-            setCellValue(worksheet, rowNum, 7, output.quantity);
-          }
-        }
-        worksheet['!ref'] = 'A1:H27';
-      } else {
-        const reportRows = [
-          [isRtl ? 'تقرير عملية تشغيل' : 'Processing Report'],
-          [trans.processDate, job.date],
-          [`${isRtl ? 'المخزن' : 'Warehouse'}: ${job.warehouseName} (${job.warehouseCode})`],
-          [isRtl ? 'إجمالي المدخلات' : 'Total Inputs', `${totalIn} kg`],
-          [isRtl ? 'إجمالي المخرجات' : 'Total Outputs', `${totalOut} kg`],
-          [isRtl ? 'نسبة التشغيل' : 'Yield', `${yieldPercentage}%`],
-          [isRtl ? 'نسبة الفقد' : 'Loss %', `${lossPercentage}%`],
-          [],
-          [trans.inputs],
-          ['Code', 'Name', 'Qty'],
-          ...job.inputs.map(i => [i.itemCode, i.itemName, i.quantity]),
-          [],
-          [trans.outputs],
-          ['Code', 'Name', 'Qty'],
-          ...job.outputs.map(i => [i.itemCode, i.itemName, i.quantity])
-        ];
-        worksheet = XLSX.utils.aoa_to_sheet(reportRows);
-        workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
+      for (let i = 0; i < rowsCount; i++) {
+        const output = job.outputs[i];
+        outputsRowsList.push(new TableRow({
+          children: [
+            createCell(output ? output.itemCode : "", { bold: true }),
+            createCell(output ? output.itemName : "", { align: AlignmentType.RIGHT }),
+            createCell(output ? output.quantity.toLocaleString() : "", { bg: output ? "FEF3C7" : undefined, bold: true }),
+          ]
+        }));
       }
 
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const fileName = `Job_${job.warehouseCode || 'Report'}_${job.date}.xlsx`;
+      outputsRowsList.push(new TableRow({
+        children: [
+          new TableCell({
+            columnSpan: 2,
+            children: [new Paragraph({ children: [new TextRun({ text: "إجمالي المخرجات", bold: true })], alignment: AlignmentType.RIGHT })],
+            shading: { fill: "FACC15", type: ShadingType.CLEAR },
+            verticalAlign: VerticalAlign.CENTER,
+          }),
+          createCell(totalOut.toLocaleString(), { bg: "FACC15", bold: true }),
+        ]
+      }));
+
+      const mainTables = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.NONE, size: 0 },
+          bottom: { style: BorderStyle.NONE, size: 0 },
+          left: { style: BorderStyle.NONE, size: 0 },
+          right: { style: BorderStyle.NONE, size: 0 },
+          insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+          insideVertical: { style: BorderStyle.NONE, size: 0 },
+        },
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({
+                width: { size: 48.5, type: WidthType.PERCENTAGE },
+                children: [
+                  new Paragraph({
+                    children: [new TextRun({ text: "المدخلات (Inputs)", bold: true, color: "1E3A8A" })],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 120 }
+                  }),
+                  new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: inputsRowsList })
+                ]
+              }),
+              new TableCell({ width: { size: 3, type: WidthType.PERCENTAGE }, children: [] }),
+              new TableCell({
+                width: { size: 48.5, type: WidthType.PERCENTAGE },
+                children: [
+                  new Paragraph({
+                    children: [new TextRun({ text: "المخرجات (Outputs)", bold: true, color: "7C2D12" })],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { after: 120 }
+                  }),
+                  new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: outputsRowsList })
+                ]
+              })
+            ]
+          })
+        ]
+      });
+
+      // Assemble all comments
+      const allComments = [];
+      if (job.notes) allComments.push({ label: isRtl ? "ملاحظات العميل: " : "Customer Notes: ", text: job.notes });
+      if (job.qualityComments) allComments.push({ label: isRtl ? "تعليقات الجودة: " : "Quality Comments: ", text: job.qualityComments });
+
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: {
+              size: { orientation: PageOrientation.PORTRAIT },
+              margin: { top: 720, bottom: 720, left: 720, right: 720 },
+            }
+          },
+          children: [
+            new Paragraph({
+              children: [new TextRun({ 
+                text: `عملية تشغيل لدى ${job.warehouseName || job.supplierName || job.thirdPartyName || ''} بتاريخ ${job.date}`,
+                bold: true,
+                size: 32,
+                color: "1E3A8A"
+              })],
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 300 },
+              border: { bottom: { color: "1E3A8A", space: 1, style: BorderStyle.SINGLE, size: 12 } }
+            }),
+            metadataTable,
+            new Paragraph({ text: "", spacing: { after: 200 } }),
+            mainTables,
+            ...allComments.map(comment => new Paragraph({
+              children: [
+                new TextRun({ text: comment.label, bold: true }),
+                new TextRun({ text: comment.text })
+              ],
+              spacing: { before: 200 }
+            })),
+            new Paragraph({ text: "", spacing: { before: 800 } }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.NONE, size: 0 },
+                bottom: { style: BorderStyle.NONE, size: 0 },
+                left: { style: BorderStyle.NONE, size: 0 },
+                right: { style: BorderStyle.NONE, size: 0 },
+                insideHorizontal: { style: BorderStyle.NONE, size: 0 },
+                insideVertical: { style: BorderStyle.NONE, size: 0 },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    createCell(isRtl ? "مسئول المشتريات" : "Purchasing Officer", { bold: true, noBorder: true, size: 22 }),
+                    createCell(isRtl ? "مسئول الجودة" : "Quality Officer", { bold: true, noBorder: true, size: 22 }),
+                    createCell(isRtl ? "مسئول المخزن" : "Warehouse Officer", { bold: true, noBorder: true, size: 22 }),
+                    createCell(isRtl ? "مستلم العميل" : "Customer Recipient", { bold: true, noBorder: true, size: 22 }),
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    createCell(isRtl ? `بواسطة: ${findUserName(job.purchasingApproverId)}` : `By: ${findUserName(job.purchasingApproverId)}`, { noBorder: true, size: 18 }),
+                    createCell(isRtl ? `بواسطة: ${findUserName(job.qualityApproverId)}` : `By: ${findUserName(job.qualityApproverId)}`, { noBorder: true, size: 18 }),
+                    createCell(isRtl ? `بواسطة: ${findUserName(job.warehouseApproverId)}` : `By: ${findUserName(job.warehouseApproverId)}`, { noBorder: true, size: 18 }),
+                    createCell(isRtl ? `بواسطة: ${findUserName(job.createdBy)}` : `By: ${findUserName(job.createdBy)}`, { noBorder: true, size: 18 }),
+                  ]
+                })
+              ]
+            })
+          ]
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const fileName = `JobReport_${job.warehouseCode || 'Report'}_${job.date}.docx`;
 
       // Compose Email Body
       const commentsText = [
@@ -1696,17 +1893,12 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         job.qualityComments && `${isRtl ? 'تعليقات الجودة:' : 'Quality Comments:'} ${job.qualityComments}`
       ].filter(Boolean).join('\n');
 
-      const findUserName = (uid: string | undefined) => {
-        if (!uid) return "...";
-        const u = users.find(u => u.id === uid || u.uid === uid);
-        return u?.displayName || u?.email?.split('@')[0] || "...";
-      };
-
       const recipient = toEmails.join(',') || 'Khaled.Shaaban@RichLandfi.com';
       const ccList = ccEmails.join(',');
       const subject = encodeURIComponent(`${isRtl ? 'تشغيلة جديدة / محدثة - ' : 'New / Updated Job - '} ${job.warehouseName} - ${job.date}`);
       const body = encodeURIComponent(
         `${isRtl ? 'تحية طيبة،\n\nيرجى العلم بأنه تم تحديث التشغيلة التالية:' : 'Hello,\n\nPlease be informed that the following job has been updated:'}\n\n` +
+        `${isRtl ? 'تقرير تشغيل ملف Word مرفق' : 'Word Job Report Attached'}\n` +
         `${isRtl ? 'المخزن:' : 'Warehouse:'} ${job.warehouseName} (${job.warehouseCode})\n` +
         `${isRtl ? 'التاريخ:' : 'Date:'} ${job.date}\n` +
         `${isRtl ? 'الحالة:' : 'Status:'} ${job.status}\n` +
@@ -1721,21 +1913,23 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         `- ${isRtl ? 'المخزن:' : 'Warehouse:'} ${findUserName(job.warehouseApproverId)}\n` +
         `- ${isRtl ? 'الجودة:' : 'Quality:'} ${findUserName(job.qualityApproverId)}\n` +
         `- ${isRtl ? 'المشتريات:' : 'Purchasing:'} ${findUserName(job.purchasingApproverId)}\n\n` +
-        `${isRtl ? 'يرجى مراجعة الملف المرفق.' : 'Please review the attached file.'}`
+        `${isRtl ? 'يرجى مراجعة ملف Word المرفق.' : 'Please review the attached Word file.'}`
       );
 
       const mailtoUrl = `mailto:${recipient}?cc=${ccList}&subject=${subject}&body=${body}`;
       window.location.href = mailtoUrl;
 
-      // Also trigger download
+      // Also trigger download of DOCX so user can attach it
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
       
-      toast.success(isRtl ? 'تم تجهيز الإيميل وبدء التحميل' : 'Email prepared and download started');
+      toast.success(isRtl ? 'تم تجهيز الإيميل وبدء تحميل ملف Word' : 'Email prepared and Word download started');
     } catch (error) {
       console.error("Share error:", error);
       toast.error(lang === 'ar' ? 'فشل التجهيز' : 'Preparation failed');
@@ -3353,7 +3547,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                           {/* Utilities and Export buttons */}
                           <div className="flex flex-wrap items-center gap-1 bg-white dark:bg-zinc-900 p-1.5 rounded-2xl border border-zinc-100 dark:border-zinc-800 shrink-0">
                             <button 
-                              onClick={(e) => { e.stopPropagation(); handleShareExcelOutlook(job); }}
+                              onClick={(e) => { e.stopPropagation(); handleShareWordOutlook(job); }}
                               className="p-2 text-blue-600 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
                               title={lang === 'ar' ? 'مشاركة عبر الإيميل' : 'Share via Email'}
                             >
