@@ -177,6 +177,17 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   const [error, setError] = useState<string | null>(null);
   const [lastModified, setLastModified] = useState<string | null>(null);
 
+  // Comparison state
+  const [savedStockMap, setSavedStockMap] = useState<Record<string, number> | null>(() => {
+    try {
+      const saved = localStorage.getItem('last_known_olive_stock_map');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
+
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
@@ -353,7 +364,10 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
       // 1. Try fetching from internal proxy
       try {
-        const response = await fetch('/api/stock-data');
+        const baseUrl = window.location.origin ? window.location.origin.replace(/\/$/, '') : '';
+        const proxyUrl = `${baseUrl}/api/stock-data?t=${Date.now()}`;
+        console.log('Fetching olive stock data from proxy:', proxyUrl);
+        const response = await fetch(proxyUrl);
         if (response.ok) {
           const contentType = response.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
@@ -365,6 +379,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
               console.warn('Proxy returned error, will fallback:', result.error);
             }
           }
+        } else {
+          console.warn('Proxy response not ok. Status:', response.status);
         }
       } catch (proxyErr) {
         console.warn('Proxy fetch failed, falling back to direct fetch:', proxyErr);
@@ -372,7 +388,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
       // 2. Fallback to direct client-side fetch from Google Sheet (supports CORS)
       if (!text) {
-        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTOGkYpf6hSa20PDIE2BxZ0ClH7vXd9aA7yrAOxO4nN-afVgi8RdqY8EDbzD_hRHR9A8kYr34RRndv3/pub?gid=801884526&single=true&output=csv';
+        const csvUrl = `https://docs.google.com/spreadsheets/d/e/2PACX-1vTOGkYpf6hSa20PDIE2BxZ0ClH7vXd9aA7yrAOxO4nN-afVgi8RdqY8EDbzD_hRHR9A8kYr34RRndv3/pub?gid=801884526&single=true&output=csv&t=${Date.now()}`;
         const directResp = await fetch(csvUrl);
         if (!directResp.ok) {
           throw new Error(`Google Sheet direct fetch failed: ${directResp.status} ${directResp.statusText}`);
@@ -477,11 +493,11 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   const dataset = useMemo<PivotedStockRow[]>(() => {
     if (rawData.length <= 1) return [];
     
-    const headers = rawData[0].map(h => h.trim());
-    const materialIdx = headers.indexOf('Material');
-    const descrIdx = headers.indexOf('Material Description');
-    const unrestrictedIdx = headers.indexOf('Unrestricted');
-    const locDescrIdx = headers.indexOf('Descr. of Storage Loc.');
+    const headers = rawData[0].map(h => h.trim().toLowerCase());
+    const materialIdx = headers.findIndex(h => h === 'material' || h.includes('material code'));
+    const descrIdx = headers.findIndex(h => h === 'material description' || (h.includes('descr') && h.includes('material')));
+    const unrestrictedIdx = headers.findIndex(h => h === 'unrestricted' || h.includes('unrestricted') || h.includes('qty') || h.includes('quantity'));
+    const locDescrIdx = headers.findIndex(h => h === 'descr. of storage loc.' || h.includes('storage loc') || h.includes('location descr'));
 
     if (materialIdx === -1 || unrestrictedIdx === -1) return [];
 
@@ -542,6 +558,91 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
     return Array.from(pivotMap.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
   }, [rawData, isRtl]);
+
+  // Save initial baseline if not set yet (so user doesn't get a huge change list on first load)
+  useEffect(() => {
+    if (dataset.length > 0 && !savedStockMap) {
+      const map: Record<string, number> = {};
+      dataset.forEach(row => {
+        map[row.materialCode] = row.totalQuantity;
+      });
+      localStorage.setItem('last_known_olive_stock_map', JSON.stringify(map));
+      setSavedStockMap(map);
+    }
+  }, [dataset, savedStockMap]);
+
+  // Comparison logic
+  const comparison = useMemo(() => {
+    if (!savedStockMap || dataset.length === 0) {
+      return { totalDiff: 0, hasChanges: false, details: [] };
+    }
+
+    const details: {
+      materialCode: string;
+      description: string;
+      oldQty: number;
+      newQty: number;
+      diff: number;
+    }[] = [];
+    let totalDiff = 0;
+
+    const checkedCodes = new Set<string>();
+
+    dataset.forEach(row => {
+      const code = row.materialCode;
+      checkedCodes.add(code);
+      const oldQty = savedStockMap[code] !== undefined ? savedStockMap[code] : 0;
+      const newQty = row.totalQuantity;
+      const diff = newQty - oldQty;
+
+      // Only record changes with significant difference (> 0.1 kg)
+      if (Math.abs(diff) > 0.1) {
+        details.push({
+          materialCode: code,
+          description: row.description,
+          oldQty,
+          newQty,
+          diff
+        });
+        totalDiff += diff;
+      }
+    });
+
+    // Check for items that were in the reference map but are completely missing in the new dataset
+    Object.entries(savedStockMap).forEach(([code, oldQty]) => {
+      if (!checkedCodes.has(code) && oldQty > 0.1) {
+        // Find if this item ever existed inside previous runs to grab its description
+        const previousItem = dataset.find(d => d.materialCode === code);
+        details.push({
+          materialCode: code,
+          description: previousItem?.description || (isRtl ? 'خام تم تصفيره أو غير موجود بالشيت' : 'Material removed or missing from sheet'),
+          oldQty,
+          newQty: 0,
+          diff: -oldQty
+        });
+        totalDiff += -oldQty;
+      }
+    });
+
+    details.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+
+    return {
+      totalDiff,
+      hasChanges: details.length > 0,
+      details
+    };
+  }, [dataset, savedStockMap, isRtl]);
+
+  const handleAcceptNewBalance = () => {
+    const map: Record<string, number> = {};
+    dataset.forEach(row => {
+      map[row.materialCode] = row.totalQuantity;
+    });
+    localStorage.setItem('last_known_olive_stock_map', JSON.stringify(map));
+    setSavedStockMap(map);
+    setIsComparisonModalOpen(false);
+    toast.success(isRtl ? 'تم اعتماد الرصيد الجديد كمرجع للمقارنة' : 'New balance accepted as comparison reference');
+  };
 
   // Extract unique storage locations found in data
   const storageLocations = useMemo(() => {
@@ -813,7 +914,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           </div>
         </div>
         
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+
           <button
             onClick={() => loadData(true)}
             disabled={loading || refreshing}
@@ -831,6 +933,40 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           </button>
         </div>
       </div>
+
+      {/* Comparison Alert Banner */}
+      {!loading && !error && comparison.hasChanges && (
+        <motion.button
+          id="stock-comparison-alert-banner"
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          onClick={() => setIsComparisonModalOpen(true)}
+          className="w-full flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-3xl bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-300 transition-all text-sm font-bold text-right sm:text-left cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <span className="p-2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-2xl">
+              <TrendingUp size={20} className={comparison.totalDiff > 0 ? "rotate-0 text-emerald-500" : "rotate-180 text-rose-500"} />
+            </span>
+            <div className="text-right">
+              <p className="text-sm font-black">
+                {isRtl 
+                  ? `تنبيه: تم رصد تغيير في الرصيد مقارنة بالرصيد المرجعي!`
+                  : `Alert: Stock balance changes detected compared to reference!`
+                }
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400/80 mt-0.5">
+                {isRtl
+                  ? `إجمالي الفرق: ${comparison.totalDiff > 0 ? '+' : ''}${formatNumber(comparison.totalDiff)} كجم`
+                  : `Total Difference: ${comparison.totalDiff > 0 ? '+' : ''}${formatNumber(comparison.totalDiff)} kg`
+                }
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 underline decoration-dotted underline-offset-4">
+            <span>{isRtl ? 'اضغط هنا لمشاهدة التفاصيل' : 'Click here to view details'}</span>
+          </div>
+        </motion.button>
+      )}
 
       {loading ? (
         <div className="min-h-[400px] flex flex-col items-center justify-center p-12 bg-white dark:bg-black border border-zinc-200 dark:border-zinc-850 rounded-3xl">
@@ -1325,6 +1461,141 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           </div>
         </>
       )}
+
+      {/* Comparison Details Modal */}
+      <AnimatePresence>
+        {isComparisonModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" id="comparison-details-modal">
+            {/* Backdrop overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsComparisonModalOpen(false)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            />
+
+            {/* Modal Body */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl p-6 overflow-hidden text-right z-10"
+              dir={isRtl ? 'rtl' : 'ltr'}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2.5 bg-amber-500/10 text-amber-500 rounded-2xl">
+                    <TrendingUp size={22} className={comparison.totalDiff > 0 ? "rotate-0" : "rotate-180"} />
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-black text-white">
+                      {isRtl ? 'تفاصيل مقارنة أرصدة المخزون' : 'Stock Balance Comparison Details'}
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {isRtl 
+                        ? 'مقارنة بين الرصيد الجديد المحدث والرصيد المرجعي السابق' 
+                        : 'Comparison details between newly fetched sheets and standard reference state'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsComparisonModalOpen(false)}
+                  className="p-1.5 hover:bg-zinc-850 text-zinc-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Quick Summary Bar */}
+              <div className="grid grid-cols-3 gap-3 my-4 bg-zinc-950/40 p-3.5 rounded-2xl border border-zinc-800">
+                <div className="text-center">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase">
+                    {isRtl ? 'إجمالي الفرق' : 'Net Difference'}
+                  </p>
+                  <p className={`text-md font-black mt-1 ${comparison.totalDiff > 0 ? 'text-emerald-500' : comparison.totalDiff < 0 ? 'text-rose-500' : 'text-zinc-400'}`}>
+                    {comparison.totalDiff > 0 ? '+' : ''}{formatNumber(comparison.totalDiff)} <span className="text-[9px] font-bold">kg</span>
+                  </p>
+                </div>
+                <div className="text-center border-x border-zinc-800/80">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase">
+                    {isRtl ? 'أصناف زادت' : 'Increased Items'}
+                  </p>
+                  <p className="text-md font-black text-emerald-500 mt-1">
+                    {comparison.details.filter(d => d.diff > 0).length}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase">
+                    {isRtl ? 'أصناف نقصت' : 'Decreased Items'}
+                  </p>
+                  <p className="text-md font-black text-rose-500 mt-1">
+                    {comparison.details.filter(d => d.diff < 0).length}
+                  </p>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 max-h-[40vh] my-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+                {comparison.details.map(item => (
+                  <div 
+                    key={item.materialCode}
+                    className="p-3 bg-zinc-950/20 hover:bg-zinc-950/30 rounded-2xl border border-zinc-800/60 flex items-center justify-between gap-4 transition-all"
+                  >
+                    <div className="flex-1 min-w-0 text-right">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-mono text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded font-black border border-zinc-700/50">
+                          {item.materialCode}
+                        </span>
+                        <span className="text-xs font-bold text-zinc-150 truncate max-w-[280px]">
+                          {item.description}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-bold">
+                        <span>
+                          {isRtl ? 'الرصيد السابق:' : 'Previous:'} {formatNumber(item.oldQty)}
+                        </span>
+                        <span className="text-zinc-800">•</span>
+                        <span>
+                          {isRtl ? 'الرصيد الحالي:' : 'Current:'} {formatNumber(item.newQty)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-left font-sans">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-black font-mono border ${
+                        item.diff > 0 
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                          : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                      }`}>
+                        {item.diff > 0 ? '+' : ''}{formatNumber(item.diff)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Actions */}
+              <div className="pt-4 border-t border-zinc-800 mt-4 flex items-center justify-between gap-4">
+                <button
+                  onClick={() => setIsComparisonModalOpen(false)}
+                  className="px-4 py-2 border border-zinc-800 text-zinc-400 hover:text-white rounded-2xl text-xs font-black cursor-pointer transition-colors"
+                >
+                  {isRtl ? 'إغلاق' : 'Close'}
+                </button>
+                <button
+                  onClick={handleAcceptNewBalance}
+                  className="flex items-center gap-1.5 px-4.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black shadow-lg transition-all cursor-pointer"
+                >
+                  <Check size={14} />
+                  {isRtl ? 'اعتماد الرصيد كمرجع للمقارنة' : 'Accept Current Balance as Reference'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
