@@ -888,7 +888,10 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         [isRtl ? 'كود الخام' : 'Material Code']: item.materialCode,
         [isRtl ? 'الوصف' : 'Description']: item.description,
         [isRtl ? 'صنف الزيتون' : 'Variety']: getVarietyName(item.variety),
-        [isRtl ? 'إجمالي الكمية' : 'Total Qty']: item.totalQuantity,
+        [isRtl ? 'الحجم' : 'Size']: item.size || '—',
+        [isRtl ? 'التشغيل' : 'Process']: getAttributeLabel(item.processType, 'process'),
+        [isRtl ? 'التوجيه' : 'Treatment']: getAttributeLabel(item.treatment, 'direction'),
+        [isRtl ? 'إجمالي الكمية (كجم)' : 'Total Qty (Kg)']: item.totalQuantity,
       };
       
       // Add location columns
@@ -1516,6 +1519,11 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                                 {getAttributeLabel(row.processType, 'process')}
                               </span>
                             )}
+                            {row.treatment && (
+                              <span className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[9px] px-1.5 py-0.5 rounded-lg font-black border border-emerald-100 dark:border-emerald-900/30 whitespace-nowrap">
+                                {getAttributeLabel(row.treatment, 'direction')}
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td 
@@ -1601,10 +1609,19 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
             {/* Table Footer Stats */}
             <div className="flex items-center justify-between px-6 py-4 bg-zinc-50/60 dark:bg-zinc-900/40 border-t border-zinc-100 dark:border-zinc-800/60">
-              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <Layers size={12} className="text-emerald-500" />
-                ({filteredDataset.length}) {isRtl ? 'صنف متاح في العرض' : 'total items displayed'}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Layers size={12} className="text-emerald-500" />
+                  ({filteredDataset.length}) {isRtl ? 'صنف متاح في العرض' : 'total items displayed'}
+                </span>
+                <button 
+                  onClick={handleExportToExcel}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 font-black text-[9px] transition-all border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                >
+                  <Download size={12} className="text-emerald-500" />
+                  <span>{isRtl ? 'تحميل إكسيل بالفلتر' : 'Download Excel (Filtered)'}</span>
+                </button>
+              </div>
               <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-tighter">
                 <div className="flex items-center gap-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
