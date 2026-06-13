@@ -1893,28 +1893,45 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         job.qualityComments && `${isRtl ? 'تعليقات الجودة:' : 'Quality Comments:'} ${job.qualityComments}`
       ].filter(Boolean).join('\n');
 
-      const recipient = toEmails.join(',') || 'Khaled.Shaaban@RichLandfi.com';
+      const recipientList = [...toEmails];
+      if (job.status === 'Pending Completion' || job.status === 'Completed') {
+        if (!recipientList.includes('y.tawfiq@monairy.com')) {
+          recipientList.push('y.tawfiq@monairy.com');
+        }
+      }
+      const recipient = recipientList.join(',') || 'Khaled.Shaaban@RichLandfi.com';
       const ccList = ccEmails.join(',');
-      const subject = encodeURIComponent(`${isRtl ? 'تشغيلة جديدة / محدثة - ' : 'New / Updated Job - '} ${job.warehouseName} - ${job.date}`);
-      const body = encodeURIComponent(
-        `${isRtl ? 'تحية طيبة،\n\nيرجى العلم بأنه تم تحديث التشغيلة التالية:' : 'Hello,\n\nPlease be informed that the following job has been updated:'}\n\n` +
-        `${isRtl ? 'تقرير تشغيل ملف Word مرفق' : 'Word Job Report Attached'}\n` +
-        `${isRtl ? 'المخزن:' : 'Warehouse:'} ${job.warehouseName} (${job.warehouseCode})\n` +
-        `${isRtl ? 'التاريخ:' : 'Date:'} ${job.date}\n` +
-        `${isRtl ? 'الحالة:' : 'Status:'} ${job.status}\n` +
-        `${isRtl ? 'رقم العملية:' : 'Job Code:'} ${job.jobCode || '-'}\n` +
-        `${isRtl ? 'رقم PO:' : 'PO Number:'} ${job.poNumber || '-'}\n\n` +
-        `${isRtl ? 'إجمالي المدخلات:' : 'Total Inputs:'} ${totalIn} kg\n` +
-        `${isRtl ? 'إجمالي المخرجات:' : 'Total Outputs:'} ${totalOut} kg\n` +
-        `${isRtl ? 'نسبة الهالك:' : 'Loss %:'} ${lossPercentage}%\n\n` +
+      const subject = encodeURIComponent(`${isRtl ? '\u200Fتشغيلة جديدة / محدثة - ' : 'New / Updated Job - '}${job.jobCode ? `${job.jobCode} - ` : ''}${job.warehouseName} - ${job.date}`);
+      
+      const rlm = '\u200F';
+      const rle = '\u202B';
+      const pdf = '\u202C';
+      const bodyText = isRtl ? (
+        `${rle}${rlm}تحية طيبة،${pdf}\n\n` +
+        `${rle}${rlm}يرجى العلم بأنه تم تحديث التشغيلة التالية:${pdf}\n\n` +
+        `${rle}${rlm}تقرير تشغيل ملف Word مرفق${pdf}\n` +
+        `${rle}${rlm}--------------------${pdf}\n` +
+        `${rle}${rlm}المخزن: ${job.warehouseName} (${job.warehouseCode})${pdf}\n` +
+        `${rle}${rlm}التاريخ: ${job.date}${pdf}\n` +
+        `${rle}${rlm}الحالة: ${job.status}${pdf}\n` +
+        `${rle}${rlm}رقم العملية: ${job.jobCode || '-'}${pdf}\n` +
+        `${rle}${rlm}رقم PO: ${job.poNumber || '-'}${pdf}\n\n` +
+        (commentsText ? `${commentsText.split('\n').map(line => `${rle}${rlm}${line}${pdf}`).join('\n')}\n\n` : '') +
+        `${rle}${rlm}يرجى مراجعة ملف Word المرفق.${pdf}`
+      ) : (
+        `Hello,\n\nPlease be informed that the following job has been updated:\n\n` +
+        `Word Job Report Attached\n` +
+        `--------------------\n` +
+        `Warehouse: ${job.warehouseName} (${job.warehouseCode})\n` +
+        `Date: ${job.date}\n` +
+        `Status: ${job.status}\n` +
+        `Job Code: ${job.jobCode || '-'}\n` +
+        `PO Number: ${job.poNumber || '-'}\n\n` +
         (commentsText ? `${commentsText}\n\n` : '') +
-        `${isRtl ? 'التوقيعات:' : 'Signatures:'}\n` +
-        `- ${isRtl ? 'العميل:' : 'Customer:'} ${findUserName(job.createdBy)}\n` +
-        `- ${isRtl ? 'المخزن:' : 'Warehouse:'} ${findUserName(job.warehouseApproverId)}\n` +
-        `- ${isRtl ? 'الجودة:' : 'Quality:'} ${findUserName(job.qualityApproverId)}\n` +
-        `- ${isRtl ? 'المشتريات:' : 'Purchasing:'} ${findUserName(job.purchasingApproverId)}\n\n` +
-        `${isRtl ? 'يرجى مراجعة ملف Word المرفق.' : 'Please review the attached Word file.'}`
+        `Please review the attached Word file.`
       );
+
+      const body = encodeURIComponent(bodyText);
 
       const mailtoUrl = `mailto:${recipient}?cc=${ccList}&subject=${subject}&body=${body}`;
       window.location.href = mailtoUrl;
