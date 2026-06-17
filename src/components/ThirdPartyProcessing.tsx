@@ -423,6 +423,14 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [dynamicItems, setDynamicItems] = useState<ProcessItem[]>(PROCESS_ITEMS_LIST);
 
+  const getOperationLabel = (op: string | undefined) => {
+    if (!op) return '';
+    if (op === 'Grading') return lang === 'ar' ? 'تدريج' : 'Grading';
+    if (op === 'PittingAndSlicing') return lang === 'ar' ? 'خلي وشرائح' : 'Pitting & Slicing';
+    if (op === 'Other') return lang === 'ar' ? 'أخرى' : 'Other';
+    return op;
+  };
+
   useEffect(() => {
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -467,7 +475,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     notes: '',
     qualityComments: '',
     poNumber: '',
-    confirmedPrice: 0
+    confirmedPrice: 0,
+    processOperation: ''
   });
 
   const [jobActionsState, setJobActionsState] = useState<{
@@ -475,6 +484,28 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       qualityComments?: string;
       confirmedPrice?: number;
       poNumber?: string;
+      defectForeignBodies?: number;
+      defectOlivesInsects?: number;
+      defectSoftTexture?: number;
+      defectBadColor?: number;
+      defectOlivesStem?: number;
+      defectSkinDefect?: number;
+      defectGasPocket?: number;
+      defectOlivesLoseSkin?: number;
+      defectOtherVariety?: number;
+      defectTotalDefect?: number;
+      defectComments?: string;
+      slicingTime?: string;
+      slicingWeightPerKg?: string;
+      slicingPreProdBroken?: number;
+      slicingPitDefects?: number;
+      slicingBrokenOlives?: number;
+      slicingPits?: number;
+      slicingTotalRejected?: number;
+      slicingFloatSalinity?: string;
+      slicingAction?: string;
+      slicingProduction?: string;
+      slicingQualityControl?: string;
     }
   }>({});
 
@@ -505,6 +536,18 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       [jobId]: {
         ...prev[jobId],
         [field]: value
+      }
+    }));
+  };
+
+  const handleUpdateDefect = (jobId: string, field: string, valueStr: string) => {
+    const val = valueStr === '' ? undefined : parseFloat(valueStr);
+    
+    setJobActionsState(prev => ({
+      ...prev,
+      [jobId]: {
+        ...(prev[jobId] || {}),
+        [field]: val
       }
     }));
   };
@@ -1277,6 +1320,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       return;
     }
 
+    if (!newJob.processOperation) {
+      toast.error(lang === 'ar' ? 'يرجى اختيار نوع عملية التشغيل' : 'Please select the type of process operation');
+      return;
+    }
+
     // Validation: Total quantity check
     const totalIn = newJob.inputs.reduce((sum, i) => sum + i.quantity, 0);
     const totalOut = newJob.outputs.reduce((sum, i) => sum + i.quantity, 0);
@@ -1381,7 +1429,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         inputs: [],
         outputs: [],
         status: hasRole('Admin') ? 'Completed' : (hasRole('Warehouse Operations') ? 'Pending Quality' : 'Pending Warehouse'),
-        notes: ''
+        notes: '',
+        processOperation: ''
       });
     } catch (error) {
       console.error("Save job error:", error);
@@ -1410,7 +1459,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       inputs: job.inputs,
       outputs: job.outputs,
       status: job.status,
-      notes: job.notes || ''
+      notes: job.notes || '',
+      processOperation: job.processOperation || ''
     });
     setEditingJobId(job.id);
     setIsAdding(true);
@@ -1476,14 +1526,44 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
   const handleApproveQuality = async (job: ProcessingJob, isAccepted: boolean) => {
     try {
-      const comments = jobActionsState[job.id]?.qualityComments || '';
-      const updateData = {
+      const state = jobActionsState[job.id] || {};
+      const comments = state.qualityComments || '';
+      const updateData: any = {
         status: isAccepted ? 'Pending Purchasing' : 'Rejected',
         qualityApproverId: user.uid,
         qualityApprovalTime: new Date().toISOString(),
         qualityComments: comments,
         serverTimestamp: serverTimestamp()
       };
+
+      if (job.processOperation === 'Grading') {
+        updateData.defectForeignBodies = state.defectForeignBodies !== undefined ? state.defectForeignBodies : (job.defectForeignBodies || 0);
+        updateData.defectOlivesInsects = state.defectOlivesInsects !== undefined ? state.defectOlivesInsects : (job.defectOlivesInsects || 0);
+        updateData.defectSoftTexture = state.defectSoftTexture !== undefined ? state.defectSoftTexture : (job.defectSoftTexture || 0);
+        updateData.defectBadColor = state.defectBadColor !== undefined ? state.defectBadColor : (job.defectBadColor || 0);
+        updateData.defectOlivesStem = state.defectOlivesStem !== undefined ? state.defectOlivesStem : (job.defectOlivesStem || 0);
+        updateData.defectSkinDefect = state.defectSkinDefect !== undefined ? state.defectSkinDefect : (job.defectSkinDefect || 0);
+        updateData.defectGasPocket = state.defectGasPocket !== undefined ? state.defectGasPocket : (job.defectGasPocket || 0);
+        updateData.defectOlivesLoseSkin = state.defectOlivesLoseSkin !== undefined ? state.defectOlivesLoseSkin : (job.defectOlivesLoseSkin || 0);
+        updateData.defectOtherVariety = state.defectOtherVariety !== undefined ? state.defectOtherVariety : (job.defectOtherVariety || 0);
+        updateData.defectTotalDefect = state.defectTotalDefect !== undefined ? state.defectTotalDefect : (job.defectTotalDefect || 0);
+        updateData.defectComments = state.defectComments !== undefined ? state.defectComments : (job.defectComments || '');
+      }
+
+      if (job.processOperation === 'PittingAndSlicing') {
+        updateData.slicingTime = state.slicingTime !== undefined ? state.slicingTime : (job.slicingTime || '');
+        updateData.slicingWeightPerKg = state.slicingWeightPerKg !== undefined ? state.slicingWeightPerKg : (job.slicingWeightPerKg || '');
+        updateData.slicingPreProdBroken = state.slicingPreProdBroken !== undefined ? state.slicingPreProdBroken : (job.slicingPreProdBroken || 0);
+        updateData.slicingPitDefects = state.slicingPitDefects !== undefined ? state.slicingPitDefects : (job.slicingPitDefects || 0);
+        updateData.slicingBrokenOlives = state.slicingBrokenOlives !== undefined ? state.slicingBrokenOlives : (job.slicingBrokenOlives || 0);
+        updateData.slicingPits = state.slicingPits !== undefined ? state.slicingPits : (job.slicingPits || 0);
+        updateData.slicingTotalRejected = state.slicingTotalRejected !== undefined ? state.slicingTotalRejected : (job.slicingTotalRejected || 0);
+        updateData.slicingFloatSalinity = state.slicingFloatSalinity !== undefined ? state.slicingFloatSalinity : (job.slicingFloatSalinity || '');
+        updateData.slicingAction = state.slicingAction !== undefined ? state.slicingAction : (job.slicingAction || '');
+        updateData.slicingProduction = state.slicingProduction !== undefined ? state.slicingProduction : (job.slicingProduction || '');
+        updateData.slicingQualityControl = state.slicingQualityControl !== undefined ? state.slicingQualityControl : (job.slicingQualityControl || '');
+      }
+
       await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
       toast.success(isAccepted 
         ? (lang === 'ar' ? 'تم اعتماد الجودة بنجاح' : 'Quality approval successful')
@@ -1547,6 +1627,66 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
     const lossPercentage = totalIn > 0 ? (((totalIn - totalOut) / totalIn) * 100).toFixed(1) : '0.0';
 
+    const gradingDefectsTextAr = (job.processOperation === 'Grading' && job.defectTotalDefect !== undefined)
+      ? `\n📊 *عيوب جودة التدريج:*\n` +
+        `• Foreign Bodies: ${job.defectForeignBodies ?? 0}%\n` +
+        `• Olives have Insects: ${job.defectOlivesInsects ?? 0}%\n` +
+        `• Soft texture: ${job.defectSoftTexture ?? 0}%\n` +
+        `• Bad Color: ${job.defectBadColor ?? 0}%\n` +
+        `• Olives have stem: ${job.defectOlivesStem ?? 0}%\n` +
+        `• Skin Defect: ${job.defectSkinDefect ?? 0}%\n` +
+        `• Gas Pocket: ${job.defectGasPocket ?? 0}%\n` +
+        `• Olives lose skin: ${job.defectOlivesLoseSkin ?? 0}%\n` +
+        `• Other Variety: ${job.defectOtherVariety ?? 0}%\n` +
+        `• *إجمالي العيوب (Total):* ${job.defectTotalDefect}%\n` +
+        (job.defectComments ? `• *تعليقات العيوب:* ${job.defectComments}\n` : '')
+      : '';
+
+    const slicingTextAr = (job.processOperation === 'PittingAndSlicing' && (job.slicingTime || job.slicingPreProdBroken !== undefined))
+      ? `\n📊 *جودة عملية الخلي والشرائح:*\n` +
+        `• الوقت: ${job.slicingTime || '-'}\n` +
+        `• وزن/اسم لكل 1 كجم: ${job.slicingWeightPerKg || '-'}\n` +
+        `• كسر ما قبل الإنتاج (≤10%): ${job.slicingPreProdBroken ?? 0}%\n` +
+        `• عيوب النوى (≤5%): ${job.slicingPitDefects ?? 0}%\n` +
+        `• كسر الزيتون (≤5%): ${job.slicingBrokenOlives ?? 0}%\n` +
+        `• النوى (≤5%): ${job.slicingPits ?? 0}%\n` +
+        `• *إجمالي المنزل (≤12%):* ${job.slicingTotalRejected ?? 0}%\n` +
+        `• ملوحة محلول العوامة: ${job.slicingFloatSalinity || '-'}\n` +
+        `• الإجراء: ${job.slicingAction || '-'}\n` +
+        `• الإنتاج: ${job.slicingProduction || '-'}\n` +
+        `• رقابة الجودة: ${job.slicingQualityControl || '-'}\n`
+      : '';
+
+    const gradingDefectsTextEn = (job.processOperation === 'Grading' && job.defectTotalDefect !== undefined)
+      ? `\n📊 *Grading Quality Defects:*\n` +
+        `• Foreign Bodies: ${job.defectForeignBodies ?? 0}%\n` +
+        `• Olives have Insects: ${job.defectOlivesInsects ?? 0}%\n` +
+        `• Soft texture: ${job.defectSoftTexture ?? 0}%\n` +
+        `• Bad Color: ${job.defectBadColor ?? 0}%\n` +
+        `• Olives have stem: ${job.defectOlivesStem ?? 0}%\n` +
+        `• Skin Defect: ${job.defectSkinDefect ?? 0}%\n` +
+        `• Gas Pocket: ${job.defectGasPocket ?? 0}%\n` +
+        `• Olives lose skin: ${job.defectOlivesLoseSkin ?? 0}%\n` +
+        `• Other Variety: ${job.defectOtherVariety ?? 0}%\n` +
+        `• *Total Defect:* ${job.defectTotalDefect}%\n` +
+        (job.defectComments ? `• *Comments:* ${job.defectComments}\n` : '')
+      : '';
+
+    const slicingTextEn = (job.processOperation === 'PittingAndSlicing' && (job.slicingTime || job.slicingPreProdBroken !== undefined))
+      ? `\n📊 *Slicing & Pitting Quality:*\n` +
+        `• Time: ${job.slicingTime || '-'}\n` +
+        `• Weight/Name per 1 Kg: ${job.slicingWeightPerKg || '-'}\n` +
+        `• Pre-Prod Broken (≤10%): ${job.slicingPreProdBroken ?? 0}%\n` +
+        `• Pit Defects (≤5%): ${job.slicingPitDefects ?? 0}%\n` +
+        `• Broken Olives (≤5%): ${job.slicingBrokenOlives ?? 0}%\n` +
+        `• Pits (≤5%): ${job.slicingPits ?? 0}%\n` +
+        `• *Total Rejected (≤12%):* ${job.slicingTotalRejected ?? 0}%\n` +
+        `• Float Salinity: ${job.slicingFloatSalinity || '-'}\n` +
+        `• Action: ${job.slicingAction || '-'}\n` +
+        `• Production: ${job.slicingProduction || '-'}\n` +
+        `• Quality Control: ${job.slicingQualityControl || '-'}\n`
+      : '';
+
     const text = isRtl
       ? `📋 *تقرير عملية تشغيل (Third Party Job)*\n\n` +
         `• *رقم العملية:* ${job.jobCode || '-'}\n` +
@@ -1556,7 +1696,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         `📥 *المدخلات:* ${totalIn.toLocaleString()} kg\n` +
         `📤 *المخرجات:* ${totalOut.toLocaleString()} kg\n` +
         `📊 *نسبة التشغيل:* ${yieldPercentage}%\n` +
-        `📉 *نسبة الفقد:* ${lossPercentage}%\n\n` +
+        `📉 *نسبة الفقد:* ${lossPercentage}%\n` +
+        gradingDefectsTextAr + slicingTextAr + `\n` +
         (job.notes ? `*ملاحظات:* ${job.notes}\n` : '') +
         (job.qualityComments ? `*تعليقات الجودة:* ${job.qualityComments}\n` : '')
       : `📋 *Processing Job Report*\n\n` +
@@ -1567,7 +1708,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         `📥 *Inputs:* ${totalIn.toLocaleString()} kg\n` +
         `📤 *Outputs:* ${totalOut.toLocaleString()} kg\n` +
         `📊 *Yield:* ${yieldPercentage}%\n` +
-        `📉 *Loss:* ${lossPercentage}%\n\n` +
+        `📉 *Loss:* ${lossPercentage}%\n` +
+        gradingDefectsTextEn + slicingTextEn + `\n` +
         (job.notes ? `*Notes:* ${job.notes}\n` : '') +
         (job.qualityComments ? `*Quality Comments:* ${job.qualityComments}\n` : '');
 
@@ -1698,6 +1840,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                         createCell(isRtl ? "رقم PO" : "PO Number", { bg: "F1F5F9", bold: true }),
                         createCell(job.poNumber || "-", { bg: "F8FAFC", bold: true, color: "2563EB" })
                       ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "عملية التشغيل" : "Process Operation", { bg: "F1F5F9", bold: true }),
+                        createCell(getOperationLabel(job.processOperation) || "-", { bg: "F8FAFC", bold: true })
+                      ]}),
                     ]
                   })
                 ]
@@ -1820,6 +1966,180 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       if (job.notes) allComments.push({ label: isRtl ? "ملاحظات العميل: " : "Customer Notes: ", text: job.notes });
       if (job.qualityComments) allComments.push({ label: isRtl ? "تعليقات الجودة: " : "Quality Comments: ", text: job.qualityComments });
 
+      const showQualityReport = (job.processOperation === 'Grading' && job.defectTotalDefect !== undefined) ||
+                                (job.processOperation === 'PittingAndSlicing' && (
+                                  job.slicingTime !== undefined ||
+                                  job.slicingWeightPerKg !== undefined ||
+                                  job.slicingPreProdBroken !== undefined
+                                ));
+
+      const qualityReportTitle = new Paragraph({
+        children: [new TextRun({ 
+          text: isRtl ? "تقرير الجودة" : "Quality Report",
+          bold: true,
+          size: 24,
+          color: "1E3A8A"
+        })],
+        alignment: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        spacing: { before: 300, after: 120 }
+      });
+
+      const qualityTable = job.processOperation === 'Grading' ? new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: [
+              createCell(isRtl ? "نوع العيب / الاختبار" : "Defect / Test Type", { bg: "FEF3C7", bold: true, width: 70, align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(isRtl ? "النسبة المئوية (%)" : "Percentage (%)", { bg: "FEF3C7", bold: true, width: 30 })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "شوائب وأجسام غريبة (Foreign Bodies)" : "Foreign Bodies", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectForeignBodies ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "ثمار مصابة بحشرات (Olives have Insects)" : "Olives have Insects", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectOlivesInsects ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "قوام طري (Soft texture)" : "Soft texture", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectSoftTexture ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "لون غير متجانس (Bad Color)" : "Bad Color", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectBadColor ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "ثمار بعنق (Olives have stem)" : "Olives have stem", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectOlivesStem ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "عيوب قشرة (Skin Defect)" : "Skin Defect", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectSkinDefect ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "جيوب غازية (Gas Pocket)" : "Gas Pocket", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectGasPocket ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "ثمار منزوعة القشرة (Olives lose skin)" : "Olives lose skin", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectOlivesLoseSkin ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "صنف آخر (Other Variety)" : "Other Variety", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectOtherVariety ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "إجمالي العيوب (Total defect)" : "Total defect", { bg: "FEE2E2", bold: true, align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT, color: "991B1B" }),
+              createCell(`${job.defectTotalDefect ?? 0}%`, { bg: "FEE2E2", bold: true, color: "991B1B" })
+            ]
+          })
+        ]
+      }) : new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: [
+              createCell(isRtl ? "بيانات وبنود اختبار الجودة (شرائح وخلي)" : "Quality Test Field", { bg: "FEF3C7", bold: true, width: 60, align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(isRtl ? "المواصفة والبيان" : "Specification & Metric", { bg: "FEF3C7", bold: true, width: 40 })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "الوقت (Time)" : "Time", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingTime || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "وزن/اسم لكل 1 كجم (Weight/Name per 1 Kg)" : "Weight/Name per 1 Kg", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingWeightPerKg || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "نسبة عيوب كسر ما قبل الإنتاج (Pre-prod broken - ≤10%)" : "Pre-production Broken defects (≤10%)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingPreProdBroken !== undefined ? `${job.slicingPreProdBroken}%` : "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "عيوب النوى (Pit defects - ≤5%)" : "Pit defects (≤5%)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingPitDefects !== undefined ? `${job.slicingPitDefects}%` : "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "كسر الزيتون (Broken olives - ≤5%)" : "Broken olives (≤5%)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingBrokenOlives !== undefined ? `${job.slicingBrokenOlives}%` : "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "النوى (Pits - ≤5%)" : "Pits (≤5%)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingPits !== undefined ? `${job.slicingPits}%` : "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "إجمالي المنزّل (Total rejected/home - ≤12%)" : "Total home/rejected (≤12%)", { bg: "FEE2E2", color: "991B1B", align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingTotalRejected !== undefined ? `${job.slicingTotalRejected}%` : "-", { bg: "FEE2E2", color: "991B1B", bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "نسبة ملوحة محلول العوامة (Float salinity brine)" : "Float salinity brine", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingFloatSalinity || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "الإجراء (Action)" : "Action", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingAction || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "الإنتاج (Production)" : "Production", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingProduction || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "رقابة الجودة (Quality Control)" : "Quality Control", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingQualityControl || "-", { bold: true })
+            ]
+          })
+        ]
+      });
+
+      const qualityCommentsParagraph = job.defectComments ? new Paragraph({
+        children: [
+          new TextRun({ text: isRtl ? "ملاحظات عيوب التدريج: " : "Grading Defects Comments: ", bold: true }),
+          new TextRun({ text: job.defectComments, italics: true })
+        ],
+        spacing: { before: 120 }
+      }) : null;
+
       const doc = new Document({
         sections: [{
           properties: {
@@ -1843,6 +2163,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             metadataTable,
             new Paragraph({ text: "", spacing: { after: 200 } }),
             mainTables,
+            ...(showQualityReport ? [
+              qualityReportTitle,
+              qualityTable,
+              ...(qualityCommentsParagraph ? [qualityCommentsParagraph] : [])
+            ] : []),
             ...allComments.map(comment => new Paragraph({
               children: [
                 new TextRun({ text: comment.label, bold: true }),
@@ -1888,9 +2213,17 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const fileName = `JobReport_${job.warehouseCode || 'Report'}_${job.date}.docx`;
 
       // Compose Email Body
+      const gradingDefectSummary = (job.processOperation === 'Grading' && job.defectTotalDefect !== undefined)
+        ? `${isRtl ? 'إجمالي عيوب التدريج:' : 'Total Grading Defects:'} ${job.defectTotalDefect}%` + (job.defectComments ? ` (${job.defectComments})` : '')
+        : '';
+      const slicingDefectSummary = (job.processOperation === 'PittingAndSlicing' && job.slicingTotalRejected !== undefined)
+        ? `${isRtl ? 'إجمالي مخرج المنزل لشرائح الجودة والخلي:' : 'Total Quality Reject:'} ${job.slicingTotalRejected}%`
+        : '';
       const commentsText = [
         job.notes && `${isRtl ? 'ملاحظات:' : 'Notes:'} ${job.notes}`,
-        job.qualityComments && `${isRtl ? 'تعليقات الجودة:' : 'Quality Comments:'} ${job.qualityComments}`
+        job.qualityComments && `${isRtl ? 'تعليقات الجودة:' : 'Quality Comments:'} ${job.qualityComments}`,
+        gradingDefectSummary,
+        slicingDefectSummary
       ].filter(Boolean).join('\n');
 
       const recipientList = [...toEmails];
@@ -2378,6 +2711,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                         createCell(isRtl ? "رقم PO" : "PO Number", { bg: "F1F5F9", bold: true }),
                         createCell(job.poNumber || "-", { bg: "F8FAFC", bold: true, color: "2563EB" })
                       ]}),
+                      new TableRow({ children: [
+                        createCell(isRtl ? "عملية التشغيل" : "Process Operation", { bg: "F1F5F9", bold: true }),
+                        createCell(getOperationLabel(job.processOperation) || "-", { bg: "F8FAFC", bold: true })
+                      ]}),
                     ]
                   })
                 ]
@@ -2500,6 +2837,180 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       if (job.notes) allComments.push({ label: isRtl ? "ملاحظات العميل: " : "Customer Notes: ", text: job.notes });
       if (job.qualityComments) allComments.push({ label: isRtl ? "تعليقات الجودة: " : "Quality Comments: ", text: job.qualityComments });
 
+      const showQualityReport = (job.processOperation === 'Grading' && job.defectTotalDefect !== undefined) ||
+                                (job.processOperation === 'PittingAndSlicing' && (
+                                  job.slicingTime !== undefined ||
+                                  job.slicingWeightPerKg !== undefined ||
+                                  job.slicingPreProdBroken !== undefined
+                                ));
+
+      const qualityReportTitle = new Paragraph({
+        children: [new TextRun({ 
+          text: isRtl ? "تقرير الجودة" : "Quality Report",
+          bold: true,
+          size: 24,
+          color: "1E3A8A"
+        })],
+        alignment: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        spacing: { before: 300, after: 120 }
+      });
+
+      const qualityTable = job.processOperation === 'Grading' ? new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: [
+              createCell(isRtl ? "نوع العيب / الاختبار" : "Defect / Test Type", { bg: "FEF3C7", bold: true, width: 70, align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(isRtl ? "النسبة المئوية (%)" : "Percentage (%)", { bg: "FEF3C7", bold: true, width: 30 })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "شوائب وأجسام غريبة (Foreign Bodies)" : "Foreign Bodies", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectForeignBodies ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "ثمار مصابة بحشرات (Olives have Insects)" : "Olives have Insects", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectOlivesInsects ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "قوام طري (Soft texture)" : "Soft texture", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectSoftTexture ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "لون غير متجانس (Bad Color)" : "Bad Color", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectBadColor ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "ثمار بعنق (Olives have stem)" : "Olives have stem", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectOlivesStem ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "عيوب قشرة (Skin Defect)" : "Skin Defect", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectSkinDefect ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "جيوب غازية (Gas Pocket)" : "Gas Pocket", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectGasPocket ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "ثمار منزوعة القشرة (Olives lose skin)" : "Olives lose skin", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectOlivesLoseSkin ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "أصناف أخرى (Other Variety)" : "Other Variety", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(`${job.defectOtherVariety ?? 0}%`, { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "إجمالي العيوب (Total defect)" : "Total defect", { bg: "FEE2E2", bold: true, align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT, color: "991B1B" }),
+              createCell(`${job.defectTotalDefect ?? 0}%`, { bg: "FEE2E2", bold: true, color: "991B1B" })
+            ]
+          })
+        ]
+      }) : new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: [
+              createCell(isRtl ? "بيانات وبنود اختبار الجودة (شرائح وخلي)" : "Quality Test Field", { bg: "FEF3C7", bold: true, width: 60, align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(isRtl ? "المواصفة والبيان" : "Specification & Metric", { bg: "FEF3C7", bold: true, width: 40 })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "الوقت (Time)" : "Time", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingTime || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "وزن/اسم لكل 1 كجم (Weight/Name per 1 Kg)" : "Weight/Name per 1 Kg", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingWeightPerKg || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "نسبة عيوب كسر ما قبل الإنتاج (Pre-prod broken - ≤10%)" : "Pre-production Broken defects (≤10%)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingPreProdBroken !== undefined ? `${job.slicingPreProdBroken}%` : "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "عيوب النوى (Pit defects - ≤5%)" : "Pit defects (≤5%)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingPitDefects !== undefined ? `${job.slicingPitDefects}%` : "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "كسر الزيتون (Broken olives - ≤5%)" : "Broken olives (≤5%)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingBrokenOlives !== undefined ? `${job.slicingBrokenOlives}%` : "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "النوى (Pits - ≤5%)" : "Pits (≤5%)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingPits !== undefined ? `${job.slicingPits}%` : "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "إجمالي المنزّل (Total rejected/home - ≤12%)" : "Total home/rejected (≤12%)", { bg: "FEE2E2", color: "991B1B", align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingTotalRejected !== undefined ? `${job.slicingTotalRejected}%` : "-", { bg: "FEE2E2", color: "991B1B", bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "نسبة ملوحة محلول العوامة (Float salinity brine)" : "Float salinity brine", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingFloatSalinity || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "الإجراء (Action)" : "Action", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingAction || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "الإنتاج (Production)" : "Production", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingProduction || "-", { bold: true })
+            ]
+          }),
+          new TableRow({
+            children: [
+              createCell(isRtl ? "رقابة الجودة (Quality Control)" : "Quality Control", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+              createCell(job.slicingQualityControl || "-", { bold: true })
+            ]
+          })
+        ]
+      });
+
+      const qualityCommentsParagraph = job.defectComments ? new Paragraph({
+        children: [
+          new TextRun({ text: isRtl ? "ملاحظات عيوب التدريج: " : "Grading Defects Comments: ", bold: true }),
+          new TextRun({ text: job.defectComments, italics: true })
+        ],
+        spacing: { before: 120 }
+      }) : null;
+
       const doc = new Document({
         sections: [{
           properties: {
@@ -2523,6 +3034,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             metadataTable,
             new Paragraph({ text: "", spacing: { after: 200 } }),
             mainTables,
+            ...(showQualityReport ? [
+              qualityReportTitle,
+              qualityTable,
+              ...(qualityCommentsParagraph ? [qualityCommentsParagraph] : [])
+            ] : []),
             ...allComments.map(comment => new Paragraph({
               children: [
                 new TextRun({ text: comment.label, bold: true }),
@@ -3099,7 +3615,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   inputs: [],
                   outputs: [],
                   status: hasRole('Admin') ? 'Completed' : 'Pending Warehouse',
-                  notes: ''
+                  notes: '',
+                  processOperation: ''
                 });
               }}
               className="px-4 py-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 font-medium transition-colors"
@@ -3157,7 +3674,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             )}
 
             {/* Basic Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">
@@ -3196,6 +3713,21 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   onChange={(e) => setNewJob({ ...newJob, date: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border-2 border-transparent focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-900 outline-none transition-all"
                 />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">
+                  {lang === 'ar' ? 'عملية التشغيل' : 'Process Operation'}
+                </label>
+                <select
+                  value={newJob.processOperation || ''}
+                  onChange={(e) => setNewJob({ ...newJob, processOperation: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border-2 border-transparent focus:border-emerald-500 focus:bg-white dark:focus:bg-zinc-900 outline-none transition-all"
+                >
+                  <option value="">{lang === 'ar' ? '-- اختر عملية التشغيل --' : '-- Select Operation --'}</option>
+                  <option value="Grading">{lang === 'ar' ? 'تدريج' : 'Grading'}</option>
+                  <option value="PittingAndSlicing">{lang === 'ar' ? 'خلي وشرائح' : 'Pitting & Slicing'}</option>
+                  <option value="Other">{lang === 'ar' ? 'أخرى' : 'Other'}</option>
+                </select>
               </div>
             </div>
 
@@ -3435,6 +3967,14 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                               <Clock size={14} className="opacity-70" />
                               {new Date(job.date).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { dateStyle: 'medium' })}
                             </span>
+                            {job.processOperation && (
+                              <>
+                                <span className="w-1 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full" />
+                                <span className="bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-lg text-[10px] font-black border border-amber-200 dark:border-amber-900/40">
+                                  {getOperationLabel(job.processOperation)}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -3496,31 +4036,324 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                               </button>
                             )}
 
-                            {/* Quality Actions */}
-                            {hasRole(['Admin', 'Quality Operations']) && job.status === 'Pending Quality' && (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-1.5 rounded-xl w-full sm:w-auto shadow-sm">
-                                <textarea
-                                  placeholder={lang === 'ar' ? 'إضافة تعليق...' : 'Add comment...'}
-                                  value={jobActionsState[job.id]?.qualityComments || ''}
-                                  onChange={(e) => handleUpdateJobActionState(job.id, 'qualityComments', e.target.value)}
-                                  className="w-full sm:w-40 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none h-9 resize-none"
-                                />
-                                <div className="flex gap-1.5 shrink-0">
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); handleApproveQuality(job, true); }}
-                                    className="px-3 py-2 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all h-9"
-                                  >
-                                    {lang === 'ar' ? 'اعتماد' : 'Approve'}
-                                  </button>
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); handleApproveQuality(job, false); }}
-                                    className="px-3 py-2 bg-rose-500 text-white rounded-lg text-[10px] font-bold hover:bg-rose-600 transition-all h-9"
-                                  >
-                                    {lang === 'ar' ? 'رفض' : 'Reject'}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
+                             {/* Quality Actions */}
+                             {hasRole(['Admin', 'Quality Operations']) && job.status === 'Pending Quality' && (
+                               <div className="flex flex-col gap-4 w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-2xl shadow-sm">
+                                 <div className="flex items-center gap-2 pb-1 border-b border-zinc-100 dark:border-zinc-800">
+                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                   <h4 className="text-[10px] font-black tracking-wider text-zinc-500 dark:text-zinc-400 uppercase">
+                                     {job.processOperation === 'Grading' 
+                                       ? (lang === 'ar' ? 'اعتماد جودة تشغيلة التدريج' : 'Grading Quality Approval Panel')
+                                       : job.processOperation === 'PittingAndSlicing'
+                                       ? (lang === 'ar' ? 'اعتماد جودة تشغيلة الخلي والشرائح' : 'Slicing Quality Approval Panel')
+                                       : (lang === 'ar' ? 'اعتماد جودة التشغيلة' : 'Quality Approval Panel')}
+                                   </h4>
+                                 </div>
+
+                                 {job.processOperation === 'Grading' ? (
+                                   <div className="space-y-4">
+                                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 bg-zinc-50 dark:bg-zinc-800/30 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800/80">
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Foreign Bodies</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectForeignBodies !== undefined ? jobActionsState[job.id]?.defectForeignBodies : (job.defectForeignBodies || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectForeignBodies', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Olives have Insects</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectOlivesInsects !== undefined ? jobActionsState[job.id]?.defectOlivesInsects : (job.defectOlivesInsects || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectOlivesInsects', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Soft texture</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectSoftTexture !== undefined ? jobActionsState[job.id]?.defectSoftTexture : (job.defectSoftTexture || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectSoftTexture', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Bad Color</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectBadColor !== undefined ? jobActionsState[job.id]?.defectBadColor : (job.defectBadColor || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectBadColor', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Olives have stem</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectOlivesStem !== undefined ? jobActionsState[job.id]?.defectOlivesStem : (job.defectOlivesStem || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectOlivesStem', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Skin Defect</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectSkinDefect !== undefined ? jobActionsState[job.id]?.defectSkinDefect : (job.defectSkinDefect || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectSkinDefect', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Gas Pocket</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectGasPocket !== undefined ? jobActionsState[job.id]?.defectGasPocket : (job.defectGasPocket || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectGasPocket', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Olives lose skin</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectOlivesLoseSkin !== undefined ? jobActionsState[job.id]?.defectOlivesLoseSkin : (job.defectOlivesLoseSkin || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectOlivesLoseSkin', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Other Variety</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectOtherVariety !== undefined ? jobActionsState[job.id]?.defectOtherVariety : (job.defectOtherVariety || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectOtherVariety', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                       <div className="space-y-1">
+                                         <span className="text-[10px] font-black text-rose-500 block leading-tight">Total defect</span>
+                                         <input
+                                           type="number"
+                                           step="0.01"
+                                           className="w-full px-2 py-1.5 text-xs font-black rounded-lg bg-rose-50/50 dark:bg-rose-950/10 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/40 outline-none text-center"
+                                           value={jobActionsState[job.id]?.defectTotalDefect !== undefined ? jobActionsState[job.id]?.defectTotalDefect : (job.defectTotalDefect || '')}
+                                           onChange={(e) => handleUpdateDefect(job.id, 'defectTotalDefect', e.target.value)}
+                                           placeholder="0"
+                                         />
+                                       </div>
+                                     </div>
+                                     <div className="space-y-1">
+                                       <span className="text-[10px] font-bold text-zinc-500 block leading-tight">Comments</span>
+                                       <textarea
+                                         placeholder={lang === 'ar' ? 'تعليقات العيوب الإضافية...' : 'Additional defects comments...'}
+                                         value={jobActionsState[job.id]?.defectComments !== undefined ? jobActionsState[job.id]?.defectComments : (job.defectComments || '')}
+                                         onChange={(e) => handleUpdateJobActionState(job.id, 'defectComments', e.target.value)}
+                                         className="w-full p-2 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none h-12 resize-none"
+                                       />
+                                     </div>
+                                   </div>
+                                 ) : job.processOperation === 'PittingAndSlicing' ? (
+                                    <div className="space-y-4">
+                                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 bg-zinc-50 dark:bg-zinc-800/30 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800/80">
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight">
+                                            {lang === 'ar' ? 'الوقت' : 'Time'}
+                                          </span>
+                                          <input
+                                            type="text"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingTime !== undefined ? jobActionsState[job.id]?.slicingTime : (job.slicingTime || '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingTime', e.target.value)}
+                                            placeholder="12:00"
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight">
+                                            {lang === 'ar' ? 'وزن/اسم لكل 1 كجم' : 'Weight/Name per 1 Kg'}
+                                          </span>
+                                          <input
+                                            type="text"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingWeightPerKg !== undefined ? jobActionsState[job.id]?.slicingWeightPerKg : (job.slicingWeightPerKg || '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingWeightPerKg', e.target.value)}
+                                            placeholder="350 / L"
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight text-amber-600 dark:text-amber-400">
+                                            {lang === 'ar' ? 'كسر ما قبل الإنتاج (≤10%)' : 'Pre-Prod Broken (≤10%)'}
+                                          </span>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingPreProdBroken !== undefined ? jobActionsState[job.id]?.slicingPreProdBroken : (job.slicingPreProdBroken !== undefined ? job.slicingPreProdBroken : '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingPreProdBroken', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                            placeholder="1%"
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight text-amber-600 dark:text-amber-400">
+                                            {lang === 'ar' ? 'عيوب النوى (≤5%)' : 'Pit Defects (≤5%)'}
+                                          </span>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingPitDefects !== undefined ? jobActionsState[job.id]?.slicingPitDefects : (job.slicingPitDefects !== undefined ? job.slicingPitDefects : '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingPitDefects', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                            placeholder="5%"
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight text-rose-600 dark:text-rose-400">
+                                            {lang === 'ar' ? 'كسر الزيتون (≤5%)' : 'Broken Olives (≤5%)'}
+                                          </span>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingBrokenOlives !== undefined ? jobActionsState[job.id]?.slicingBrokenOlives : (job.slicingBrokenOlives !== undefined ? job.slicingBrokenOlives : '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingBrokenOlives', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                            placeholder="5%"
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight text-rose-600 dark:text-rose-400">
+                                            {lang === 'ar' ? 'النوى (≤5%)' : 'Pits (≤5%)'}
+                                          </span>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingPits !== undefined ? jobActionsState[job.id]?.slicingPits : (job.slicingPits !== undefined ? job.slicingPits : '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingPits', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                            placeholder="5%"
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-black text-rose-500 block leading-tight">
+                                            {lang === 'ar' ? 'إجمالي المنزل (≤12%)' : 'Total Home/Rejected (≤12%)'}
+                                          </span>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingTotalRejected !== undefined ? jobActionsState[job.id]?.slicingTotalRejected : (job.slicingTotalRejected !== undefined ? job.slicingTotalRejected : '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingTotalRejected', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                            placeholder="12%"
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight">
+                                            {lang === 'ar' ? 'ملوحة العوامة' : 'Float Salinity'}
+                                          </span>
+                                          <input
+                                            type="text"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingFloatSalinity !== undefined ? jobActionsState[job.id]?.slicingFloatSalinity : (job.slicingFloatSalinity || '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingFloatSalinity', e.target.value)}
+                                            placeholder="7%"
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight">
+                                            {lang === 'ar' ? 'الإجراء' : 'Action'}
+                                          </span>
+                                          <input
+                                            type="text"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingAction !== undefined ? jobActionsState[job.id]?.slicingAction : (job.slicingAction || '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingAction', e.target.value)}
+                                            placeholder={lang === 'ar' ? 'الإجراء المتبع' : 'Procedure'}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight">
+                                            {lang === 'ar' ? 'الإنتاج' : 'Production'}
+                                          </span>
+                                          <input
+                                            type="text"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingProduction !== undefined ? jobActionsState[job.id]?.slicingProduction : (job.slicingProduction || '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingProduction', e.target.value)}
+                                            placeholder={lang === 'ar' ? 'توقيع الإنتاج' : 'Production'}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <span className="text-[10px] font-semibold text-zinc-500 block leading-tight">
+                                            {lang === 'ar' ? 'رقابة الجودة' : 'Quality Control'}
+                                          </span>
+                                          <input
+                                            type="text"
+                                            className="w-full px-2 py-1.5 text-xs font-semibold rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none text-center"
+                                            value={jobActionsState[job.id]?.slicingQualityControl !== undefined ? jobActionsState[job.id]?.slicingQualityControl : (job.slicingQualityControl || '')}
+                                            onChange={(e) => handleUpdateJobActionState(job.id, 'slicingQualityControl', e.target.value)}
+                                            placeholder={lang === 'ar' ? 'رقابة الجودة' : 'Quality Control'}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : null}
+
+                                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+                                   <div className="flex-1">
+                                     <textarea
+                                       placeholder={lang === 'ar' ? 'إضافة تعليق عام للتشغيلة...' : 'Add general comments...'}
+                                       value={jobActionsState[job.id]?.qualityComments || ''}
+                                       onChange={(e) => handleUpdateJobActionState(job.id, 'qualityComments', e.target.value)}
+                                       className="w-full p-2 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none h-11 resize-none"
+                                     />
+                                   </div>
+                                   <div className="flex gap-1.5 shrink-0 select-none">
+                                     <button 
+                                       onClick={(e) => { e.stopPropagation(); handleApproveQuality(job, true); }}
+                                       className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all h-11"
+                                     >
+                                       {lang === 'ar' ? 'اعتماد' : 'Approve'}
+                                     </button>
+                                     <button 
+                                       onClick={(e) => { e.stopPropagation(); handleApproveQuality(job, false); }}
+                                       className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold hover:bg-rose-600 transition-all h-11"
+                                     >
+                                       {lang === 'ar' ? 'رفض' : 'Reject'}
+                                     </button>
+                                   </div>
+                                 </div>
+                               </div>
+                             )}
 
                             {/* Purchasing Actions */}
                             {hasRole(['Admin', 'Purchasing Operations']) && job.status === 'Pending Purchasing' && (
@@ -3609,6 +4442,131 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                             </div>
                           </div>
                         </div>
+
+                        {/* Grading Quality Defects Report */}
+                        {job.processOperation === 'Grading' && job.defectTotalDefect !== undefined && (
+                          <div className="bg-amber-50/40 dark:bg-amber-950/5 p-4 rounded-3xl border border-amber-200/30 dark:border-amber-900/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-[11px] font-black tracking-wider text-amber-800 dark:text-amber-400 uppercase">
+                                {lang === 'ar' ? 'تقرير عيوب جودة التدريج' : 'Grading Quality Defects Report'}
+                              </h4>
+                              <span className="text-xs font-black px-2.5 py-1 bg-amber-100 dark:bg-amber-950/45 text-amber-700 dark:text-amber-300 rounded-lg">
+                                {lang === 'ar' ? `إجمالي العيوب: ${job.defectTotalDefect}` : `Total Defect: ${job.defectTotalDefect}`}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Foreign Bodies</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectForeignBodies ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Olives have Insects</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectOlivesInsects ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Soft texture</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectSoftTexture ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Bad Color</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectBadColor ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Olives have stem</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectOlivesStem ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Skin Defect</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectSkinDefect ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Gas Pocket</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectGasPocket ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Olives lose skin</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectOlivesLoseSkin ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Other Variety</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.defectOtherVariety ?? 0}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center col-span-2 sm:col-span-1">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">Total Defect</span>
+                                <span className="text-xs font-black text-rose-500">{job.defectTotalDefect ?? 0}</span>
+                              </div>
+                            </div>
+                            {job.defectComments && (
+                              <div className="bg-white dark:bg-zinc-900 p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+                                <span className="text-[10px] font-black text-zinc-400 uppercase block mb-1">
+                                  {lang === 'ar' ? 'ملاحظات عيوب التدريج' : 'Grading Defects Comments'}
+                                </span>
+                                <p className="text-xs text-zinc-650 dark:text-zinc-350 italic">"{job.defectComments}"</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {job.processOperation === 'PittingAndSlicing' && (job.slicingTime !== undefined || job.slicingPreProdBroken !== undefined) && (
+                          <div className="bg-emerald-50/40 dark:bg-emerald-950/5 p-4 rounded-3xl border border-emerald-200/30 dark:border-emerald-900/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-[11px] font-black tracking-wider text-emerald-800 dark:text-emerald-400 uppercase">
+                                {lang === 'ar' ? 'تقرير رقابة جودة الشرائح والخلي' : 'Slicing & Pitting Quality Report'}
+                              </h4>
+                              <span className="text-xs font-black px-2.5 py-1 bg-emerald-100 dark:bg-emerald-950/45 text-emerald-700 dark:text-emerald-300 rounded-lg">
+                                {lang === 'ar' ? `إجمالي المنزل: ${job.slicingTotalRejected ?? 0}%` : `Total Rejected: ${job.slicingTotalRejected ?? 0}%`}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'الوقت' : 'Time'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.slicingTime || '-'}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'وزن/اسم لكل 1 كجم' : 'Weight/Name per 1 Kg'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.slicingWeightPerKg || '-'}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'كسر قبل الإنتاج (≤10%)' : 'Pre-Prod Broken (≤10%)'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.slicingPreProdBroken ?? 0}%</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'عيوب النوى (≤5%)' : 'Pit Defects (≤5%)'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.slicingPitDefects ?? 0}%</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'كسر الزيتون (≤5%)' : 'Broken Olives (≤5%)'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.slicingBrokenOlives ?? 0}%</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'النوى (≤5%)' : 'Pits (≤5%)'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.slicingPits ?? 0}%</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'إجمالي المنزل (≤12%)' : 'Total Home/Rejected (≤12%)'}</span>
+                                <span className="text-xs font-rose-500 font-black">{job.slicingTotalRejected ?? 0}%</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'ملوحة العوامة' : 'Float Salinity'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.slicingFloatSalinity || '-'}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'الإجراء' : 'Action'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-200">{job.slicingAction || '-'}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'الإنتاج' : 'Production'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-205">{job.slicingProduction || '-'}</span>
+                              </div>
+                              <div className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-2.5 rounded-xl text-center col-span-2 sm:col-span-1">
+                                <span className="text-[9px] font-bold text-zinc-400 block mb-0.5 leading-tight">{lang === 'ar' ? 'رقابة الجودة' : 'Quality Control'}</span>
+                                <span className="text-xs font-black text-zinc-700 dark:text-zinc-205">{job.slicingQualityControl || '-'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Workflow Info section */}
                         {(job.qualityComments || (job.confirmedPrice && job.confirmedPrice > 0) || job.poNumber) && (

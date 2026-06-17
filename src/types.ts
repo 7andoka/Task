@@ -200,6 +200,7 @@ export interface ProcessingJob {
     unit: string;
   }[];
   notes?: string;
+  processOperation?: string;
   status: JobStatus;
   createdAt: string;
   createdBy: string;
@@ -208,6 +209,32 @@ export interface ProcessingJob {
   confirmedPrice?: number;
   qualityComments?: string;
   poNumber?: string;
+
+  // Grading Specific Quality defects
+  defectForeignBodies?: number;
+  defectOlivesInsects?: number;
+  defectSoftTexture?: number;
+  defectBadColor?: number;
+  defectOlivesStem?: number;
+  defectSkinDefect?: number;
+  defectGasPocket?: number;
+  defectOlivesLoseSkin?: number;
+  defectOtherVariety?: number;
+  defectTotalDefect?: number;
+  defectComments?: string;
+
+  // Slicing Specific Quality fields
+  slicingTime?: string;
+  slicingWeightPerKg?: string;
+  slicingPreProdBroken?: number;
+  slicingPitDefects?: number;
+  slicingBrokenOlives?: number;
+  slicingPits?: number;
+  slicingTotalRejected?: number;
+  slicingFloatSalinity?: string;
+  slicingAction?: string;
+  slicingProduction?: string;
+  slicingQualityControl?: string;
   
   // Track timestamps/users for each stage
   warehouseApprovalTime?: string;
