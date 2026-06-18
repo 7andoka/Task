@@ -187,8 +187,9 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
   // TV Presentation/Fullscreen mode settings
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
-  const [tvTheme, setTvTheme] = useState<'light' | 'dark'>('light');
-  const [tvZoom, setTvZoom] = useState<number>(1.0);
+  const [tvTheme, setTvTheme] = useState<'light' | 'dark'>('dark');
+  const [tvZoom, setTvZoom] = useState<number>(1.4);
+  const [tvFontScale, setTvFontScale] = useState<'normal' | 'large' | 'huge'>('huge');
   const [refreshTimer, setRefreshTimer] = useState<number>(60);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
 
@@ -200,10 +201,10 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
       if (e.key === 'Escape') {
         setIsTvMode(false);
       } else if (e.key === '+' || e.key === '=') {
-        setTvZoom(prev => Math.min(1.5, parseFloat((prev + 0.05).toFixed(2))));
+        setTvZoom(prev => Math.min(3.5, parseFloat((prev + 0.1).toFixed(2))));
         e.preventDefault();
       } else if (e.key === '-' || e.key === '_') {
-        setTvZoom(prev => Math.max(0.6, parseFloat((prev - 0.05).toFixed(2))));
+        setTvZoom(prev => Math.max(0.4, parseFloat((prev - 0.1).toFixed(2))));
         e.preventDefault();
       }
     };
@@ -813,9 +814,9 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
             <div className={`flex items-center gap-2 border px-3 py-1 rounded-2xl ${
               tvTheme === 'dark' ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-50'
             }`}>
-              <span className="text-[10px] font-bold text-zinc-400">{isRtl ? 'حجم الشاشة (+ / -):' : 'TV Zoom (+/-):'}</span>
+              <span className="text-[10px] font-bold text-zinc-400">{isRtl ? 'حجم العرض التلقائي:' : 'Display Zoom:'}</span>
               <button 
-                onClick={() => setTvZoom(z => Math.max(0.6, parseFloat((z - 0.05).toFixed(2))))}
+                onClick={() => setTvZoom(z => Math.max(0.4, parseFloat((z - 0.1).toFixed(2))))}
                 className="w-6 h-6 flex items-center justify-center hover:bg-zinc-500/10 rounded-lg text-xs font-bold"
                 title={isRtl ? 'تصغير حجم اللوحة' : 'Zoom Out'}
               >
@@ -823,11 +824,54 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               </button>
               <span className="text-xs font-black min-w-[2.5rem] text-center font-mono">{Math.round(tvZoom * 100)}%</span>
               <button 
-                onClick={() => setTvZoom(z => Math.min(1.5, parseFloat((z + 0.05).toFixed(2))))}
+                onClick={() => setTvZoom(z => Math.min(3.5, parseFloat((z + 0.1).toFixed(2))))}
                 className="w-6 h-6 flex items-center justify-center hover:bg-zinc-500/10 rounded-lg text-xs font-bold"
                 title={isRtl ? 'تكبير حجم اللوحة' : 'Zoom In'}
               >
                 +
+              </button>
+            </div>
+
+            {/* Font Scale mode specifically for long-distance TV dashboards */}
+            <div className={`flex items-center gap-1.5 border px-3 py-1 rounded-2xl ${
+              tvTheme === 'dark' ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-50'
+            }`}>
+              <span className="text-[10px] font-black text-zinc-400">{isRtl ? 'حجم الخط للمسافة:' : 'Distance Font:'}</span>
+              
+              <button
+                onClick={() => setTvFontScale('huge')}
+                className={`px-3 py-1 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  tvFontScale === 'huge'
+                    ? 'bg-emerald-600 text-white shadow-md' 
+                    : 'hover:bg-zinc-500/10 text-zinc-400'
+                }`}
+                title={isRtl ? 'تكبير فائق مخصص للرؤية من مسافة ٢٠ متر تقريباً' : 'Ultra enlarged font for 20m distance viewing'}
+              >
+                {isRtl ? '٢٠ متر (ضخم)' : '20m (Huge)'}
+              </button>
+              
+              <button
+                onClick={() => setTvFontScale('large')}
+                className={`px-3 py-1 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  tvFontScale === 'large'
+                    ? 'bg-teal-600 text-white shadow-md' 
+                    : 'hover:bg-zinc-500/10 text-zinc-400'
+                }`}
+                title={isRtl ? 'تكبير مخصص للرؤية من مسافة ١٠ أمتار تقريباً' : 'Enlarged font for 10m distance viewing'}
+              >
+                {isRtl ? '١٠ متر (كبير)' : '10m (Large)'}
+              </button>
+
+              <button
+                onClick={() => setTvFontScale('normal')}
+                className={`px-3 py-1 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  tvFontScale === 'normal'
+                    ? 'bg-zinc-500 text-white shadow-md' 
+                    : 'hover:bg-zinc-500/10 text-zinc-400'
+                }`}
+                title={isRtl ? 'حجم الخط الأساسي للمشاهدة القريبة' : 'Standard font size'}
+              >
+                {isRtl ? 'قريب (عادي)' : 'Normal'}
               </button>
             </div>
 
@@ -1033,7 +1077,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               transition: 'transform 0.2s ease-out',
               minWidth: '1380px'
             } : undefined}
-            className={`w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6 transition-all duration-300 ${isTvThemeDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800' : 'bg-white border-zinc-200/50 text-zinc-800'}`}
+            className={`w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6 transition-all duration-300 ${isTvThemeDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800' : 'bg-white border-zinc-200/50 text-zinc-800'} ${isTvMode ? (tvFontScale === 'huge' ? 'tv-font-huge' : tvFontScale === 'large' ? 'tv-font-large' : '') : ''}`}
             dir="rtl"
           >
             
