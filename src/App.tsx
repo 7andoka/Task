@@ -14,6 +14,7 @@ import ColdStorage from './components/ColdStorage';
 import RawMaterial from './components/RawMaterial';
 import ThirdPartyProcessing from './components/ThirdPartyProcessing';
 import OliveStock from './components/OliveStock';
+import KPIDashboard from './components/KPIDashboard';
 import OfflineScreen from './components/OfflineScreen';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
@@ -41,19 +42,25 @@ export default function App() {
       { id: 'rawMaterial', roles: undefined },
       { id: 'thirdPartyProcessing', roles: undefined },
       { id: 'oliveStock', roles: undefined },
+      { id: 'kpis', roles: undefined },
       { id: 'tasks', roles: undefined },
       { id: 'team', roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
       { id: 'users', roles: ['Warehouse Manager', 'Admin'] },
       { id: 'settings', roles: undefined },
     ];
 
+    const userRoles = u.roles || (u.role ? [u.role] : []);
+    const isAdminOrWHManager = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
+
     if (u.permissions && u.permissions.length > 0) {
       return menuItems
-        .filter(item => u.permissions!.includes(item.id))
+        .filter(item => {
+          if (item.id === 'kpis' && isAdminOrWHManager) return true;
+          return u.permissions!.includes(item.id);
+        })
         .map(item => item.id);
     }
 
-    const userRoles = u.roles || (u.role ? [u.role] : []);
     return menuItems
       .filter(item => !item.roles || item.roles.some(r => userRoles.includes(r as any)))
       .map(item => item.id);
@@ -465,6 +472,8 @@ export default function App() {
         return <ThirdPartyProcessing lang={lang} user={user} />;
       case 'oliveStock':
         return <OliveStock lang={lang} user={user} />;
+      case 'kpis':
+        return <KPIDashboard lang={lang} user={user} />;
       case 'tasks':
         return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':

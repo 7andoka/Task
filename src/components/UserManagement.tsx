@@ -74,6 +74,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     { id: 'rawMaterial', label: t.rawMaterial },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing },
     { id: 'oliveStock', label: t.oliveStock },
+    { id: 'kpis', label: t.kpis },
     { id: 'tasks', label: t.tasks },
     { id: 'team', label: t.team },
     { id: 'users', label: t.userManagement },

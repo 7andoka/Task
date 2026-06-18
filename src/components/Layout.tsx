@@ -116,6 +116,7 @@ export default function Layout({
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing, icon: ClipboardList },
     { id: 'oliveStock', label: t.oliveStock, icon: Database },
+    { id: 'kpis', label: t.kpis, icon: BarChart3 },
     { id: 'tasks', label: t.tasks, icon: CheckSquare },
     { id: 'team', label: t.team, icon: Users, roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
     { id: 'users', label: t.userManagement, icon: Users, roles: ['Warehouse Manager', 'Admin'] },
@@ -123,10 +124,12 @@ export default function Layout({
   ];
 
   const filteredMenuItems = menuItems.filter(item => {
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    const isAdminOrWHManager = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
     if (user?.permissions && user.permissions.length > 0) {
+      if (item.id === 'kpis' && isAdminOrWHManager) return true;
       return user.permissions.includes(item.id);
     }
-    const userRoles = user?.roles || (user?.role ? [user.role] : []);
     return !item.roles || (user && item.roles.some(r => userRoles.includes(r as any)));
   });
 
