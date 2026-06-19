@@ -772,6 +772,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
   };
 
   const isTvThemeDark = isTvMode && tvTheme === 'dark';
+  const isCurrentDark = isTvMode ? (tvTheme === 'dark') : true; // Align normal non-TV mode with global dark layout theme
 
   return (
     <div 
@@ -1019,7 +1020,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
       {loading ? (
         <div className="flex flex-col items-center justify-center p-24 space-y-3">
           <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-bold text-zinc-500">{isRtl ? 'جاري قراءة لوحة مؤشرات الأداء...' : 'Syncing KPI boards...'}</p>
+          <p className="text-sm font-bold text-zinc-500 dark:text-zinc-300">{isRtl ? 'جاري قراءة لوحة مؤشرات الأداء...' : 'Syncing KPI boards...'}</p>
         </div>
       ) : (
         
@@ -1033,7 +1034,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               transition: 'transform 0.2s ease-out',
               minWidth: '1380px'
             } : undefined}
-            className={`w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6 transition-all duration-300 ${isTvThemeDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800' : 'bg-white border-zinc-200/50 text-zinc-800'}`}
+            className={`w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6 transition-all duration-300 ${isCurrentDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800' : 'bg-white border-zinc-200/50 text-zinc-800'}`}
             dir="rtl"
           >
             
@@ -1042,27 +1043,27 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               
               {/* Top Right Date/Shift Block Grid (First in JSX renders on the right in RTL) */}
               <div className={`grid grid-cols-2 gap-y-2.5 gap-x-4 p-4 rounded-2xl border min-w-[270px] text-xs font-bold leading-none transition-all duration-300 ${
-                isTvThemeDark 
-                  ? 'bg-zinc-950 border-zinc-800 text-zinc-300' 
+                isCurrentDark 
+                  ? 'bg-zinc-950 border-zinc-800 text-zinc-350' 
                   : 'bg-zinc-50 border-zinc-200/80 text-zinc-950 shadow-sm'
               }`}>
-                <div className="flex items-center gap-1.5 text-zinc-950 dark:text-zinc-350">
+                <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-650'}`}>
                   <Calendar size={13} className="text-emerald-600 animate-pulse" />
                   <span>التاريخ:</span>
                 </div>
-                <div className="text-left select-text underline decoration-emerald-500/30 underline-offset-2">
+                <div className={`text-left select-text underline decoration-emerald-500/30 underline-offset-2 ${isCurrentDark ? 'text-zinc-200' : 'text-zinc-900'}`}>
                   {date.split('-').reverse().join(' / ')}
                 </div>
 
-                <div className="flex items-center gap-1.5 text-zinc-950 dark:text-zinc-350">
+                <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-650'}`}>
                   <Clock size={13} className="text-emerald-600" />
                   <span>اليوم:</span>
                 </div>
-                <div className={`text-left font-extrabold ${isTvThemeDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                <div className={`text-left font-extrabold ${isCurrentDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
                   {data.dayName}
                 </div>
 
-                <div className="flex items-center gap-1.5 text-zinc-950 dark:text-zinc-350 col-span-1">
+                <div className={`flex items-center gap-1.5 col-span-1 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-650'}`}>
                   <Users size={13} className="text-emerald-600" />
                   <span>الوردية:</span>
                 </div>
@@ -1073,10 +1074,10 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* Centered Dashboard Titles */}
               <div className="text-center space-y-1.5 flex-1 select-none">
-                <h2 className={`text-3xl font-black tracking-wider font-sans transition-colors duration-300 ${isTvThemeDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
+                <h2 className={`text-3xl font-black tracking-wider font-sans transition-colors duration-300 ${isCurrentDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
                   لوحة متابعة مؤشرات الأداء اليومية
                 </h2>
-                <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isTvThemeDark ? 'text-[#98C21E]' : 'text-[#81A017]'}`}>
+                <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isCurrentDark ? 'text-[#98C21E]' : 'text-[#81A017]'}`}>
                   ريتش لاند للصناعات الغذائية
                 </h3>
               </div>
@@ -1100,7 +1101,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
               
               {/* CARD 1: Production (الإنتاج) */}
-              <div id="kpi-card-production" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
+              <div id="kpi-card-production" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white animate-fade-in">
                 <div className="p-3 px-4 bg-[#0E5F59] text-white flex items-center justify-between font-black">
                   <span className="text-sm tracking-wide">الإنتاج (Production)</span>
                   <Settings size={15} />
@@ -1108,7 +1109,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 <div className="flex-1 p-2">
                   <table className="w-full text-[11px] font-bold border-collapse">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-950 dark:text-zinc-100 text-right font-black">
+                      <tr className="border-b border-zinc-200 text-zinc-950 text-right font-black">
                         <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
                         <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
                         <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
@@ -1119,31 +1120,31 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2 text-right font-black text-zinc-950">إجمالي الإنتاج (كجم)</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodTotal.actual.toLocaleString()}</td>
-                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.prodTotal.target.toLocaleString()}</td>
+                        <td className="py-2 text-center text-zinc-950 font-bold">{data.prodTotal.target.toLocaleString()}</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod1Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2 text-right font-black text-zinc-950">(%) الكفاءة الإنتاجية</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodEfficiency.actual}%</td>
-                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.prodEfficiency.target}%</td>
+                        <td className="py-2 text-center text-zinc-950 font-bold">{data.prodEfficiency.target}%</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod2Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2 text-right font-black text-zinc-950">Product Waste (%)</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodWaste.actual}%</td>
-                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">≤ {data.prodWaste.target}%</td>
+                        <td className="py-2 text-center text-zinc-950 font-bold">≤ {data.prodWaste.target}%</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod3Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2 text-right font-black text-zinc-950">Film Waste (%)</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodFilmWaste.actual}%</td>
-                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">≤ {data.prodFilmWaste.target}%</td>
+                        <td className="py-2 text-center text-zinc-950 font-bold">≤ {data.prodFilmWaste.target}%</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod4Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2 text-right font-black text-zinc-950">Rework (%)</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodRework.actual}%</td>
-                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">≤ {data.prodRework.target}%</td>
+                        <td className="py-2 text-center text-zinc-950 font-bold">≤ {data.prodRework.target}%</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod5Status)}</td>
                       </tr>
                     </tbody>
@@ -1160,7 +1161,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 <div className="flex-1 p-2">
                   <table className="w-full text-[11px] font-bold border-collapse">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-950 dark:text-zinc-100 text-right font-black">
+                      <tr className="border-b border-zinc-200 text-zinc-950 text-right font-black">
                         <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
                         <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
                         <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
@@ -1171,19 +1172,19 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2.5 text-right font-black text-zinc-950">عدد حالات الـ Hold</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualHoldCases.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.qualHoldCases.target}</td>
+                        <td className="py-2.5 text-center text-zinc-950 font-bold">{data.qualHoldCases.target}</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(qual1Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2.5 text-right font-black text-zinc-950">مخالفات الفود سيفتي</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualFoodSafety.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.qualFoodSafety.target}</td>
+                        <td className="py-2.5 text-center text-zinc-950 font-bold">{data.qualFoodSafety.target}</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(qual2Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2.5 text-right font-black text-zinc-950">GMP Score (%)</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualGmpScore.actual}%</td>
-                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">≥ {data.qualGmpScore.target}%</td>
+                        <td className="py-2.5 text-center text-zinc-950 font-bold">≥ {data.qualGmpScore.target}%</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(qual3Status)}</td>
                       </tr>
                     </tbody>
@@ -1200,7 +1201,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 <div className="flex-1 p-2">
                   <table className="w-full text-[11px] font-bold border-collapse">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-950 dark:text-zinc-100 text-right font-black">
+                      <tr className="border-b border-zinc-200 text-zinc-950 text-right font-black">
                         <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
                         <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
                         <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
@@ -1211,13 +1212,13 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                       <tr className="hover:bg-zinc-50">
                         <td className="py-3.5 text-right font-black text-zinc-950">عدد الحوادث الوشيكة</td>
                         <td className="py-3.5 text-center text-zinc-950 font-black">{data.safeNearMisses.actual}</td>
-                        <td className="py-3.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.safeNearMisses.target}</td>
+                        <td className="py-3.5 text-center text-zinc-950 font-bold">{data.safeNearMisses.target}</td>
                         <td className="py-3.5 flex justify-center">{renderStatusIcon(safe1Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-3.5 text-right font-black text-zinc-950">مخاطر السلامة المفتوحة</td>
                         <td className="py-3.5 text-center text-zinc-950 font-black">{data.safeOpenRisks.actual}</td>
-                        <td className="py-3.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.safeOpenRisks.target}</td>
+                        <td className="py-3.5 text-center text-zinc-950 font-bold">{data.safeOpenRisks.target}</td>
                         <td className="py-3.5 flex justify-center">{renderStatusIcon(safe2Status)}</td>
                       </tr>
                     </tbody>
@@ -1234,7 +1235,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 <div className="flex-1 p-2">
                   <table className="w-full text-[11px] font-bold border-collapse">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-950 dark:text-zinc-100 text-right font-black">
+                      <tr className="border-b border-zinc-200 text-zinc-950 text-right font-black">
                         <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
                         <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
                         <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
@@ -1245,19 +1246,19 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2.5 text-right font-black text-zinc-950">عدد الحاويات المشحونة</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.whShippedContainers.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.whShippedContainers.target}</td>
+                        <td className="py-2.5 text-center text-zinc-950 font-bold">{data.whShippedContainers.target}</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(wh1Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2.5 text-right font-black text-zinc-950">عدد أوامر التحميل المنفذة</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.whExecutedOrders.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.whExecutedOrders.target}</td>
+                        <td className="py-2.5 text-center text-zinc-950 font-bold">{data.whExecutedOrders.target}</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(wh2Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
                         <td className="py-2.5 text-right font-black text-zinc-950">الشحن في الموعد (% OTIF)</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.whOtif.actual}%</td>
-                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">≥ {data.whOtif.target}%</td>
+                        <td className="py-2.5 text-center text-zinc-950 font-bold">≥ {data.whOtif.target}%</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(wh3Status)}</td>
                       </tr>
                     </tbody>
@@ -1504,7 +1505,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="flex justify-center gap-3 text-[10px] font-black text-zinc-950 pt-1 select-none">
+                <div className="flex justify-center gap-3 text-[10px] font-black text-zinc-950 dark:text-zinc-200 pt-1 select-none">
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#0E5F59]" />الكفاءة الإنتاجية (%)</span>
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#98C21E]" />Product Waste (%)</span>
                   <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#D48C00]" />Rework (%)</span>
@@ -1513,7 +1514,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* Middle Column: Shipped Containers */}
               <div id="chart-containers-container" className="lg:col-span-4 border border-zinc-200 rounded-[24px] p-4 bg-white flex flex-col justify-between min-h-[290px]">
-                <h4 className="text-xs font-black text-center text-zinc-900 border-b border-zinc-150 pb-2 mb-2 select-none">
+                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-150 pb-2 mb-2 select-none">
                   أداء الحاويات المشحونة خلال الأسبوع
                 </h4>
                 <div className="w-full flex-1 h-44">
@@ -1534,7 +1535,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* Right Column: Legend Key */}
               <div className="lg:col-span-2 border border-zinc-200 rounded-[24px] p-4 bg-white min-h-[290px] flex flex-col select-none">
-                <h4 className="text-xs font-black text-center text-zinc-900 border-b border-zinc-150 pb-2 mb-3">
+                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-150 pb-2 mb-3">
                   مفتاح الحالة
                 </h4>
                 <div className="flex-1 flex flex-col justify-center space-y-4 text-xs font-black px-1">
@@ -1542,32 +1543,32 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black shadow-sm">
                       <Check size={14} strokeWidth={3} />
                     </div>
-                    <span>ضمن المستهدف</span>
+                    <span className="dark:text-zinc-100">ضمن المستهدف</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-white font-black text-lg select-none leading-none">
                       -
                     </div>
-                    <span>يحتاج إلى متابعة</span>
+                    <span className="dark:text-zinc-100">يحتاج إلى متابعة</span>
                   </div>
                   <div className="flex items-center gap-2.5">
                     <div className="w-6 h-6 rounded-full bg-[#E11D48] flex items-center justify-center text-white font-black shadow-sm">
                       <X size={14} strokeWidth={3} />
                     </div>
-                    <span>خارج المستهدف</span>
+                    <span className="dark:text-zinc-100">خارج المستهدف</span>
                   </div>
                 </div>
               </div>
 
               {/* Far Right Column: Notebook comments block */}
               <div id="notes-notebook-container" className="lg:col-span-2 border border-zinc-200 rounded-[24px] p-4 bg-amber-50/20 dark:bg-zinc-900/10 min-h-[290px] flex flex-col">
-                <h4 className="text-xs font-black text-center text-zinc-900 border-b border-zinc-150 pb-2 mb-3 select-none">
+                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-150 pb-2 mb-3 select-none">
                   ملاحظات
                 </h4>
                 
                 {/* Styled Lined Notebook paper look with spacing */}
                 <div className="flex-1 flex flex-col relative justify-between">
-                  <p className="text-[11.5px] leading-6 font-black text-zinc-950 z-10 px-1 italic select-text">
+                  <p className="text-[11.5px] leading-6 font-black text-zinc-950 dark:text-zinc-100 z-10 px-1 italic select-text">
                     {data.notes || 'لا توجد ملاحظات إضافية مسجلة للوردية اليوم.'}
                   </p>
                   

@@ -80,10 +80,10 @@ export default function Dashboard({ lang, user, tasks }: DashboardProps) {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+          <h2 className="text-2xl font-black text-zinc-950 dark:text-zinc-50">
             {lang === 'ar' ? `مرحباً بك، ${user.displayName}` : `Welcome back, ${user.displayName}`}
           </h2>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-1">
+          <p className="text-zinc-950 dark:text-zinc-300 font-black mt-1">
             {lang === 'ar' ? 'إليك نظرة عامة على أداء فريقك اليوم' : 'Here is an overview of your team\'s performance today'}
           </p>
         </div>
@@ -109,16 +109,16 @@ export default function Dashboard({ lang, user, tasks }: DashboardProps) {
                 <card.icon className={card.color} size={24} />
               </div>
               <span className={cn(
-                "text-xs font-bold px-2 py-1 rounded-full",
-                card.trend.startsWith('+') && card.label !== t.delayedTasks ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10" : 
-                card.trend.startsWith('+') && card.label === t.delayedTasks ? "text-red-600 bg-red-50 dark:bg-red-500/10" :
-                "text-zinc-600 bg-zinc-50 dark:bg-zinc-800"
+                "text-xs font-black px-2 py-1 rounded-full",
+                card.trend.startsWith('+') && card.label !== t.delayedTasks ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-500/10" : 
+                card.trend.startsWith('+') && card.label === t.delayedTasks ? "text-red-700 bg-red-50 dark:bg-red-500/10" :
+                "text-zinc-950 bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-200"
               )}>
                 {card.trend}
               </span>
             </div>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">{card.label}</p>
-            <h3 className="text-3xl font-black mt-1 text-zinc-900 dark:text-white">{card.value}</h3>
+            <p className="text-sm text-zinc-950 dark:text-zinc-200 font-black">{card.label}</p>
+            <h3 className="text-3xl font-black mt-1 text-zinc-950 dark:text-white">{card.value}</h3>
           </motion.div>
         ))}
       </div>
@@ -127,7 +127,7 @@ export default function Dashboard({ lang, user, tasks }: DashboardProps) {
         {/* Task Status Chart */}
         <div className="lg:col-span-2 p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-zinc-900 dark:text-white">{t.teamOverview}</h3>
+            <h3 className="text-lg font-black text-zinc-950 dark:text-white">{t.teamOverview}</h3>
           </div>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -188,7 +188,7 @@ export default function Dashboard({ lang, user, tasks }: DashboardProps) {
           </div>
 
           <div className="p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm">
-            <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">
+            <h3 className="text-lg font-black text-zinc-950 dark:text-white mb-4">
               {lang === 'ar' ? 'مهام عاجلة' : 'Urgent Tasks'}
             </h3>
             {urgentTasks.length > 0 ? (
@@ -199,8 +199,8 @@ export default function Dashboard({ lang, user, tasks }: DashboardProps) {
                       <AlertTriangle size={16} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 line-clamp-1">{task.title}</h4>
-                      <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
+                      <h4 className="text-sm font-black text-zinc-950 dark:text-zinc-100 line-clamp-1">{task.title}</h4>
+                      <p className="text-xs text-red-700 dark:text-red-400 mt-1 font-bold">
                         {new Date(task.deadline).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')}
                       </p>
                     </div>
@@ -208,9 +208,9 @@ export default function Dashboard({ lang, user, tasks }: DashboardProps) {
                 ))}
               </div>
             ) : (
-              <div className="p-6 text-center rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-dashed border-zinc-200 dark:border-zinc-700">
+              <div className="p-6 text-center rounded-2xl bg-zinc-100 dark:bg-zinc-800/50 border border-dashed border-zinc-300 dark:border-zinc-700">
                 <CheckCircle2 size={24} className="mx-auto text-emerald-500 mb-2" />
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                <p className="text-sm text-zinc-950 dark:text-zinc-200 font-black">
                   {lang === 'ar' ? 'لا توجد مهام عاجلة حالياً' : 'No urgent tasks currently'}
                 </p>
               </div>
@@ -221,22 +221,22 @@ export default function Dashboard({ lang, user, tasks }: DashboardProps) {
 
       {/* Warehouse KPIs */}
       <div className="p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm">
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-6">{t.warehouseKPIs}</h3>
+        <h3 className="text-lg font-black text-zinc-950 dark:text-white mb-6">{t.warehouseKPIs}</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {warehouseKPIs.map((kpi, i) => (
-            <div key={i} className="flex items-center justify-between p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
+            <div key={i} className="flex items-center justify-between p-5 rounded-2xl bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-300 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors">
               <div className="flex items-center gap-4">
                 <div className={cn("p-3 rounded-xl shadow-sm", kpi.bg, kpi.color)}>
                   <kpi.icon size={24} />
                 </div>
                 <div>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium mb-1">{kpi.label}</p>
-                  <p className="text-xl font-black text-zinc-900 dark:text-white">{kpi.value}</p>
+                  <p className="text-sm text-zinc-950 dark:text-zinc-200 font-black mb-1">{kpi.label}</p>
+                  <p className="text-xl font-black text-zinc-950 dark:text-white">{kpi.value}</p>
                 </div>
               </div>
               <div className={cn(
-                "flex items-center gap-1 text-sm font-bold",
-                kpi.isPositive ? "text-emerald-500" : "text-amber-500"
+                "flex items-center gap-1 text-sm font-black",
+                kpi.isPositive ? "text-emerald-700" : "text-amber-700"
               )}>
                 {kpi.isPositive ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
                 {kpi.trend}

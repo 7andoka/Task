@@ -70,7 +70,7 @@ export default function Auth({ lang, onLogin }: AuthProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="w-full bg-white/5 backdrop-blur-lg p-6 rounded-[2rem] border border-white/10 shadow-2xl"
+          className="w-full bg-white/10 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 shadow-2xl"
         >
           <div className="flex flex-col items-center justify-center text-center mb-6">
             <div className="bg-white p-2 rounded-2xl shadow-xl border border-white/20 select-none mb-3 flex items-center justify-center animate-pulse" style={{ animationDuration: '4s' }}>
