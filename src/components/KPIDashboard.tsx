@@ -209,11 +209,45 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
   // TV Presentation/Fullscreen mode settings
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
   const [tvTheme, setTvTheme] = useState<'light' | 'dark'>('light');
-  const [tvZoom, setTvZoom] = useState<number>(1.4);
+  const [tvZoom, setTvZoom] = useState<number>(1.0);
   const [tvFontScale, setTvFontScale] = useState<'normal' | 'large' | 'huge'>('huge');
   const [tvBlackText, setTvBlackText] = useState<boolean>(true);
   const [refreshTimer, setRefreshTimer] = useState<number>(60);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+
+  const [autoScale, setAutoScale] = useState<number>(1);
+
+  // Manage autoScale based on 4K target dimensions
+  useEffect(() => {
+    if (!isTvMode) return;
+
+    const handleResize = () => {
+      const targetW = 3840;
+      const targetH = 2160;
+
+      const scaleX = window.innerWidth / targetW;
+      const scaleY = window.innerHeight / targetH;
+
+      // Fit completely within both boundaries without scroll (leaving a small margins)
+      const newScale = Math.min(scaleX, scaleY) * 0.98;
+      setAutoScale(newScale);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
+    // Multiple periodic triggers during transition phase
+    const t1 = setTimeout(handleResize, 100);
+    const t2 = setTimeout(handleResize, 300);
+    const t3 = setTimeout(handleResize, 600);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [isTvMode]);
 
   // Handle escape, + and - keyboard shortcuts in TV mode to increase sizing dynamically
   useEffect(() => {
@@ -817,7 +851,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
     <div 
       className={`space-y-6 transition-all duration-300 ${
         isTvMode 
-          ? `fixed inset-0 z-[9999] overflow-auto p-6 md:p-8 flex flex-col ${isTvThemeDark ? 'tv-dark-override bg-zinc-950 text-zinc-100' : 'bg-white text-zinc-900'}` 
+          ? `fixed inset-0 z-[9999] overflow-hidden p-0 flex items-center justify-center ${isTvThemeDark ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-100 text-zinc-900'}` 
           : ''
       } ${tvBlackText ? 'tv-black-text' : ''}`}
       style={{ direction: 'rtl' }}
@@ -825,7 +859,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
       
       {isTvMode ? (
         /* GORGEOUS AUTOPLAYING INDUSTRIAL WIDESCREEN TV FLOATING CONTROL BAR WITH HOVER-TO-SHOW AUTO-HIDE */
-        <div className="w-full sticky top-0 z-[10000] group -mt-4 pt-4 pb-2 transition-all duration-300">
+        <div className="absolute top-0 left-0 right-0 z-[10000] group pt-4 pb-2 transition-all duration-300">
           {/* Subtle horizontal indicator line at the top to guide the user */}
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-emerald-500/20 group-hover:bg-transparent transition-colors cursor-pointer" />
           
@@ -877,49 +911,6 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 title={isRtl ? 'تكبير حجم اللوحة' : 'Zoom In'}
               >
                 +
-              </button>
-            </div>
-
-            {/* Font Scale mode specifically for long-distance TV dashboards */}
-            <div className={`flex items-center gap-1.5 border px-3 py-1 rounded-2xl ${
-              tvTheme === 'dark' ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-50'
-            }`}>
-              <span className="text-[10px] font-black text-zinc-400">{isRtl ? 'حجم الخط للمسافة:' : 'Distance Font:'}</span>
-              
-              <button
-                onClick={() => setTvFontScale('huge')}
-                className={`px-3 py-1 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                  tvFontScale === 'huge'
-                    ? 'bg-emerald-600 text-white shadow-md' 
-                    : 'hover:bg-zinc-500/10 text-zinc-400'
-                }`}
-                title={isRtl ? 'تكبير فائق مخصص للرؤية من مسافة ٢٠ متر تقريباً' : 'Ultra enlarged font for 20m distance viewing'}
-              >
-                {isRtl ? '٢٠ متر (ضخم)' : '20m (Huge)'}
-              </button>
-              
-              <button
-                onClick={() => setTvFontScale('large')}
-                className={`px-3 py-1 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                  tvFontScale === 'large'
-                    ? 'bg-teal-600 text-white shadow-md' 
-                    : 'hover:bg-zinc-500/10 text-zinc-400'
-                }`}
-                title={isRtl ? 'تكبير مخصص للرؤية من مسافة ١٠ أمتار تقريباً' : 'Enlarged font for 10m distance viewing'}
-              >
-                {isRtl ? '١٠ متر (كبير)' : '10m (Large)'}
-              </button>
-
-              <button
-                onClick={() => setTvFontScale('normal')}
-                className={`px-3 py-1 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                  tvFontScale === 'normal'
-                    ? 'bg-zinc-500 text-white shadow-md' 
-                    : 'hover:bg-zinc-500/10 text-zinc-400'
-                }`}
-                title={isRtl ? 'حجم الخط الأساسي للمشاهدة القريبة' : 'Standard font size'}
-              >
-                {isRtl ? 'قريب (عادي)' : 'Normal'}
               </button>
             </div>
 
@@ -1145,16 +1136,26 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
       ) : (
         
         /* THE ACTUAL INTERACTIVE HIGH-FIDELITY BOARD DOCUMENT */
-        <div className={`overflow-x-auto w-full pb-4 ${isTvMode ? 'flex-1 flex items-start justify-center' : ''}`}>
+        <div className={isTvMode ? 'w-full h-full relative flex items-center justify-center overflow-hidden' : 'overflow-x-auto w-full pb-4'}>
           <div 
             ref={boardRef}
             style={isTvMode ? { 
-              transform: `scale(${tvZoom})`, 
-              transformOrigin: 'top center',
-              transition: 'transform 0.2s ease-out',
-              minWidth: '1380px'
+              transform: `scale(${autoScale * tvZoom})`, 
+              transformOrigin: 'center center',
+              transition: 'transform 0.15s ease-out',
+              width: '3840px',
+              height: '2160px',
+              minWidth: '3840px',
+              minHeight: '2160px',
+              maxWidth: '3840px',
+              maxHeight: '2160px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxSizing: 'border-box',
+              padding: '64px',
             } : undefined}
-            className={`w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6 transition-all duration-300 ${isTvThemeDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800' : 'bg-white border-zinc-200/50 text-zinc-800'} ${isTvMode ? (tvFontScale === 'huge' ? 'tv-font-huge' : tvFontScale === 'large' ? 'tv-font-large' : '') : ''}`}
+            className={`transition-all duration-300 ${isTvMode ? 'tv-font-huge rounded-[48px] border-[6px]' : 'w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6'} ${isTvThemeDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800 bg-[#0c0c0e]' : 'bg-white border-zinc-200/50 text-zinc-800'}`}
             dir="rtl"
           >
             
