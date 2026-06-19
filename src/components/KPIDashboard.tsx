@@ -35,7 +35,10 @@ import {
   Moon,
   Sun,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Eye,
+  Wrench,
+  Zap
 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -80,6 +83,15 @@ interface KPIData {
   whExecutedOrders: { actual: number; target: number; statusOverride?: string };
   whOtif: { actual: number; target: number; statusOverride?: string };
 
+  // 5. Maintenance Section
+  maintPlanned: { actual: number; target: number; statusOverride?: string };
+  maintBreakdowns: { actual: number; target: number; statusOverride?: string };
+  maintMttr: { actual: number; target: number; statusOverride?: string };
+
+  // 6. Energy & Utilities Section
+  energyPower: { actual: number; target: number; statusOverride?: string };
+  energyWater: { actual: number; target: number; statusOverride?: string };
+
   // lines Performance
   linePacking1: { prod: number; prodPlanned: number; eff: number; effPlanned: number; waste: number; wastePlanned: number; downtime: number; downtimePlanned: number };
   linePacking2: { prod: number; prodPlanned: number; eff: number; effPlanned: number; waste: number; wastePlanned: number; downtime: number; downtimePlanned: number };
@@ -118,6 +130,15 @@ const DEFAULT_KPI_DATA: KPIData = {
   whShippedContainers: { actual: 4, target: 5 },
   whExecutedOrders: { actual: 4, target: 5 },
   whOtif: { actual: 90, target: 95 },
+
+  // Category 5: Maintenance
+  maintPlanned: { actual: 96, target: 95 },
+  maintBreakdowns: { actual: 1.2, target: 0.5 },
+  maintMttr: { actual: 45, target: 60 },
+
+  // Category 6: Energy & Utilities
+  energyPower: { actual: 12400, target: 13000 },
+  energyWater: { actual: 310, target: 350 },
 
   // Production lines Performance
   linePacking1: {
@@ -187,9 +208,10 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
   // TV Presentation/Fullscreen mode settings
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
-  const [tvTheme, setTvTheme] = useState<'light' | 'dark'>('dark');
+  const [tvTheme, setTvTheme] = useState<'light' | 'dark'>('light');
   const [tvZoom, setTvZoom] = useState<number>(1.4);
   const [tvFontScale, setTvFontScale] = useState<'normal' | 'large' | 'huge'>('huge');
+  const [tvBlackText, setTvBlackText] = useState<boolean>(true);
   const [refreshTimer, setRefreshTimer] = useState<number>(60);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
 
@@ -688,8 +710,12 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
     setEditFormData(prev => {
       const copy = { ...prev };
       const secObj = (copy as any)[section];
-      if (secObj && secObj[key]) {
-        secObj[key][field] = value;
+      if (secObj) {
+        if (secObj[key] && typeof secObj[key] === 'object') {
+          secObj[key][field] = value;
+        } else {
+          secObj[field] = value;
+        }
       }
       return copy;
     });
@@ -710,8 +736,12 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
     setEditFormData(prev => {
       const copy = { ...prev };
       const secObj = (copy as any)[section];
-      if (secObj && secObj[key]) {
-        secObj[key].statusOverride = status === 'auto' ? undefined : status;
+      if (secObj) {
+        if (secObj[key] && typeof secObj[key] === 'object') {
+          secObj[key].statusOverride = status === 'auto' ? undefined : status;
+        } else {
+          secObj.statusOverride = status === 'auto' ? undefined : status;
+        }
       }
       return copy;
     });
@@ -734,6 +764,15 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
   const wh1Status = getKpiStatus(data.whShippedContainers.actual, data.whShippedContainers.target, 'higher-better', data.whShippedContainers.statusOverride);
   const wh2Status = getKpiStatus(data.whExecutedOrders.actual, data.whExecutedOrders.target, 'higher-better', data.whExecutedOrders.statusOverride);
   const wh3Status = getKpiStatus(data.whOtif.actual, data.whOtif.target, 'higher-better', data.whOtif.statusOverride);
+
+  // New Maintenance statuses
+  const maint1Status = getKpiStatus(data.maintPlanned.actual, data.maintPlanned.target, 'higher-better', data.maintPlanned.statusOverride);
+  const maint2Status = getKpiStatus(data.maintBreakdowns.actual, data.maintBreakdowns.target, 'lower-better', data.maintBreakdowns.statusOverride);
+  const maint3Status = getKpiStatus(data.maintMttr.actual, data.maintMttr.target, 'lower-better', data.maintMttr.statusOverride);
+
+  // New Energy statuses
+  const energy1Status = getKpiStatus(data.energyPower.actual, data.energyPower.target, 'lower-better', data.energyPower.statusOverride);
+  const energy2Status = getKpiStatus(data.energyWater.actual, data.energyWater.target, 'lower-better', data.energyWater.statusOverride);
 
   // Line calculations & statuses
   const getLineEffStatus = (actual: number, target: number) => {
@@ -776,21 +815,30 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
   return (
     <div 
-      className={`space-y-6 transition-colors duration-300 ${
+      className={`space-y-6 transition-all duration-300 ${
         isTvMode 
-          ? `fixed inset-0 z-[9999] overflow-auto p-6 md:p-8 flex flex-col ${isTvThemeDark ? 'tv-dark-override bg-zinc-950 text-zinc-100' : 'bg-slate-50 text-zinc-900'}` 
+          ? `fixed inset-0 z-[9999] overflow-auto p-6 md:p-8 flex flex-col ${isTvThemeDark ? 'tv-dark-override bg-zinc-950 text-zinc-100' : 'bg-white text-zinc-900'}` 
           : ''
-      }`}
+      } ${tvBlackText ? 'tv-black-text' : ''}`}
       style={{ direction: 'rtl' }}
     >
       
       {isTvMode ? (
-        /* GORGEOUS AUTOPLAYING INDUSTRIAL WIDESCREEN TV FLOATING CONTROL BAR */
-        <div id="tv-control-bar" className={`flex flex-wrap items-center justify-between gap-4 p-4 rounded-3xl mb-1 border transition-colors duration-300 ${
-          tvTheme === 'dark' 
-            ? 'bg-zinc-900/90 border-zinc-800 text-zinc-200' 
-            : 'bg-white/95 border-zinc-200 text-zinc-800'
-        } backdrop-blur-md shadow-lg sticky top-0 z-[10000] select-none`}>
+        /* GORGEOUS AUTOPLAYING INDUSTRIAL WIDESCREEN TV FLOATING CONTROL BAR WITH HOVER-TO-SHOW AUTO-HIDE */
+        <div className="w-full sticky top-0 z-[10000] group -mt-4 pt-4 pb-2 transition-all duration-300">
+          {/* Subtle horizontal indicator line at the top to guide the user */}
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-emerald-500/20 group-hover:bg-transparent transition-colors cursor-pointer" />
+          
+          {/* Main sliding container */}
+          <div 
+            id="tv-control-bar" 
+            className={`flex flex-wrap items-center justify-between gap-4 p-4 rounded-3xl mb-1 border transition-all duration-500 ease-in-out transform -translate-y-full opacity-0 pointer-events-none group-hover:translate-y-0 group-hover:opacity-100 group-hover:pointer-events-auto ${
+              tvTheme === 'dark' 
+                ? 'bg-zinc-900/95 border-zinc-800 text-zinc-200 shadow-2xl shadow-black/55' 
+                : 'bg-white/95 border-zinc-200 text-zinc-800 shadow-2xl shadow-zinc-200/50'
+            } backdrop-blur-md select-none`}
+            title={isRtl ? 'ضع مؤشر الماوس في الأعلى لإظهار الشريط العام' : 'Hover over the very top to reveal control bar'}
+          >
           <div className="flex items-center gap-3">
             <div className="relative flex items-center justify-center">
               <span className="absolute inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400 opacity-75 animate-ping" />
@@ -888,6 +936,20 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               {tvTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
 
+            {/* High Contrast Black Text Toggle Button */}
+            <button
+              onClick={() => setTvBlackText(b => !b)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border transition-all cursor-pointer ${
+                tvBlackText 
+                  ? 'bg-black text-white hover:bg-zinc-950 border-black shadow-md shadow-black/10' 
+                  : (tvTheme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100')
+              }`}
+              title={isRtl ? 'تبديل كتابة اللون الأسود الفائق' : 'Toggle 100% Solid Black Text Contrast'}
+            >
+              <Eye size={14} className={tvBlackText ? 'text-emerald-400' : ''} />
+              <span className="text-xs font-black">{isRtl ? 'كتابة سوداء فائقة التباين' : 'Black Text Only'}</span>
+            </button>
+
             {/* Exit Mode button */}
             <button
               onClick={handleToggleFullscreen}
@@ -897,6 +959,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               <span>{isRtl ? 'خروج من البث' : 'Exit TV Broadcast'}</span>
             </button>
           </div>
+        </div>
         </div>
       ) : (
         /* Configuration Header Action buttons */
@@ -951,6 +1014,20 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
             >
               <Tv size={14} className="animate-pulse" />
               <span>{isRtl ? 'بث التلفزيون (كامل الشاشة)' : 'TV Broadcast Mode'}</span>
+            </button>
+
+            {/* Standard Black Text Toggle */}
+            <button
+              onClick={() => setTvBlackText(b => !b)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl text-xs font-black transition-all border cursor-pointer ${
+                tvBlackText
+                  ? 'bg-black text-white hover:bg-zinc-950 border-black shadow shadow-black/10'
+                  : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700'
+              }`}
+              title={isRtl ? 'تبديل المظهر فائق التباين للكتابة باللون الأسود بالكامل' : 'Toggle 100% Solid Black Text Contrast'}
+            >
+              <Eye size={14} className={tvBlackText ? 'text-emerald-400' : 'text-zinc-400'} />
+              <span>{isRtl ? 'كتابة سوداء فائقة التباين' : 'Extreme Black Text'}</span>
             </button>
 
             {/* PDF Exporter */}
@@ -1140,8 +1217,8 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               </div>
             </div>
 
-            {/* SEGMENTS GRID (THE 4 CORE CATEGORY CARDS) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+            {/* SEGMENTS GRID (NOW UPGRADED TO Symmetrical 6-COLUMN MASTER GRID FOR ALL INDUSTRIAL CATEGORIES) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               
               {/* CARD 1: Production (الإنتاج) */}
               <div id="kpi-card-production" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
@@ -1303,6 +1380,80 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.whOtif.actual}%</td>
                         <td className="py-2.5 text-center text-zinc-400 font-medium">≥ {data.whOtif.target}%</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(wh3Status)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* CARD 5: Maintenance & Downtime (الصيانة والأعطال) */}
+              <div id="kpi-card-maintenance" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
+                <div className="p-3 px-4 bg-[#4F46E5] text-white flex items-center justify-between font-black">
+                  <span className="text-sm tracking-wide">الصيانة والأعطال (Maintenance)</span>
+                  <Wrench size={15} />
+                </div>
+                <div className="flex-1 p-2">
+                  <table className="w-full text-[11px] font-bold border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 text-zinc-400 text-right">
+                        <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
+                        <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
+                        <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
+                        <th className="py-1.5 pb-2 text-center w-8">الحالة</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      <tr className="hover:bg-zinc-50">
+                        <td className="py-2 text-right font-black">صيانة وقائية (% PM)</td>
+                        <td className="py-2 text-center text-zinc-950 font-black">{data.maintPlanned.actual}%</td>
+                        <td className="py-2 text-center text-zinc-400 font-medium">≥ {data.maintPlanned.target}%</td>
+                        <td className="py-2 flex justify-center">{renderStatusIcon(maint1Status)}</td>
+                      </tr>
+                      <tr className="hover:bg-zinc-50">
+                        <td className="py-2 text-right font-black">ساعات الأعطال الطارئة</td>
+                        <td className="py-2 text-center text-zinc-950 font-black">{data.maintBreakdowns.actual}</td>
+                        <td className="py-2 text-center text-zinc-400 font-medium">≤ {data.maintBreakdowns.target}</td>
+                        <td className="py-2 flex justify-center">{renderStatusIcon(maint2Status)}</td>
+                      </tr>
+                      <tr className="hover:bg-zinc-50">
+                        <td className="py-2 text-right font-black">وقت الإصلاح (MTTR) (د)</td>
+                        <td className="py-2 text-center text-zinc-950 font-black">{data.maintMttr.actual}</td>
+                        <td className="py-2 text-center text-zinc-400 font-medium">≤ {data.maintMttr.target}</td>
+                        <td className="py-2 flex justify-center">{renderStatusIcon(maint3Status)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* CARD 6: Energy & Utilities (الطاقة والاستهلاك) */}
+              <div id="kpi-card-energy" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
+                <div className="p-3 px-4 bg-[#EA580C] text-white flex items-center justify-between font-black">
+                  <span className="text-sm tracking-wide">الطاقة والاستهلاك (Energy)</span>
+                  <Zap size={15} />
+                </div>
+                <div className="flex-1 p-2">
+                  <table className="w-full text-[11px] font-bold border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-200 text-zinc-400 text-right">
+                        <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
+                        <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
+                        <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
+                        <th className="py-1.5 pb-2 text-center w-8">الحالة</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      <tr className="hover:bg-zinc-50">
+                        <td className="py-3 text-right font-black">استهلاك الكهرباء (kW)</td>
+                        <td className="py-3 text-center text-zinc-950 font-black">{data.energyPower.actual}</td>
+                        <td className="py-3 text-center text-zinc-400 font-medium">≤ {data.energyPower.target}</td>
+                        <td className="py-3 flex justify-center">{renderStatusIcon(energy1Status)}</td>
+                      </tr>
+                      <tr className="hover:bg-zinc-50">
+                        <td className="py-3 text-right font-black">استهلاك المياه (م³)</td>
+                        <td className="py-3 text-center text-zinc-950 font-black">{data.energyWater.actual}</td>
+                        <td className="py-3 text-center text-zinc-400 font-medium">≤ {data.energyWater.target}</td>
+                        <td className="py-3 flex justify-center">{renderStatusIcon(energy2Status)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1776,7 +1927,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
                 {/* 2. Quality inputs */}
                 <div className="space-y-3">
-                  <h4 className="font-extrabold text-blue-600 dark:text-blue-400 border-b border-zinc-150 pb-1 flex items-center gap-1 text-sm">
+                  <h4 className="font-extrabold text-blue-605 dark:text-blue-400 border-b border-zinc-150 pb-1 flex items-center gap-1 text-sm">
                     <div className="w-1.5 h-3 bg-blue-500 rounded" />
                     <span>{isRtl ? 'قسم الجودة (Quality)' : 'Quality KPIs'}</span>
                   </h4>
@@ -1836,6 +1987,196 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                       </div>
                     </div>
 
+                  </div>
+                </div>
+
+                {/* 3. Safety inputs */}
+                <div className="space-y-3">
+                  <h4 className="font-extrabold text-red-600 dark:text-red-400 border-b border-zinc-150 pb-1 flex items-center gap-1 text-sm">
+                    <div className="w-1.5 h-3 bg-red-500 rounded" />
+                    <span>{isRtl ? 'قسم السلامة (Safety)' : 'Safety KPIs'}</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Near Misses */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">عدد الحوادث الوشيكة (Near Misses)</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.safeNearMisses.actual} onChange={(e) => handleEditField('safeNearMisses', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.safeNearMisses.target} onChange={(e) => handleEditField('safeNearMisses', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Open Risks */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">مخاطر السلامة المفتوحة (Open Risks)</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.safeOpenRisks.actual} onChange={(e) => handleEditField('safeOpenRisks', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.safeOpenRisks.target} onChange={(e) => handleEditField('safeOpenRisks', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Warehouse inputs */}
+                <div className="space-y-3">
+                  <h4 className="font-extrabold text-lime-600 dark:text-lime-400 border-b border-zinc-150 pb-1 flex items-center gap-1 text-sm">
+                    <div className="w-1.5 h-3 bg-lime-500 rounded" />
+                    <span>{isRtl ? 'قسم المستودعات والشحن (Warehouse)' : 'Warehouse KPIs'}</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Shipped containers */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">عدد الحاويات المشحونة</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.whShippedContainers.actual} onChange={(e) => handleEditField('whShippedContainers', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.whShippedContainers.target} onChange={(e) => handleEditField('whShippedContainers', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Executed orders */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">عدد أوامر التحميل المنفذة</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.whExecutedOrders.actual} onChange={(e) => handleEditField('whExecutedOrders', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.whExecutedOrders.target} onChange={(e) => handleEditField('whExecutedOrders', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* OTIF */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">الشحن في الموعد (% OTIF)</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.whOtif.actual} onChange={(e) => handleEditField('whOtif', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.whOtif.target} onChange={(e) => handleEditField('whOtif', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Maintenance inputs */}
+                <div className="space-y-3">
+                  <h4 className="font-extrabold text-indigo-600 dark:text-indigo-400 border-b border-zinc-150 pb-1 flex items-center gap-1 text-sm">
+                    <div className="w-1.5 h-3 bg-indigo-500 rounded" />
+                    <span>{isRtl ? 'قسم الصيانة والأعطال (Maintenance)' : 'Maintenance KPIs'}</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Planned Maintenance */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">نسبة الالتزام بالصيانة الوقائية (% PM)</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.maintPlanned.actual} onChange={(e) => handleEditField('maintPlanned', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.maintPlanned.target} onChange={(e) => handleEditField('maintPlanned', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Breakdown hours */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">ساعات الأعطال الطارئة</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" step="0.1" value={editFormData.maintBreakdowns.actual} onChange={(e) => handleEditField('maintBreakdowns', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" step="0.1" value={editFormData.maintBreakdowns.target} onChange={(e) => handleEditField('maintBreakdowns', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* MTTR */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">متوسط وقت الإصلاح (MTTR) (دقيقة)</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.maintMttr.actual} onChange={(e) => handleEditField('maintMttr', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.maintMttr.target} onChange={(e) => handleEditField('maintMttr', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 6. Energy inputs */}
+                <div className="space-y-3">
+                  <h4 className="font-extrabold text-orange-600 dark:text-orange-400 border-b border-zinc-150 pb-1 flex items-center gap-1 text-sm">
+                    <div className="w-1.5 h-3 bg-orange-500 rounded" />
+                    <span>{isRtl ? 'قسم الطاقة والاستهلاك (Energy & Utilities)' : 'Energy KPIs'}</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Power */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">استهلاك الكهرباء (kW)</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.energyPower.actual} onChange={(e) => handleEditField('energyPower', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.energyPower.target} onChange={(e) => handleEditField('energyPower', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Water */}
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                      <div className="font-bold">استهلاك المياه (م³)</div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400">الفعلي</span>
+                          <input type="number" value={editFormData.energyWater.actual} onChange={(e) => handleEditField('energyWater', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                        <div>
+                          <span className="text-zinc-400">المستهدف</span>
+                          <input type="number" value={editFormData.energyWater.target} onChange={(e) => handleEditField('energyWater', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

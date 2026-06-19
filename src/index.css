@@ -161,3 +161,61 @@
 .tv-font-huge .lg\:col-span-4, .tv-font-huge .lg\:col-span-2 { grid-column: span 1 / span 1 !important; }
 .tv-font-huge .h-44 { height: 350px !important; } /* Elevate chart heights significantly to make them big as posters */
 .tv-font-huge .min-h-\[290px\] { min-height: 480px !important; }
+
+/* Dynamic High-Contrast Pure Black Text rules for TV broadcasts */
+.tv-black-text {
+  color: #000000 !important;
+}
+
+.tv-black-text h1,
+.tv-black-text h2,
+.tv-black-text h3,
+.tv-black-text h4,
+.tv-black-text h5,
+.tv-black-text h6,
+.tv-black-text p,
+.tv-black-text span,
+.tv-black-text div:not(.recharts-line):not(.recharts-area),
+.tv-black-text a,
+.tv-black-text th,
+.tv-black-text td,
+.tv-black-text label,
+.tv-black-text input,
+.tv-black-text select,
+.tv-black-text textarea,
+.tv-black-text button:not(.bg-emerald-600):not(.bg-teal-600),
+.tv-black-text text,
+.tv-black-text .recharts-text,
+.tv-black-text .recharts-label,
+.tv-black-text .recharts-legend-item-text {
+  color: #000000 !important;
+  fill: #000000 !important;
+  font-weight: 950 !important; /* Maximum weight for readability at 20 meters */
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+/* Make card borders and separation lines deep black instead of light zinc gray */
+.tv-black-text .border,
+.tv-black-text .border-zinc-200,
+.tv-black-text .border-zinc-300,
+.tv-black-text .border-zinc-100 {
+  border-color: #000000 !important;
+  border-width: 2px !important; /* Bold layout lines */
+}
+
+/* Make sure all SVG icons inside the template are deep black for contrast */
+.tv-black-text svg:not(.recharts-surface) {
+  stroke: #000000 !important;
+  stroke-width: 2.5px !important;
+  opacity: 1 !important;
+}
+
+/* Highlight the cartesian grids of Recharts with solid black for visibility */
+.tv-black-text .recharts-cartesian-grid-horizontal line,
+.tv-black-text .recharts-cartesian-grid-vertical line {
+  stroke: #000000 !important;
+  stroke-width: 1.5px !important;
+  stroke-dasharray: none !important;
+  opacity: 0.8 !important;
+}
