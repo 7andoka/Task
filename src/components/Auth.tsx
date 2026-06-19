@@ -51,7 +51,7 @@ export default function Auth({ lang, onLogin }: AuthProps) {
       {/* Background Image Container */}
       <div className="absolute inset-0 z-0">
         <img 
-          src="https://i.postimg.cc/j5PH02L7/images-2.jpg" 
+          src="/background.jpg" 
           alt="" 
           className="w-full h-full object-cover"
           referrerPolicy="no-referrer"
@@ -61,7 +61,7 @@ export default function Auth({ lang, onLogin }: AuthProps) {
           }}
         />
         {/* Subtle overlay for text readability without sacrificing image quality */}
-        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-black/45" />
       </div>
       
       {/* Main Content & Login Form */}

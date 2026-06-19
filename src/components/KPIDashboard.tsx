@@ -350,8 +350,8 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
       );
     } else if (status === 'warning') {
       return (
-        <div id="status-kpi-warning" className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center text-white font-black text-sm shadow-sm leading-none select-none">
-          -
+        <div id="status-kpi-warning" className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center text-white font-extrabold text-xs shadow-sm leading-none select-none">
+          !
         </div>
       );
     } else {
@@ -1044,9 +1044,9 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               <div className={`grid grid-cols-2 gap-y-2.5 gap-x-4 p-4 rounded-2xl border min-w-[270px] text-xs font-bold leading-none transition-all duration-300 ${
                 isTvThemeDark 
                   ? 'bg-zinc-950 border-zinc-800 text-zinc-300' 
-                  : 'bg-zinc-50 border-zinc-200/80 text-zinc-800'
+                  : 'bg-zinc-50 border-zinc-200/80 text-zinc-950 shadow-sm'
               }`}>
-                <div className="flex items-center gap-1.5 text-zinc-500">
+                <div className="flex items-center gap-1.5 text-zinc-950 dark:text-zinc-350">
                   <Calendar size={13} className="text-emerald-600 animate-pulse" />
                   <span>التاريخ:</span>
                 </div>
@@ -1054,7 +1054,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   {date.split('-').reverse().join(' / ')}
                 </div>
 
-                <div className="flex items-center gap-1.5 text-zinc-500">
+                <div className="flex items-center gap-1.5 text-zinc-950 dark:text-zinc-350">
                   <Clock size={13} className="text-emerald-600" />
                   <span>اليوم:</span>
                 </div>
@@ -1062,7 +1062,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   {data.dayName}
                 </div>
 
-                <div className="flex items-center gap-1.5 text-zinc-500 col-span-1">
+                <div className="flex items-center gap-1.5 text-zinc-950 dark:text-zinc-350 col-span-1">
                   <Users size={13} className="text-emerald-600" />
                   <span>الوردية:</span>
                 </div>
@@ -1076,7 +1076,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 <h2 className={`text-3xl font-black tracking-wider font-sans transition-colors duration-300 ${isTvThemeDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
                   لوحة متابعة مؤشرات الأداء اليومية
                 </h2>
-                <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isTvThemeDark ? 'text-emerald-400' : 'text-[#005370]'}`}>
+                <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isTvThemeDark ? 'text-[#98C21E]' : 'text-[#81A017]'}`}>
                   ريتش لاند للصناعات الغذائية
                 </h3>
               </div>
@@ -1108,7 +1108,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 <div className="flex-1 p-2">
                   <table className="w-full text-[11px] font-bold border-collapse">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-400 text-right">
+                      <tr className="border-b border-zinc-200 text-zinc-950 dark:text-zinc-100 text-right font-black">
                         <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
                         <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
                         <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
@@ -1117,33 +1117,33 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black">إجمالي الإنتاج (كجم)</td>
+                        <td className="py-2 text-right font-black text-zinc-950">إجمالي الإنتاج (كجم)</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodTotal.actual.toLocaleString()}</td>
-                        <td className="py-2 text-center text-zinc-400 font-medium">{data.prodTotal.target.toLocaleString()}</td>
+                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.prodTotal.target.toLocaleString()}</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod1Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black">(%) الكفاءة الإنتاجية</td>
+                        <td className="py-2 text-right font-black text-zinc-950">(%) الكفاءة الإنتاجية</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodEfficiency.actual}%</td>
-                        <td className="py-2 text-center text-zinc-400 font-medium">{data.prodEfficiency.target}%</td>
+                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.prodEfficiency.target}%</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod2Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black">Product Waste (%)</td>
+                        <td className="py-2 text-right font-black text-zinc-950">Product Waste (%)</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodWaste.actual}%</td>
-                        <td className="py-2 text-center text-zinc-400 font-medium">≤ {data.prodWaste.target}%</td>
+                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">≤ {data.prodWaste.target}%</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod3Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black">Film Waste (%)</td>
+                        <td className="py-2 text-right font-black text-zinc-950">Film Waste (%)</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodFilmWaste.actual}%</td>
-                        <td className="py-2 text-center text-zinc-400 font-medium">≤ {data.prodFilmWaste.target}%</td>
+                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">≤ {data.prodFilmWaste.target}%</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod4Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black">Rework (%)</td>
+                        <td className="py-2 text-right font-black text-zinc-950">Rework (%)</td>
                         <td className="py-2 text-center text-zinc-950 font-black">{data.prodRework.actual}%</td>
-                        <td className="py-2 text-center text-zinc-400 font-medium">≤ {data.prodRework.target}%</td>
+                        <td className="py-2 text-center text-zinc-950 dark:text-zinc-100 font-bold">≤ {data.prodRework.target}%</td>
                         <td className="py-2 flex justify-center">{renderStatusIcon(prod5Status)}</td>
                       </tr>
                     </tbody>
@@ -1153,14 +1153,14 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* CARD 2: Quality (الجودة) */}
               <div id="kpi-card-quality" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
-                <div className="p-3 px-4 bg-[#005370] text-white flex items-center justify-between font-black">
+                <div className="p-3 px-4 bg-[#829E16] text-white flex items-center justify-between font-black">
                   <span className="text-sm tracking-wide">الجودة (Quality)</span>
                   <Info size={15} />
                 </div>
                 <div className="flex-1 p-2">
                   <table className="w-full text-[11px] font-bold border-collapse">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-400 text-right">
+                      <tr className="border-b border-zinc-200 text-zinc-950 dark:text-zinc-100 text-right font-black">
                         <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
                         <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
                         <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
@@ -1169,21 +1169,21 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black">عدد حالات الـ Hold</td>
+                        <td className="py-2.5 text-right font-black text-zinc-950">عدد حالات الـ Hold</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualHoldCases.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-400 font-medium">{data.qualHoldCases.target}</td>
+                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.qualHoldCases.target}</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(qual1Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black">مخالفات الفود سيفتي</td>
+                        <td className="py-2.5 text-right font-black text-zinc-950">مخالفات الفود سيفتي</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualFoodSafety.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-400 font-medium">{data.qualFoodSafety.target}</td>
+                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.qualFoodSafety.target}</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(qual2Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black">GMP Score (%)</td>
+                        <td className="py-2.5 text-right font-black text-zinc-950">GMP Score (%)</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualGmpScore.actual}%</td>
-                        <td className="py-2.5 text-center text-zinc-400 font-medium">≥ {data.qualGmpScore.target}%</td>
+                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">≥ {data.qualGmpScore.target}%</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(qual3Status)}</td>
                       </tr>
                     </tbody>
@@ -1193,14 +1193,14 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* CARD 3: Safety (السلامة) */}
               <div id="kpi-card-safety" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
-                <div className="p-3 px-4 bg-[#1B733D] text-white flex items-center justify-between font-black">
+                <div className="p-3 px-4 bg-[#007E72] text-white flex items-center justify-between font-black">
                   <span className="text-sm tracking-wide">السلامة (Safety)</span>
                   <AlertCircle size={15} />
                 </div>
                 <div className="flex-1 p-2">
                   <table className="w-full text-[11px] font-bold border-collapse">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-400 text-right">
+                      <tr className="border-b border-zinc-200 text-zinc-950 dark:text-zinc-100 text-right font-black">
                         <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
                         <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
                         <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
@@ -1209,15 +1209,15 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-3.5 text-right font-black">عدد الحوادث الوشيكة</td>
+                        <td className="py-3.5 text-right font-black text-zinc-950">عدد الحوادث الوشيكة</td>
                         <td className="py-3.5 text-center text-zinc-950 font-black">{data.safeNearMisses.actual}</td>
-                        <td className="py-3.5 text-center text-zinc-400 font-medium">{data.safeNearMisses.target}</td>
+                        <td className="py-3.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.safeNearMisses.target}</td>
                         <td className="py-3.5 flex justify-center">{renderStatusIcon(safe1Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-3.5 text-right font-black">مخاطر السلامة المفتوحة</td>
+                        <td className="py-3.5 text-right font-black text-zinc-950">مخاطر السلامة المفتوحة</td>
                         <td className="py-3.5 text-center text-zinc-950 font-black">{data.safeOpenRisks.actual}</td>
-                        <td className="py-3.5 text-center text-zinc-400 font-medium">{data.safeOpenRisks.target}</td>
+                        <td className="py-3.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.safeOpenRisks.target}</td>
                         <td className="py-3.5 flex justify-center">{renderStatusIcon(safe2Status)}</td>
                       </tr>
                     </tbody>
@@ -1227,14 +1227,14 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* CARD 4: Warehouse & Dispatch */}
               <div id="kpi-card-warehouse" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
-                <div className="p-3 px-4 bg-[#798A19] text-white flex items-center justify-between font-black">
+                <div className="p-3 px-4 bg-[#889E19] text-white flex items-center justify-between font-black">
                   <span className="text-sm tracking-wide">المستودعات والشحن (Warehouse)</span>
                   <Clock size={15} />
                 </div>
                 <div className="flex-1 p-2">
                   <table className="w-full text-[11px] font-bold border-collapse">
                     <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-400 text-right">
+                      <tr className="border-b border-zinc-200 text-zinc-950 dark:text-zinc-100 text-right font-black">
                         <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
                         <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
                         <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
@@ -1243,21 +1243,21 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black">عدد الحاويات المشحونة</td>
+                        <td className="py-2.5 text-right font-black text-zinc-950">عدد الحاويات المشحونة</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.whShippedContainers.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-400 font-medium">{data.whShippedContainers.target}</td>
+                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.whShippedContainers.target}</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(wh1Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black">عدد أوامر التحميل المنفذة</td>
+                        <td className="py-2.5 text-right font-black text-zinc-950">عدد أوامر التحميل المنفذة</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.whExecutedOrders.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-400 font-medium">{data.whExecutedOrders.target}</td>
+                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">{data.whExecutedOrders.target}</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(wh2Status)}</td>
                       </tr>
                       <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black">الشحن في الموعد (% OTIF)</td>
+                        <td className="py-2.5 text-right font-black text-zinc-950">الشحن في الموعد (% OTIF)</td>
                         <td className="py-2.5 text-center text-zinc-950 font-black">{data.whOtif.actual}%</td>
-                        <td className="py-2.5 text-center text-zinc-400 font-medium">≥ {data.whOtif.target}%</td>
+                        <td className="py-2.5 text-center text-zinc-950 dark:text-zinc-100 font-bold">≥ {data.whOtif.target}%</td>
                         <td className="py-2.5 flex justify-center">{renderStatusIcon(wh3Status)}</td>
                       </tr>
                     </tbody>
@@ -1284,7 +1284,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   <div className="p-2 space-y-2">
                     <table className="w-full text-[10px] font-bold">
                       <thead>
-                        <tr className="text-zinc-400 border-b border-zinc-100">
+                        <tr className="text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 font-black">
                           <th className="py-1 text-right">المؤشر</th>
                           <th className="py-1 text-center w-12">المخطط</th>
                           <th className="py-1 text-center w-12">الفعلي</th>
@@ -1292,33 +1292,33 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                           <th className="py-1 text-center w-6">الحالة</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-50">
+                      <tbody className="divide-y divide-zinc-100">
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">الإنتاج (كجم)</td>
-                          <td className="py-1.5 text-center text-zinc-400">{data.linePacking1.prodPlanned.toLocaleString()}</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePacking1.prod.toLocaleString()}</td>
-                          <td className="py-1.5 text-center text-[#115E59] font-black">{line1_eff_calc}%</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">الإنتاج (كجم)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">{data.linePacking1.prodPlanned.toLocaleString()}</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePacking1.prod.toLocaleString()}</td>
+                          <td className="py-1.5 text-center text-[#115E59] dark:text-emerald-400 font-black">{line1_eff_calc}%</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon(getLineEffStatus(line1_eff_calc, 100))}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">الكفاءة (%)</td>
-                          <td className="py-1.5 text-center text-zinc-400">{data.linePacking1.effPlanned}%</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePacking1.eff}%</td>
-                          <td className="py-1.5 text-center text-emerald-600 font-black">102%</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">الكفاءة (%)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">{data.linePacking1.effPlanned}%</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePacking1.eff}%</td>
+                          <td className="py-1.5 text-center text-emerald-600 dark:text-emerald-400 font-black">102%</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('success')}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">Product Waste</td>
-                          <td className="py-1.5 text-center text-zinc-400">≤ {data.linePacking1.wastePlanned}%</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePacking1.waste}%</td>
-                          <td className="py-1.5 text-center text-zinc-300">-</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">Product Waste</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">≤ {data.linePacking1.wastePlanned}%</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePacking1.waste}%</td>
+                          <td className="py-1.5 text-center text-zinc-500 dark:text-zinc-500">-</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('success')}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500 font-black">Downtime (د)</td>
-                          <td className="py-1.5 text-center text-zinc-400">35</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">-</td>
-                          <td className="py-1.5 text-center text-zinc-300">-</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100 font-black">Downtime (د)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">35</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">-</td>
+                          <td className="py-1.5 text-center text-zinc-500 dark:text-zinc-500">-</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('warning')}</td>
                         </tr>
                       </tbody>
@@ -1335,7 +1335,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   <div className="p-2 space-y-2">
                     <table className="w-full text-[10px] font-bold">
                       <thead>
-                        <tr className="text-zinc-400 border-b border-zinc-100">
+                        <tr className="text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 font-black">
                           <th className="py-1 text-right">المؤشر</th>
                           <th className="py-1 text-center w-12">المخطط</th>
                           <th className="py-1 text-center w-12">الفعلي</th>
@@ -1343,33 +1343,33 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                           <th className="py-1 text-center w-6">الحالة</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-50">
+                      <tbody className="divide-y divide-zinc-100">
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">الإنتاج (كجم)</td>
-                          <td className="py-1.5 text-center text-zinc-400">{data.linePacking2.prodPlanned.toLocaleString()}</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePacking2.prod.toLocaleString()}</td>
-                          <td className="py-1.5 text-center text-[#115E59] font-black">{line2_eff_calc}%</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">الإنتاج (كجم)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">{data.linePacking2.prodPlanned.toLocaleString()}</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePacking2.prod.toLocaleString()}</td>
+                          <td className="py-1.5 text-center text-[#115E59] dark:text-emerald-400 font-black">{line2_eff_calc}%</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon(getLineEffStatus(line2_eff_calc, 100))}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">الكفاءة (%)</td>
-                          <td className="py-1.5 text-center text-zinc-400">{data.linePacking2.effPlanned}%</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePacking2.eff}%</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">الكفاءة (%)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">{data.linePacking2.effPlanned}%</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePacking2.eff}%</td>
                           <td className="py-1.5 text-center text-amber-655 font-black">98%</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('warning')}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">Product Waste</td>
-                          <td className="py-1.5 text-center text-zinc-400">≤ {data.linePacking2.wastePlanned}%</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePacking2.waste}%</td>
-                          <td className="py-1.5 text-center text-zinc-300">-</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">Product Waste</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">≤ {data.linePacking2.wastePlanned}%</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePacking2.waste}%</td>
+                          <td className="py-1.5 text-center text-zinc-500 dark:text-zinc-500">-</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('warning')}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500 font-black">Downtime (د)</td>
-                          <td className="py-1.5 text-center text-zinc-400">42</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">-</td>
-                          <td className="py-1.5 text-center text-zinc-300">-</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100 font-black">Downtime (د)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">42</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">-</td>
+                          <td className="py-1.5 text-center text-zinc-500 dark:text-zinc-500">-</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('danger')}</td>
                         </tr>
                       </tbody>
@@ -1386,7 +1386,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   <div className="p-2 space-y-2">
                     <table className="w-full text-[10px] font-bold">
                       <thead>
-                        <tr className="text-zinc-400 border-b border-zinc-100">
+                        <tr className="text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 font-black">
                           <th className="py-1 text-right">المؤشر</th>
                           <th className="py-1 text-center w-12">المخطط</th>
                           <th className="py-1 text-center w-12">الفعلي</th>
@@ -1394,33 +1394,33 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                           <th className="py-1 text-center w-6">الحالة</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-50">
+                      <tbody className="divide-y divide-zinc-100">
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">الإنتاج (كرتونة)</td>
-                          <td className="py-1.5 text-center text-zinc-400">{data.linePackaging1.prodPlanned.toLocaleString()}</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePackaging1.prod.toLocaleString()}</td>
-                          <td className="py-1.5 text-center text-[#115E59] font-black">{line3_eff_calc}%</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">الإنتاج (كرتونة)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">{data.linePackaging1.prodPlanned.toLocaleString()}</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePackaging1.prod.toLocaleString()}</td>
+                          <td className="py-1.5 text-center text-[#115E59] dark:text-emerald-400 font-black">{line3_eff_calc}%</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon(getLineEffStatus(line3_eff_calc, 100))}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">الكفاءة (%)</td>
-                          <td className="py-1.5 text-center text-zinc-400">{data.linePackaging1.effPlanned}%</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePackaging1.eff}%</td>
-                          <td className="py-1.5 text-center text-emerald-600 font-black">104%</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">الكفاءة (%)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">{data.linePackaging1.effPlanned}%</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePackaging1.eff}%</td>
+                          <td className="py-1.5 text-center text-emerald-600 dark:text-emerald-400 font-black">104%</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('success')}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">Film Waste</td>
-                          <td className="py-1.5 text-center text-zinc-400">≤ {data.linePackaging1.wastePlanned}%</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePackaging1.waste}%</td>
-                          <td className="py-1.5 text-center text-zinc-300">-</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">Film Waste</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">≤ {data.linePackaging1.wastePlanned}%</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePackaging1.waste}%</td>
+                          <td className="py-1.5 text-center text-zinc-500 dark:text-zinc-500">-</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('success')}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500 font-black">Downtime (د)</td>
-                          <td className="py-1.5 text-center text-zinc-400">25</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">-</td>
-                          <td className="py-1.5 text-center text-zinc-300">-</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100 font-black">Downtime (د)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">25</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">-</td>
+                          <td className="py-1.5 text-center text-zinc-500 dark:text-zinc-500">-</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('success')}</td>
                         </tr>
                       </tbody>
@@ -1437,7 +1437,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   <div className="p-2 space-y-2">
                     <table className="w-full text-[10px] font-bold">
                       <thead>
-                        <tr className="text-zinc-400 border-b border-zinc-100">
+                        <tr className="text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 font-black">
                           <th className="py-1 text-right">المؤشر</th>
                           <th className="py-1 text-center w-12">المخطط</th>
                           <th className="py-1 text-center w-12">الفعلي</th>
@@ -1445,33 +1445,33 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                           <th className="py-1 text-center w-6">الحالة</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-zinc-50">
+                      <tbody className="divide-y divide-zinc-100">
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">الإنتاج (كرتونة)</td>
-                          <td className="py-1.5 text-center text-zinc-400">{data.linePackaging2.prodPlanned.toLocaleString()}</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePackaging2.prod.toLocaleString()}</td>
-                          <td className="py-1.5 text-center text-[#115E59] font-black">{line4_eff_calc}%</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">الإنتاج (كرتونة)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">{data.linePackaging2.prodPlanned.toLocaleString()}</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePackaging2.prod.toLocaleString()}</td>
+                          <td className="py-1.5 text-center text-[#115E59] dark:text-emerald-400 font-black">{line4_eff_calc}%</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon(getLineEffStatus(line4_eff_calc, 100))}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">الكفاءة (%)</td>
-                          <td className="py-1.5 text-center text-zinc-400">{data.linePackaging2.effPlanned}%</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePackaging2.eff}%</td>
-                          <td className="py-1.5 text-center text-amber-600 font-black">104%</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">الكفاءة (%)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">{data.linePackaging2.effPlanned}%</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePackaging2.eff}%</td>
+                          <td className="py-1.5 text-center text-amber-600 dark:text-amber-400 font-black">104%</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('warning')}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500">Film Waste</td>
-                          <td className="py-1.5 text-center text-zinc-400">≤ {data.linePackaging2.wastePlanned}%</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">{data.linePackaging2.waste}%</td>
-                          <td className="py-1.5 text-center text-zinc-300">-</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100">Film Waste</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">≤ {data.linePackaging2.wastePlanned}%</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">{data.linePackaging2.waste}%</td>
+                          <td className="py-1.5 text-center text-zinc-500 dark:text-zinc-500">-</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('success')}</td>
                         </tr>
                         <tr>
-                          <td className="py-1.5 text-right text-zinc-500 font-black">Downtime (د)</td>
-                          <td className="py-1.5 text-center text-zinc-400">50</td>
-                          <td className="py-1.5 text-center text-zinc-900 font-extrabold">-</td>
-                          <td className="py-1.5 text-center text-zinc-300">-</td>
+                          <td className="py-1.5 text-right text-zinc-950 dark:text-zinc-100 font-black">Downtime (د)</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-200 font-extrabold">50</td>
+                          <td className="py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-extrabold">-</td>
+                          <td className="py-1.5 text-center text-zinc-500 dark:text-zinc-500">-</td>
                           <td className="py-1.5 flex justify-center">{renderStatusIcon('danger')}</td>
                         </tr>
                       </tbody>
@@ -1498,16 +1498,16 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                       <XAxis dataKey="date" tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#888" />
                       <YAxis tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#888" />
                       <Tooltip contentStyle={{ fontSize: 10, direction: 'rtl', borderRadius: 12 }} />
-                      <Line type="monotone" name="efficiency" dataKey="efficiency" stroke="#10B981" strokeWidth={2.5} dot={{ r: 3 }} />
-                      <Line type="monotone" name="waste" dataKey="waste" stroke="#3B82F6" strokeWidth={2.5} dot={{ r: 3 }} />
-                      <Line type="monotone" name="rework" dataKey="rework" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 3 }} />
+                      <Line type="monotone" name="efficiency" dataKey="efficiency" stroke="#0E5F59" strokeWidth={2.5} dot={{ r: 3 }} />
+                      <Line type="monotone" name="waste" dataKey="waste" stroke="#98C21E" strokeWidth={2.5} dot={{ r: 3 }} />
+                      <Line type="monotone" name="rework" dataKey="rework" stroke="#D48C00" strokeWidth={2.5} dot={{ r: 3 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="flex justify-center gap-3 text-[8px] font-bold text-zinc-500 pt-1 select-none">
-                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />الكفاءة الإنتاجية (%)</span>
-                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6]" />Product Waste (%)</span>
-                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />Rework (%)</span>
+                <div className="flex justify-center gap-3 text-[10px] font-black text-zinc-950 pt-1 select-none">
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#0E5F59]" />الكفاءة الإنتاجية (%)</span>
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#98C21E]" />Product Waste (%)</span>
+                  <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#D48C00]" />Rework (%)</span>
                 </div>
               </div>
 
@@ -1523,11 +1523,11 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                       <XAxis dataKey="date" tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#888" />
                       <YAxis tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#888" />
                       <Tooltip contentStyle={{ fontSize: 10, direction: 'rtl', borderRadius: 12 }} />
-                      <Bar dataKey="value" fill="#4B9C49" radius={[4, 4, 0, 0]} barSize={24} />
+                      <Bar dataKey="value" fill="#8DB825" radius={[4, 4, 0, 0]} barSize={24} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="text-center text-[9px] font-bold text-zinc-400 select-none">
+                <div className="text-center text-[11px] font-black text-zinc-950 dark:text-zinc-200 select-none">
                   عدد الحاويات المشحونة يومياً
                 </div>
               </div>
@@ -1567,7 +1567,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 
                 {/* Styled Lined Notebook paper look with spacing */}
                 <div className="flex-1 flex flex-col relative justify-between">
-                  <p className="text-[11px] leading-6 font-semibold text-zinc-650 z-10 px-1 italic select-text">
+                  <p className="text-[11.5px] leading-6 font-black text-zinc-950 z-10 px-1 italic select-text">
                     {data.notes || 'لا توجد ملاحظات إضافية مسجلة للوردية اليوم.'}
                   </p>
                   
@@ -1666,63 +1666,63 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Total prod */}
                     <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
-                      <div className="font-bold">{isRtl ? 'إجمالي الإنتاج (كجم)' : 'Total Prod (kg)'}</div>
+                      <div className="font-bold text-zinc-800 dark:text-zinc-200">{isRtl ? 'إجمالي الإنتاج (كجم)' : 'Total Prod (kg)'}</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
-                          <span className="text-zinc-400">الفعلي</span>
-                          <input type="number" value={editFormData.prodTotal.actual} onChange={(e) => handleEditField('prodTotal', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
+                          <input type="number" value={editFormData.prodTotal.actual} onChange={(e) => handleEditField('prodTotal', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                         <div>
-                          <span className="text-zinc-400">المستهدف</span>
-                          <input type="number" value={editFormData.prodTotal.target} onChange={(e) => handleEditField('prodTotal', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
+                          <input type="number" value={editFormData.prodTotal.target} onChange={(e) => handleEditField('prodTotal', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                       </div>
-                      <div className="pt-1">
-                        <span className="text-[10px] text-zinc-400 block">حالة تملص</span>
-                        <select value={editFormData.prodTotal.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('prodTotal', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border rounded">
+                      <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800/50 mt-1">
+                        <span className="text-[10px] text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">تجاوز الحالة</span>
+                        <select value={editFormData.prodTotal.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('prodTotal', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150">
                           <option value="auto">تلقائي (Auto)</option>
-                          <option value="success">✅ مقبول</option>
-                          <option value="warning">🟡 متابعة</option>
-                          <option value="danger">❌ مرفوض</option>
+                          <option value="success">✅ مقبول (Acceptable)</option>
+                          <option value="warning">🟡 متابعة (Warning)</option>
+                          <option value="danger">❌ مرفوض (Rejected)</option>
                         </select>
                       </div>
                     </div>
 
                     {/* Efficiency */}
                     <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
-                      <div className="font-bold">{isRtl ? 'الكفاءة الإنتاجية (%)' : 'Productivity Efficiency (%)'}</div>
+                      <div className="font-bold text-zinc-800 dark:text-zinc-200">{isRtl ? 'الكفاءة الإنتاجية (%)' : 'Productivity Efficiency (%)'}</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
-                          <span className="text-zinc-400">الفعلي</span>
-                          <input type="number" value={editFormData.prodEfficiency.actual} onChange={(e) => handleEditField('prodEfficiency', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
+                          <input type="number" value={editFormData.prodEfficiency.actual} onChange={(e) => handleEditField('prodEfficiency', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                         <div>
-                          <span className="text-zinc-400">المستهدف</span>
-                          <input type="number" value={editFormData.prodEfficiency.target} onChange={(e) => handleEditField('prodEfficiency', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
+                          <input type="number" value={editFormData.prodEfficiency.target} onChange={(e) => handleEditField('prodEfficiency', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                       </div>
-                      <div className="pt-1">
-                        <span className="text-[10px] text-zinc-400 block">حالة تملص</span>
-                        <select value={editFormData.prodEfficiency.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('prodEfficiency', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border rounded">
+                      <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800/50 mt-1">
+                        <span className="text-[10px] text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">تجاوز الحالة</span>
+                        <select value={editFormData.prodEfficiency.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('prodEfficiency', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150">
                           <option value="auto">تلقائي (Auto)</option>
-                          <option value="success">✅ مقبول</option>
-                          <option value="warning">🟡 متابعة</option>
-                          <option value="danger">❌ مرفوض</option>
+                          <option value="success">✅ مقبول (Acceptable)</option>
+                          <option value="warning">🟡 متابعة (Warning)</option>
+                          <option value="danger">❌ مرفوض (Rejected)</option>
                         </select>
                       </div>
                     </div>
 
                     {/* Product Waste */}
                     <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
-                      <div className="font-bold">Product Waste (%)</div>
+                      <div className="font-bold text-zinc-800 dark:text-zinc-200">Product Waste (%)</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
-                          <span className="text-zinc-400">الفعلي</span>
-                          <input type="number" step="0.1" value={editFormData.prodWaste.actual} onChange={(e) => handleEditField('prodWaste', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
+                          <input type="number" step="0.1" value={editFormData.prodWaste.actual} onChange={(e) => handleEditField('prodWaste', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                         <div>
-                          <span className="text-zinc-400">المستهدف</span>
-                          <input type="number" step="0.1" value={editFormData.prodWaste.target} onChange={(e) => handleEditField('prodWaste', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
+                          <input type="number" step="0.1" value={editFormData.prodWaste.target} onChange={(e) => handleEditField('prodWaste', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                       </div>
                     </div>
@@ -1740,20 +1740,20 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Hold Cases */}
                     <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
-                      <div className="font-bold">عدد حالات الـ Hold</div>
+                      <div className="font-bold text-zinc-800 dark:text-zinc-200">عدد حالات الـ Hold</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
-                          <span className="text-zinc-400">الفعلي</span>
-                          <input type="number" value={editFormData.qualHoldCases.actual} onChange={(e) => handleEditField('qualHoldCases', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
+                          <input type="number" value={editFormData.qualHoldCases.actual} onChange={(e) => handleEditField('qualHoldCases', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                         <div>
-                          <span className="text-zinc-400">المستهدف</span>
-                          <input type="number" value={editFormData.qualHoldCases.target} onChange={(e) => handleEditField('qualHoldCases', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
+                          <input type="number" value={editFormData.qualHoldCases.target} onChange={(e) => handleEditField('qualHoldCases', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                       </div>
-                      <div className="pt-1">
-                        <span className="text-[10px] text-zinc-400 block">تجاوز الحالة</span>
-                        <select value={editFormData.qualHoldCases.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('qualHoldCases', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border rounded">
+                      <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800/50 mt-1">
+                        <span className="text-[10px] text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">تجاوز الحالة</span>
+                        <select value={editFormData.qualHoldCases.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('qualHoldCases', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150">
                           <option value="auto">تلقائي (Auto)</option>
                           <option value="success">✅ مقبول</option>
                           <option value="warning">🟡 متابعة</option>
@@ -1764,30 +1764,30 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
                     {/* Food Safety */}
                     <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
-                      <div className="font-bold">مخالفات الفود سيفتي</div>
+                      <div className="font-bold text-zinc-800 dark:text-zinc-200">مخالفات الفود سيفتي</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
-                          <span className="text-zinc-400">الفعلي</span>
-                          <input type="number" value={editFormData.qualFoodSafety.actual} onChange={(e) => handleEditField('qualFoodSafety', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
+                          <input type="number" value={editFormData.qualFoodSafety.actual} onChange={(e) => handleEditField('qualFoodSafety', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                         <div>
-                          <span className="text-zinc-400">المستهدف</span>
-                          <input type="number" value={editFormData.qualFoodSafety.target} onChange={(e) => handleEditField('qualFoodSafety', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
+                          <input type="number" value={editFormData.qualFoodSafety.target} onChange={(e) => handleEditField('qualFoodSafety', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                       </div>
                     </div>
 
                     {/* GMP Score */}
                     <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
-                      <div className="font-bold">GMP Score (%)</div>
+                      <div className="font-bold text-zinc-800 dark:text-zinc-200">GMP Score (%)</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
-                          <span className="text-zinc-400">الفعلي</span>
-                          <input type="number" value={editFormData.qualGmpScore.actual} onChange={(e) => handleEditField('qualGmpScore', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
+                          <input type="number" value={editFormData.qualGmpScore.actual} onChange={(e) => handleEditField('qualGmpScore', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                         <div>
-                          <span className="text-zinc-400">المستهدف</span>
-                          <input type="number" value={editFormData.qualGmpScore.target} onChange={(e) => handleEditField('qualGmpScore', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border rounded" />
+                          <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
+                          <input type="number" value={editFormData.qualGmpScore.target} onChange={(e) => handleEditField('qualGmpScore', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
                         </div>
                       </div>
                     </div>
