@@ -49,6 +49,7 @@ import { jsPDF } from 'jspdf';
 interface KPIDashboardProps {
   lang: Language;
   user: UserProfile;
+  isDark?: boolean;
 }
 
 // Full interface matching the image structures
@@ -166,7 +167,7 @@ const DEFAULT_KPI_DATA: KPIData = {
 const SHIFTS_AR = ['الصباحية', 'المسائية', 'الليلية'];
 const SHIFTS_EN = ['Morning', 'Evening', 'Night'];
 
-export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
+export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboardProps) {
   const isRtl = lang === 'ar';
   const boardRef = useRef<HTMLDivElement>(null);
 
@@ -772,7 +773,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
   };
 
   const isTvThemeDark = isTvMode && tvTheme === 'dark';
-  const isCurrentDark = isTvMode ? (tvTheme === 'dark') : true; // Align normal non-TV mode with global dark layout theme
+  const isCurrentDark = isTvMode ? (tvTheme === 'dark') : isDark;
 
   return (
     <div 
@@ -1034,7 +1035,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               transition: 'transform 0.2s ease-out',
               minWidth: '1380px'
             } : undefined}
-            className={`w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6 transition-all duration-300 ${isCurrentDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800' : 'bg-white border-zinc-200/50 text-zinc-800'}`}
+            className={`w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6 transition-all duration-300 ${isCurrentDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800' : 'daytime-light-override-card bg-white border-zinc-200/50 text-zinc-850'}`}
             dir="rtl"
           >
             
@@ -1044,10 +1045,10 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               {/* Top Right Date/Shift Block Grid (First in JSX renders on the right in RTL) */}
               <div className={`grid grid-cols-2 gap-y-2.5 gap-x-4 p-4 rounded-2xl border min-w-[270px] text-xs font-bold leading-none transition-all duration-300 ${
                 isCurrentDark 
-                  ? 'bg-zinc-950 border-zinc-800 text-zinc-350' 
+                  ? 'bg-zinc-950 border-zinc-800 text-zinc-405' 
                   : 'bg-zinc-50 border-zinc-200/80 text-zinc-950 shadow-sm'
               }`}>
-                <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-650'}`}>
+                <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
                   <Calendar size={13} className="text-emerald-600 animate-pulse" />
                   <span>التاريخ:</span>
                 </div>
@@ -1055,7 +1056,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   {date.split('-').reverse().join(' / ')}
                 </div>
 
-                <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-650'}`}>
+                <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
                   <Clock size={13} className="text-emerald-600" />
                   <span>اليوم:</span>
                 </div>
@@ -1063,7 +1064,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                   {data.dayName}
                 </div>
 
-                <div className={`flex items-center gap-1.5 col-span-1 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-650'}`}>
+                <div className={`flex items-center gap-1.5 col-span-1 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
                   <Users size={13} className="text-emerald-600" />
                   <span>الوردية:</span>
                 </div>
@@ -1488,7 +1489,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               
               {/* Left Column: Trend chart */}
               <div id="chart-trend-container" className="lg:col-span-4 border border-zinc-200 rounded-[24px] p-4 bg-white flex flex-col justify-between min-h-[290px]">
-                <h4 className="text-xs font-black text-center text-zinc-900 flex items-center justify-center gap-1.5 mb-2 border-b border-zinc-150 pb-2 select-none">
+                <h4 className="text-xs font-black text-center text-zinc-900 flex items-center justify-center gap-1.5 mb-2 border-b border-zinc-200 pb-2 select-none">
                   <TrendingUp size={14} className="text-[#0E5F59]" />
                   <span>مؤشرات الاتجاه (Trend)</span>
                 </h4>
@@ -1514,7 +1515,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* Middle Column: Shipped Containers */}
               <div id="chart-containers-container" className="lg:col-span-4 border border-zinc-200 rounded-[24px] p-4 bg-white flex flex-col justify-between min-h-[290px]">
-                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-150 pb-2 mb-2 select-none">
+                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 pb-2 mb-2 select-none">
                   أداء الحاويات المشحونة خلال الأسبوع
                 </h4>
                 <div className="w-full flex-1 h-44">
@@ -1535,7 +1536,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* Right Column: Legend Key */}
               <div className="lg:col-span-2 border border-zinc-200 rounded-[24px] p-4 bg-white min-h-[290px] flex flex-col select-none">
-                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-150 pb-2 mb-3">
+                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 pb-2 mb-3">
                   مفتاح الحالة
                 </h4>
                 <div className="flex-1 flex flex-col justify-center space-y-4 text-xs font-black px-1">
@@ -1562,7 +1563,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
               {/* Far Right Column: Notebook comments block */}
               <div id="notes-notebook-container" className="lg:col-span-2 border border-zinc-200 rounded-[24px] p-4 bg-amber-50/20 dark:bg-zinc-900/10 min-h-[290px] flex flex-col">
-                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-150 pb-2 mb-3 select-none">
+                <h4 className="text-xs font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 pb-2 mb-3 select-none">
                   ملاحظات
                 </h4>
                 
@@ -1617,7 +1618,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="relative w-full max-w-4xl bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col max-h-[90vh]"
             >
-              <div className="flex justify-between items-center pb-4 border-b border-zinc-150 dark:border-zinc-800 shrink-0">
+              <div className="flex justify-between items-center pb-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
                 <div>
                   <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
                     {isRtl ? 'تعديل قيم مؤشرات الأداء' : 'Edit KPI Monitoring values'}
@@ -1626,13 +1627,13 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     {isRtl ? `تعديل البيانات لـ: ${editFormData.date}` : `Modify fields for: ${editFormData.date}`}
                   </p>
                 </div>
-                <button onClick={() => setShowEditor(false)} className="text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200">
+                <button onClick={() => setShowEditor(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
                   <X size={20} />
                 </button>
               </div>
 
               {/* Form Content Scrollable */}
-              <div className="flex-1 overflow-y-auto py-5 space-y-6 text-xs text-zinc-850 dark:text-zinc-300">
+              <div className="flex-1 overflow-y-auto py-5 space-y-6 text-xs text-zinc-800 dark:text-zinc-300">
                 
                 {/* Meta details */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-zinc-50 dark:bg-zinc-950 p-4 rounded-2xl">
@@ -1659,28 +1660,28 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
                 {/* 1. Production inputs */}
                 <div className="space-y-3">
-                  <h4 className="font-extrabold text-teal-600 dark:text-teal-400 border-b border-zinc-150 pb-1 flex items-center gap-1 text-sm">
+                  <h4 className="font-extrabold text-teal-600 dark:text-teal-400 border-b border-zinc-200 pb-1 flex items-center gap-1 text-sm">
                     <div className="w-1.5 h-3 bg-teal-500 rounded" />
                     <span>{isRtl ? 'قسم الإنتاج (Production)' : 'Production KPIs'}</span>
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Total prod */}
-                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2">
                       <div className="font-bold text-zinc-800 dark:text-zinc-200">{isRtl ? 'إجمالي الإنتاج (كجم)' : 'Total Prod (kg)'}</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
-                          <input type="number" value={editFormData.prodTotal.actual} onChange={(e) => handleEditField('prodTotal', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.prodTotal.actual} onChange={(e) => handleEditField('prodTotal', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
-                          <input type="number" value={editFormData.prodTotal.target} onChange={(e) => handleEditField('prodTotal', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.prodTotal.target} onChange={(e) => handleEditField('prodTotal', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                       </div>
                       <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800/50 mt-1">
                         <span className="text-[10px] text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">تجاوز الحالة</span>
-                        <select value={editFormData.prodTotal.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('prodTotal', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150">
+                        <select value={editFormData.prodTotal.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('prodTotal', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300">
                           <option value="auto">تلقائي (Auto)</option>
                           <option value="success">✅ مقبول (Acceptable)</option>
                           <option value="warning">🟡 متابعة (Warning)</option>
@@ -1690,21 +1691,21 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     </div>
 
                     {/* Efficiency */}
-                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2">
                       <div className="font-bold text-zinc-800 dark:text-zinc-200">{isRtl ? 'الكفاءة الإنتاجية (%)' : 'Productivity Efficiency (%)'}</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
-                          <input type="number" value={editFormData.prodEfficiency.actual} onChange={(e) => handleEditField('prodEfficiency', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.prodEfficiency.actual} onChange={(e) => handleEditField('prodEfficiency', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
-                          <input type="number" value={editFormData.prodEfficiency.target} onChange={(e) => handleEditField('prodEfficiency', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.prodEfficiency.target} onChange={(e) => handleEditField('prodEfficiency', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                       </div>
                       <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800/50 mt-1">
                         <span className="text-[10px] text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">تجاوز الحالة</span>
-                        <select value={editFormData.prodEfficiency.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('prodEfficiency', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150">
+                        <select value={editFormData.prodEfficiency.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('prodEfficiency', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300">
                           <option value="auto">تلقائي (Auto)</option>
                           <option value="success">✅ مقبول (Acceptable)</option>
                           <option value="warning">🟡 متابعة (Warning)</option>
@@ -1714,16 +1715,16 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     </div>
 
                     {/* Product Waste */}
-                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2">
                       <div className="font-bold text-zinc-800 dark:text-zinc-200">Product Waste (%)</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
-                          <input type="number" step="0.1" value={editFormData.prodWaste.actual} onChange={(e) => handleEditField('prodWaste', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" step="0.1" value={editFormData.prodWaste.actual} onChange={(e) => handleEditField('prodWaste', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
-                          <input type="number" step="0.1" value={editFormData.prodWaste.target} onChange={(e) => handleEditField('prodWaste', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" step="0.1" value={editFormData.prodWaste.target} onChange={(e) => handleEditField('prodWaste', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                       </div>
                     </div>
@@ -1733,28 +1734,28 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
                 {/* 2. Quality inputs */}
                 <div className="space-y-3">
-                  <h4 className="font-extrabold text-blue-600 dark:text-blue-400 border-b border-zinc-150 pb-1 flex items-center gap-1 text-sm">
+                  <h4 className="font-extrabold text-blue-600 dark:text-blue-400 border-b border-zinc-200 pb-1 flex items-center gap-1 text-sm">
                     <div className="w-1.5 h-3 bg-blue-500 rounded" />
                     <span>{isRtl ? 'قسم الجودة (Quality)' : 'Quality KPIs'}</span>
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Hold Cases */}
-                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2">
                       <div className="font-bold text-zinc-800 dark:text-zinc-200">عدد حالات الـ Hold</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
-                          <input type="number" value={editFormData.qualHoldCases.actual} onChange={(e) => handleEditField('qualHoldCases', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.qualHoldCases.actual} onChange={(e) => handleEditField('qualHoldCases', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
-                          <input type="number" value={editFormData.qualHoldCases.target} onChange={(e) => handleEditField('qualHoldCases', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.qualHoldCases.target} onChange={(e) => handleEditField('qualHoldCases', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                       </div>
                       <div className="pt-1 border-t border-zinc-100 dark:border-zinc-800/50 mt-1">
                         <span className="text-[10px] text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">تجاوز الحالة</span>
-                        <select value={editFormData.qualHoldCases.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('qualHoldCases', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150">
+                        <select value={editFormData.qualHoldCases.statusOverride || 'auto'} onChange={(e) => handleOverrideStatus('qualHoldCases', 'actual', e.target.value)} className="w-full p-1 text-[10px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300">
                           <option value="auto">تلقائي (Auto)</option>
                           <option value="success">✅ مقبول</option>
                           <option value="warning">🟡 متابعة</option>
@@ -1764,31 +1765,31 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                     </div>
 
                     {/* Food Safety */}
-                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2">
                       <div className="font-bold text-zinc-800 dark:text-zinc-200">مخالفات الفود سيفتي</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
-                          <input type="number" value={editFormData.qualFoodSafety.actual} onChange={(e) => handleEditField('qualFoodSafety', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.qualFoodSafety.actual} onChange={(e) => handleEditField('qualFoodSafety', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
-                          <input type="number" value={editFormData.qualFoodSafety.target} onChange={(e) => handleEditField('qualFoodSafety', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.qualFoodSafety.target} onChange={(e) => handleEditField('qualFoodSafety', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                       </div>
                     </div>
 
                     {/* GMP Score */}
-                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-150 dark:border-zinc-800 space-y-2">
+                    <div className="bg-zinc-50/50 dark:bg-zinc-800/20 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2">
                       <div className="font-bold text-zinc-800 dark:text-zinc-200">GMP Score (%)</div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">الفعلي</span>
-                          <input type="number" value={editFormData.qualGmpScore.actual} onChange={(e) => handleEditField('qualGmpScore', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.qualGmpScore.actual} onChange={(e) => handleEditField('qualGmpScore', 'actual', 'actual', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                         <div>
                           <span className="text-zinc-700 dark:text-zinc-300 font-extrabold block mb-0.5">المستهدف</span>
-                          <input type="number" value={editFormData.qualGmpScore.target} onChange={(e) => handleEditField('qualGmpScore', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-150" />
+                          <input type="number" value={editFormData.qualGmpScore.target} onChange={(e) => handleEditField('qualGmpScore', 'actual', 'target', parseFloat(e.target.value) || 0)} className="w-full p-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded text-zinc-900 dark:text-zinc-300" />
                         </div>
                       </div>
                     </div>
@@ -1798,8 +1799,8 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
 
                 {/* 3. Notes & thoughts */}
                 <div className="space-y-2">
-                  <h4 className="font-extrabold text-zinc-650 dark:text-zinc-300 flex items-center gap-1 text-sm border-b pb-1">
-                    <div className="w-1.5 h-3 bg-zinc-450 dark:bg-zinc-300 rounded" />
+                  <h4 className="font-extrabold text-zinc-600 dark:text-zinc-300 flex items-center gap-1 text-sm border-b pb-1">
+                    <div className="w-1.5 h-3 bg-zinc-400 dark:bg-zinc-300 rounded" />
                     <span>{isRtl ? 'الملاحظات والرسائل' : 'Notes & Slogan text'}</span>
                   </h4>
                   <textarea
@@ -1814,7 +1815,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
               </div>
 
               {/* Footer actions */}
-              <div className="pt-4 border-t border-zinc-150 dark:border-zinc-850 shrink-0 flex items-center justify-end gap-2">
+              <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 shrink-0 flex items-center justify-end gap-2 text-zinc-850 dark:text-zinc-150">
                 <button
                   type="button"
                   onClick={() => setShowEditor(false)}

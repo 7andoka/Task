@@ -473,7 +473,7 @@ export default function App() {
       case 'oliveStock':
         return <OliveStock lang={lang} user={user} />;
       case 'kpis':
-        return <KPIDashboard lang={lang} user={user} />;
+        return <KPIDashboard lang={lang} user={user} isDark={isDark} />;
       case 'tasks':
         return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':

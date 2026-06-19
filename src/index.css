@@ -102,3 +102,47 @@
 .tv-dark-override-card .recharts-tooltip-cursor {
   stroke: #2c2c2e !important;
 }
+
+/* Day/Light Presentation Mode overrides for perfect WCAG contrast and readability in daytime mode */
+.daytime-light-override-card {
+  background-color: #ffffff !important;
+  color: #09090b !important;
+  border-color: #e4e4e7 !important;
+}
+
+/* Ensure recharts layout text elements are crisp black */
+.daytime-light-override-card .recharts-text {
+  fill: #09090b !important;
+}
+
+/* Override any dark-mode text classes that leak due to layout level '.dark' wrappers */
+.daytime-light-override-card .dark\:text-zinc-100 {
+  color: #09090b !important;
+}
+.daytime-light-override-card .dark\:text-zinc-200 {
+  color: #18181b !important;
+}
+.daytime-light-override-card .dark\:text-zinc-300 {
+  color: #27272a !important;
+}
+.daytime-light-override-card .dark\:text-zinc-400 {
+  color: #52525b !important;
+}
+.daytime-light-override-card .dark\:text-zinc-500 {
+  color: #71717a !important;
+}
+.daytime-light-override-card .dark\:text-zinc-150 {
+  color: #09090b !important;
+}
+.daytime-light-override-card .dark\:text-emerald-400 {
+  color: #115e59 !important;
+}
+.daytime-light-override-card .dark\:text-teal-400 {
+  color: #0d5f54 !important;
+}
+.daytime-light-override-card .dark\:text-amber-400 {
+  color: #b45309 !important;
+}
+.daytime-light-override-card .dark\:text-blue-400 {
+  color: #1d4ed8 !important;
+}
