@@ -151,9 +151,17 @@ export default function Layout({
         </div>
 
         {/* Centered Branding */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center leading-none z-0">
-          <h1 className="text-lg font-bold text-emerald-700 tracking-tight font-serif whitespace-nowrap">Rich Land</h1>
-          <p className="text-[8px] font-bold text-emerald-600 tracking-widest uppercase mt-0.5 whitespace-nowrap">FOOD INDUSTRIES</p>
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center z-0 scale-95 sm:scale-100">
+          <div className="bg-white px-2.5 py-1 rounded-xl shadow-sm border border-zinc-200/50 flex items-center justify-center select-none">
+            <img 
+              src="/logo.png" 
+              alt="Rich Land" 
+              className="h-9 w-auto object-contain max-w-[200px] mix-blend-multiply"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg';
+              }}
+            />
+          </div>
         </div>
 
         {/* Right Side Controls (Navigation + Logout/Mode Toggle) */}

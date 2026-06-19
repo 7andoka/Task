@@ -72,7 +72,17 @@ export default function Auth({ lang, onLogin }: AuthProps) {
           transition={{ delay: 0.2 }}
           className="w-full bg-white/5 backdrop-blur-lg p-6 rounded-[2rem] border border-white/10 shadow-2xl"
         >
-          <div className="text-center mb-6">
+          <div className="flex flex-col items-center justify-center text-center mb-6">
+            <div className="bg-white p-2 rounded-2xl shadow-xl border border-white/20 select-none mb-3 flex items-center justify-center animate-pulse" style={{ animationDuration: '4s' }}>
+              <img 
+                src="/logo.png" 
+                alt="Rich Land Logo" 
+                className="h-20 w-auto object-contain mix-blend-multiply"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg';
+                }}
+              />
+            </div>
             <h2 className="text-3xl font-bold text-white tracking-tight">{t.login}</h2>
             <p className="text-white/70 text-sm mt-1">{t.welcomeBack}</p>
           </div>

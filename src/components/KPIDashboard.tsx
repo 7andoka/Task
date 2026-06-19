@@ -1040,31 +1040,7 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
             {/* RICH LAND DOCUMENT HEADER */}
             <div className="flex flex-col md:flex-row items-center justify-between border-b border-zinc-300 pb-5 gap-6">
               
-              {/* Brand and Logo */}
-              <div className="flex items-center gap-3 shrink-0">
-                <div className="w-12 h-12 rounded-full border-4 border-[#0E5F59] flex items-center justify-center bg-white shadow-md relative overflow-hidden select-none">
-                  {/* Styled Green Circle RL Logo representation */}
-                  <div className="absolute inset-0 bg-[#0E5F59]/5" />
-                  <div className="text-xl font-extrabold text-[#0E5F59] font-serif tracking-tight leading-none">RL</div>
-                  <div className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                </div>
-                <div>
-                  <h1 className={`text-3xl font-black tracking-tight font-serif leading-none transition-colors duration-300 ${isTvThemeDark ? 'text-teal-400' : 'text-[#0D5F54]'}`}>Rich Land</h1>
-                  <p className="text-[10px] font-extrabold text-emerald-600 tracking-widest uppercase mt-1">FOOD INDUSTRIES</p>
-                </div>
-              </div>
-
-              {/* Centered Dashboard Titles */}
-              <div className="text-center space-y-1.5 flex-1 select-none">
-                <h2 className={`text-3xl font-black tracking-wider font-sans transition-colors duration-300 ${isTvThemeDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
-                  لوحة متابعة مؤشرات الأداء اليومية
-                </h2>
-                <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isTvThemeDark ? 'text-emerald-400' : 'text-[#005370]'}`}>
-                  ريتش لاند للصناعات الغذائية
-                </h3>
-              </div>
-
-              {/* Top Right Date/Shift Block Grid */}
+              {/* Top Right Date/Shift Block Grid (First in JSX renders on the right in RTL) */}
               <div className={`grid grid-cols-2 gap-y-2.5 gap-x-4 p-4 rounded-2xl border min-w-[270px] text-xs font-bold leading-none transition-all duration-300 ${
                 isTvThemeDark 
                   ? 'bg-zinc-950 border-zinc-800 text-zinc-300' 
@@ -1092,6 +1068,30 @@ export default function KPIDashboard({ lang, user }: KPIDashboardProps) {
                 </div>
                 <div className="text-left text-emerald-500 font-extrabold">
                   {data.shift}
+                </div>
+              </div>
+
+              {/* Centered Dashboard Titles */}
+              <div className="text-center space-y-1.5 flex-1 select-none">
+                <h2 className={`text-3xl font-black tracking-wider font-sans transition-colors duration-300 ${isTvThemeDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
+                  لوحة متابعة مؤشرات الأداء اليومية
+                </h2>
+                <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isTvThemeDark ? 'text-emerald-400' : 'text-[#005370]'}`}>
+                  ريتش لاند للصناعات الغذائية
+                </h3>
+              </div>
+
+              {/* Brand and Logo (Last in JSX renders on the left in RTL, achieving "top-left" position) */}
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-zinc-200/60 flex items-center justify-center select-none">
+                  <img 
+                    src="/logo.png" 
+                    alt="Rich Land Logo" 
+                    className="h-16 w-auto object-contain transition-transform duration-300 hover:scale-105 mix-blend-multiply"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg';
+                    }}
+                  />
                 </div>
               </div>
             </div>
