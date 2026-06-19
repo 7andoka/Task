@@ -190,8 +190,54 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
   const [tvTheme, setTvTheme] = useState<'light' | 'dark'>('light');
   const [tvZoom, setTvZoom] = useState<number>(1.0);
+  const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
   const [refreshTimer, setRefreshTimer] = useState<number>(60);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+
+  // Auto scale / zoom dashboard to fit any TV screen perfectly
+  useEffect(() => {
+    if (!isTvMode) return;
+
+    const handleResize = () => {
+      if (!isAutoFit) return;
+      
+      const containerWidth = window.innerWidth - 48; // Horizontal screen clearance
+      const containerHeight = window.innerHeight - 80 - 48; // control bar height + padding
+      
+      const unscaledWidth = 1420; // Natural dashboard bounding width
+      const unscaledHeight = boardRef.current ? boardRef.current.offsetHeight : 1000;
+
+      if (unscaledHeight > 0) {
+        const scaleX = containerWidth / unscaledWidth;
+        const scaleY = containerHeight / unscaledHeight;
+        
+        // Take the min scale of both axes to ensure entire layout lives inside the viewport
+        let optimalScale = Math.min(scaleX, scaleY);
+        
+        // Clamp scale to readable limits
+        optimalScale = Math.max(0.4, Math.min(1.3, optimalScale));
+        
+        setTvZoom(parseFloat(optimalScale.toFixed(3)));
+      }
+    };
+
+    const timer = setTimeout(handleResize, 150);
+    window.addEventListener('resize', handleResize);
+    
+    let resizeObserver: ResizeObserver | null = null;
+    if (boardRef.current && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        handleResize();
+      });
+      resizeObserver.observe(boardRef.current);
+    }
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+      if (resizeObserver) resizeObserver.disconnect();
+    };
+  }, [isTvMode, isAutoFit, data]);
 
   // Handle escape, + and - keyboard shortcuts in TV mode to increase sizing dynamically
   useEffect(() => {
@@ -201,9 +247,11 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
       if (e.key === 'Escape') {
         setIsTvMode(false);
       } else if (e.key === '+' || e.key === '=') {
+        setIsAutoFit(false);
         setTvZoom(prev => Math.min(1.5, parseFloat((prev + 0.05).toFixed(2))));
         e.preventDefault();
       } else if (e.key === '-' || e.key === '_') {
+        setIsAutoFit(false);
         setTvZoom(prev => Math.max(0.6, parseFloat((prev - 0.05).toFixed(2))));
         e.preventDefault();
       }
@@ -777,10 +825,10 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
 
   return (
     <div 
-      className={`space-y-6 transition-colors duration-300 ${
+      className={`transition-colors duration-300 ${
         isTvMode 
-          ? `fixed inset-0 z-[9999] overflow-auto p-6 md:p-8 flex flex-col ${isTvThemeDark ? 'tv-dark-override bg-zinc-950 text-zinc-100' : 'bg-slate-50 text-zinc-900'}` 
-          : ''
+          ? `fixed inset-0 z-[9999] overflow-hidden p-4 md:p-6 flex flex-col gap-3 ${isTvThemeDark ? 'tv-dark-override bg-zinc-950 text-zinc-100' : 'bg-slate-50 text-zinc-900'}` 
+          : 'space-y-6'
       }`}
       style={{ direction: 'rtl' }}
     >
@@ -811,21 +859,44 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Auto-Fit Toggle Button */}
+            <button
+              onClick={() => {
+                const nextVal = !isAutoFit;
+                setIsAutoFit(nextVal);
+              }}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[11px] font-bold transition-all cursor-pointer select-none ${
+                isAutoFit 
+                  ? 'bg-emerald-505/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' 
+                  : (tvTheme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
+              }`}
+              title={isRtl ? 'تفعيل ملاءمة الشاشة التلقائية لحجم التلفزيون' : 'Auto fit dashboard to screen size'}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full ${isAutoFit ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
+              <span>{isRtl ? 'ملاءمة تلقائية للشاشة' : 'Auto-Fit Screen'}</span>
+            </button>
+
             {/* Sizing Scaling Keyboard instructions & buttons */}
             <div className={`flex items-center gap-2 border px-3 py-1 rounded-2xl ${
               tvTheme === 'dark' ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-50'
             }`}>
               <span className="text-[10px] font-bold text-zinc-400">{isRtl ? 'حجم الشاشة (+ / -):' : 'TV Zoom (+/-):'}</span>
               <button 
-                onClick={() => setTvZoom(z => Math.max(0.6, parseFloat((z - 0.05).toFixed(2))))}
+                onClick={() => {
+                  setIsAutoFit(false);
+                  setTvZoom(z => Math.max(0.4, parseFloat((z - 0.05).toFixed(2))));
+                }}
                 className="w-6 h-6 flex items-center justify-center hover:bg-zinc-500/10 rounded-lg text-xs font-bold"
                 title={isRtl ? 'تصغير حجم اللوحة' : 'Zoom Out'}
               >
                 -
               </button>
-              <span className="text-xs font-black min-w-[2.5rem] text-center font-mono">{Math.round(tvZoom * 100)}%</span>
+              <span className={`text-xs font-black min-w-[2.5rem] text-center font-mono ${isAutoFit ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-650 dark:text-zinc-350'}`}>{Math.round(tvZoom * 100)}%</span>
               <button 
-                onClick={() => setTvZoom(z => Math.min(1.5, parseFloat((z + 0.05).toFixed(2))))}
+                onClick={() => {
+                  setIsAutoFit(false);
+                  setTvZoom(z => Math.min(1.5, parseFloat((z + 0.05).toFixed(2))));
+                }}
                 className="w-6 h-6 flex items-center justify-center hover:bg-zinc-500/10 rounded-lg text-xs font-bold"
                 title={isRtl ? 'تكبير حجم اللوحة' : 'Zoom In'}
               >
@@ -1026,7 +1097,7 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
       ) : (
         
         /* THE ACTUAL INTERACTIVE HIGH-FIDELITY BOARD DOCUMENT */
-        <div className={`overflow-x-auto w-full pb-4 ${isTvMode ? 'flex-1 flex items-start justify-center' : ''}`}>
+        <div className={`w-full ${isTvMode ? 'overflow-hidden flex-1 flex items-start justify-center' : 'overflow-x-auto pb-4'}`}>
           <div 
             ref={boardRef}
             style={isTvMode ? { 
