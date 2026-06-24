@@ -156,7 +156,8 @@ export const translations = {
     unit: "الوحدة",
     addInput: "إضافة مدخلات",
     addOutput: "إضافة مخرجات",
-    processingJobs: "سجل عمليات التشغيل"
+    processingJobs: "سجل عمليات التشغيل",
+    finishedProduct: "منتج تام"
   },
   en: {
     warehouseManager: "Warehouse Manager",
@@ -315,6 +316,7 @@ export const translations = {
     unit: "Unit",
     addInput: "Add Input",
     addOutput: "Add Output",
-    processingJobs: "Processing Jobs Log"
+    processingJobs: "Processing Jobs Log",
+    finishedProduct: "Finished Product"
   }
 };

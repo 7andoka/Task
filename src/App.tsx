@@ -15,6 +15,7 @@ import RawMaterial from './components/RawMaterial';
 import ThirdPartyProcessing from './components/ThirdPartyProcessing';
 import OliveStock from './components/OliveStock';
 import KPIDashboard from './components/KPIDashboard';
+import CsvDataView from './components/CsvDataView';
 import OfflineScreen from './components/OfflineScreen';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
@@ -42,6 +43,7 @@ export default function App() {
       { id: 'rawMaterial', roles: undefined },
       { id: 'thirdPartyProcessing', roles: undefined },
       { id: 'oliveStock', roles: undefined },
+      { id: 'finishedProduct', roles: undefined },
       { id: 'kpis', roles: undefined },
       { id: 'tasks', roles: undefined },
       { id: 'team', roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
@@ -56,6 +58,9 @@ export default function App() {
       return menuItems
         .filter(item => {
           if (item.id === 'kpis' && isAdminOrWHManager) return true;
+          if (item.id === 'finishedProduct') {
+            return u.permissions!.includes('finishedProduct') || u.permissions!.includes('oliveStock') || isAdminOrWHManager;
+          }
           return u.permissions!.includes(item.id);
         })
         .map(item => item.id);
@@ -472,6 +477,8 @@ export default function App() {
         return <ThirdPartyProcessing lang={lang} user={user} />;
       case 'oliveStock':
         return <OliveStock lang={lang} user={user} />;
+      case 'finishedProduct':
+        return <CsvDataView lang={lang} />;
       case 'kpis':
         return <KPIDashboard lang={lang} user={user} isDark={isDark} />;
       case 'tasks':

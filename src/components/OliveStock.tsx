@@ -53,6 +53,13 @@ interface PivotedStockRow {
   treatment: string;
   processType: string;
   locationQuantities: Record<string, number>;
+  analyses: string[];
+  rawRows: {
+    quantity: number;
+    location: string;
+    analysis: string;
+    batch: string;
+  }[];
 }
 
 const CATEGORIES_REF = {
@@ -75,6 +82,12 @@ const CATEGORIES_REF = {
     { id: 'XXS', labelAr: 'XXS', labelEn: 'XXS', aliases: ['2xs', 'xxs'] },
   ]
 };
+
+const ANALYSIS_CATEGORIES = [
+  { id: 'Within Limits', labelAr: 'مطابق (Within Limits)', labelEn: 'Within Limits' },
+  { id: 'Not Comply', labelAr: 'غير مطابق (Not Comply)', labelEn: 'Not Comply' },
+  { id: 'Free', labelAr: 'حر (Free)', labelEn: 'Free' }
+];
 
 interface MultiSelectProps {
   label: string;
@@ -196,6 +209,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([]);
+  const [selectedAnalyses, setSelectedAnalyses] = useState<string[]>([]);
 
   const isRtl = lang === 'ar';
 
@@ -301,6 +315,22 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       default:
         return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800/30 dark:text-zinc-400 dark:border-zinc-700/50';
     }
+  };
+
+  const getAnalysisLabel = (id: string) => {
+    if (id === 'Within Limits') return isRtl ? 'مطابق (Within Limits)' : 'Within Limits';
+    if (id === 'Not Comply') return isRtl ? 'غير مطابق (Not Comply)' : 'Not Comply';
+    return isRtl ? 'حر (Free)' : 'Free';
+  };
+
+  const getAnalysisColor = (id: string) => {
+    if (id === 'Within Limits') {
+      return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-400 dark:border-emerald-500/10';
+    }
+    if (id === 'Not Comply') {
+      return 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:bg-rose-500/5 dark:text-rose-400 dark:border-rose-500/10';
+    }
+    return 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/5 dark:text-blue-400 dark:border-blue-500/10';
   };
 
   const detectAttribute = (descr: string, type: 'size' | 'process' | 'direction'): string => {
@@ -540,6 +570,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     const descrIdx = headers.findIndex(h => h === 'material description' || (h.includes('descr') && h.includes('material')));
     const unrestrictedIdx = headers.findIndex(h => h === 'unrestricted' || h.includes('unrestricted') || h.includes('qty') || h.includes('quantity'));
     const locDescrIdx = headers.findIndex(h => h === 'descr. of storage loc.' || h.includes('storage loc') || h.includes('location descr'));
+    const batchIdx = headers.findIndex(h => h === 'batch' || h.includes('batch') || h.includes('تشغيلة'));
 
     if (materialIdx === -1 || unrestrictedIdx === -1) return [];
 
@@ -580,6 +611,16 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         locDescr = 'Richland';
       }
 
+      // Determine batch analysis
+      const batchVal = batchIdx !== -1 && row[batchIdx] ? row[batchIdx].trim() : '';
+      const prefix = batchVal.substring(0, 3).toUpperCase();
+      let rowAnalysis = 'Free';
+      if (prefix === 'PWL') {
+        rowAnalysis = 'Within Limits';
+      } else if (prefix === 'PNC') {
+        rowAnalysis = 'Not Comply';
+      }
+
       if (!pivotMap.has(code)) {
         pivotMap.set(code, {
           materialCode: code,
@@ -589,13 +630,26 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           size: detectAttribute(descr, 'size'),
           treatment: detectAttribute(descr, 'direction'),
           processType: detectAttribute(descr, 'process'),
-          locationQuantities: {}
+          locationQuantities: {},
+          analyses: [],
+          rawRows: []
         });
       }
 
       const entry = pivotMap.get(code)!;
       entry.totalQuantity += quantity;
       entry.locationQuantities[locDescr] = (entry.locationQuantities[locDescr] || 0) + quantity;
+      
+      entry.rawRows.push({
+        quantity,
+        location: locDescr,
+        analysis: rowAnalysis,
+        batch: batchVal
+      });
+
+      if (!entry.analyses.includes(rowAnalysis)) {
+        entry.analyses.push(rowAnalysis);
+      }
     }
 
     return Array.from(pivotMap.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
@@ -717,34 +771,62 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
   // Filtered dataset
   const filteredDataset = useMemo(() => {
-    return dataset.filter(row => {
-      const matchesSearch = 
-        row.materialCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        row.description.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesLocation = 
-        selectedLocations.length === 0 || 
-        selectedLocations.some(loc => row.locationQuantities[loc] && row.locationQuantities[loc] > 0);
+    return dataset
+      .map(row => {
+        // If analysis filter is selected, we filter the rawRows inside
+        const activeRawRows = selectedAnalyses.length === 0
+          ? row.rawRows
+          : row.rawRows.filter(r => selectedAnalyses.includes(r.analysis));
 
-      const matchesVariety = 
-        selectedVarieties.length === 0 || 
-        selectedVarieties.includes(row.variety);
+        // Recompute quantities based on the active rawRows
+        const totalQuantity = activeRawRows.reduce((sum, r) => sum + r.quantity, 0);
+        
+        const locationQuantities: Record<string, number> = {};
+        activeRawRows.forEach(r => {
+          locationQuantities[r.location] = (locationQuantities[r.location] || 0) + r.quantity;
+        });
 
-      const matchesSize = 
-        selectedSizes.length === 0 || 
-        selectedSizes.includes(row.size);
+        // Unique analyses remaining with quantity > 0
+        const activeAnalyses = Array.from(new Set(activeRawRows.filter(r => r.quantity > 0).map(r => r.analysis)));
 
-      const matchesTreatment = 
-        selectedTreatments.length === 0 || 
-        selectedTreatments.includes(row.treatment);
+        return {
+          ...row,
+          totalQuantity,
+          locationQuantities,
+          analyses: activeAnalyses
+        };
+      })
+      .filter(row => {
+        // Only keep rows that have stock remaining after analysis filter
+        if (row.totalQuantity <= 0) return false;
 
-      const matchesProcess = 
-        selectedProcesses.length === 0 || 
-        selectedProcesses.includes(row.processType);
+        const matchesSearch = 
+          row.materialCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          row.description.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        const matchesLocation = 
+          selectedLocations.length === 0 || 
+          selectedLocations.some(loc => row.locationQuantities[loc] && row.locationQuantities[loc] > 0);
 
-      return matchesSearch && matchesLocation && matchesVariety && matchesSize && matchesTreatment && matchesProcess;
-    });
-  }, [dataset, searchTerm, selectedLocations, selectedVarieties, selectedSizes, selectedTreatments, selectedProcesses]);
+        const matchesVariety = 
+          selectedVarieties.length === 0 || 
+          selectedVarieties.includes(row.variety);
+
+        const matchesSize = 
+          selectedSizes.length === 0 || 
+          selectedSizes.includes(row.size);
+
+        const matchesTreatment = 
+          selectedTreatments.length === 0 || 
+          selectedTreatments.includes(row.treatment);
+
+        const matchesProcess = 
+          selectedProcesses.length === 0 || 
+          selectedProcesses.includes(row.processType);
+
+        return matchesSearch && matchesLocation && matchesVariety && matchesSize && matchesTreatment && matchesProcess;
+      });
+  }, [dataset, searchTerm, selectedLocations, selectedVarieties, selectedSizes, selectedTreatments, selectedProcesses, selectedAnalyses]);
 
   // Unmodified totals block, independent of filters
   const unmodifiedTotals = useMemo(() => {
@@ -891,6 +973,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         [isRtl ? 'الحجم' : 'Size']: item.size || '—',
         [isRtl ? 'التشغيل' : 'Process']: getAttributeLabel(item.processType, 'process'),
         [isRtl ? 'التوجيه' : 'Treatment']: getAttributeLabel(item.treatment, 'direction'),
+        [isRtl ? 'التحليل' : 'Analysis']: item.analyses.map(a => getAnalysisLabel(a)).join(', '),
         [isRtl ? 'إجمالي الكمية (كجم)' : 'Total Qty (Kg)']: item.totalQuantity,
       };
       
@@ -1317,7 +1400,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 />
               </div>
 
-              {(searchTerm !== '' || selectedLocations.length > 0 || selectedVarieties.length > 0 || selectedSizes.length > 0 || selectedTreatments.length > 0 || selectedProcesses.length > 0) && (
+              {(searchTerm !== '' || selectedLocations.length > 0 || selectedVarieties.length > 0 || selectedSizes.length > 0 || selectedTreatments.length > 0 || selectedProcesses.length > 0 || selectedAnalyses.length > 0) && (
                 <button
                   onClick={() => {
                     setSearchTerm('');
@@ -1326,6 +1409,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                     setSelectedSizes([]);
                     setSelectedTreatments([]);
                     setSelectedProcesses([]);
+                    setSelectedAnalyses([]);
                   }}
                   className="text-xs text-red-500 hover:text-red-750 font-bold px-3 py-1.5 transition-colors underline decoration-dotted flex items-center gap-1"
                 >
@@ -1374,6 +1458,16 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 options={CATEGORIES_REF.process.map(p => ({ id: p.id, label: isRtl ? p.labelAr : p.labelEn }))}
                 selected={selectedProcesses}
                 onChange={setSelectedProcesses}
+              />
+
+              {/* Analysis Multi-Filter */}
+              <MultiSelect
+                lang={lang}
+                label={isRtl ? 'التحليل' : 'Analysis'}
+                icon={<CheckCircle size={12} />}
+                options={ANALYSIS_CATEGORIES.map(a => ({ id: a.id, label: isRtl ? a.labelAr : a.labelEn }))}
+                selected={selectedAnalyses}
+                onChange={setSelectedAnalyses}
               />
 
               {/* Location Multi-Filter */}
@@ -1524,6 +1618,14 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                                 {getAttributeLabel(row.treatment, 'direction')}
                               </span>
                             )}
+                            {row.analyses && row.analyses.map(analysis => (
+                              <span 
+                                key={analysis} 
+                                className={`px-1.5 py-0.5 rounded-lg text-[9px] font-black border whitespace-nowrap ${getAnalysisColor(analysis)}`}
+                              >
+                                {getAnalysisLabel(analysis)}
+                              </span>
+                            ))}
                           </div>
                         </td>
                         <td 
