@@ -17,6 +17,7 @@ import {
   RefreshCw, 
   Edit3, 
   Download, 
+  Upload,
   Calendar, 
   Clock, 
   Info, 
@@ -35,7 +36,9 @@ import {
   Moon,
   Sun,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ArrowLeft,
+  Sliders
 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -193,6 +196,142 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
   const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
   const [refreshTimer, setRefreshTimer] = useState<number>(60);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+
+  // Layout customization settings
+  const [showCustomizer, setShowCustomizer] = useState<boolean>(false);
+  const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg' | 'xl'>(() => {
+    return (localStorage.getItem('kpi_font_size') as any) || 'base';
+  });
+  const [cardSpacing, setCardSpacing] = useState<'sm' | 'md' | 'lg'>(() => {
+    return (localStorage.getItem('kpi_card_spacing') as any) || 'md';
+  });
+  const [topCardsCols, setTopCardsCols] = useState<number>(() => {
+    return Number(localStorage.getItem('kpi_top_cards_cols')) || 4;
+  });
+  const [topCardsOrder, setTopCardsOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('kpi_top_cards_order');
+    return saved ? JSON.parse(saved) : ['production', 'quality', 'safety', 'warehouse'];
+  });
+  const [mainSectionsOrder, setMainSectionsOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('kpi_main_sections_order');
+    return saved ? JSON.parse(saved) : ['top_kpis', 'lines', 'charts'];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('kpi_font_size', fontSize);
+  }, [fontSize]);
+  useEffect(() => {
+    localStorage.setItem('kpi_card_spacing', cardSpacing);
+  }, [cardSpacing]);
+  useEffect(() => {
+    localStorage.setItem('kpi_top_cards_cols', String(topCardsCols));
+  }, [topCardsCols]);
+  useEffect(() => {
+    localStorage.setItem('kpi_top_cards_order', JSON.stringify(topCardsOrder));
+  }, [topCardsOrder]);
+  useEffect(() => {
+    localStorage.setItem('kpi_main_sections_order', JSON.stringify(mainSectionsOrder));
+  }, [mainSectionsOrder]);
+
+  const moveCardInOrder = (index: number, direction: 'left' | 'right') => {
+    const nextOrder = [...topCardsOrder];
+    // RTL view: "left" moves to a lower index (index-1), "right" moves to higher (index+1)
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex >= 0 && targetIndex < nextOrder.length) {
+      const temp = nextOrder[index];
+      nextOrder[index] = nextOrder[targetIndex];
+      nextOrder[targetIndex] = temp;
+      setTopCardsOrder(nextOrder);
+    }
+  };
+
+  const moveSectionInOrder = (index: number, direction: 'up' | 'down') => {
+    const nextOrder = [...mainSectionsOrder];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex >= 0 && targetIndex < nextOrder.length) {
+      const temp = nextOrder[index];
+      nextOrder[index] = nextOrder[targetIndex];
+      nextOrder[targetIndex] = temp;
+      setMainSectionsOrder(nextOrder);
+    }
+  };
+
+  const handleResetLayout = () => {
+    setFontSize('base');
+    setCardSpacing('md');
+    setTopCardsCols(4);
+    setTopCardsOrder(['production', 'quality', 'safety', 'warehouse']);
+    setMainSectionsOrder(['top_kpis', 'lines', 'charts']);
+    toast.success(isRtl ? 'تم إعادة ضبط مظهر وترتيب البطاقات للوضع الافتراضي' : 'Layout has been reset to default');
+  };
+
+  // Typography Scaling Helper
+  const getFontSizeClass = (level: 'title' | 'subtitle' | 'table-head' | 'table-body' | 'text' | 'section-header' | 'sub-text' | 'legend-title' | 'card-title') => {
+    if (fontSize === 'sm') {
+      if (level === 'title') return 'text-xl md:text-2xl font-black';
+      if (level === 'subtitle') return 'text-[11px] md:text-xs font-bold';
+      if (level === 'card-title') return 'text-[11px] md:text-xs font-black';
+      if (level === 'section-header') return 'text-xs font-black py-1.5';
+      if (level === 'table-head') return 'text-[9px] py-1';
+      if (level === 'table-body') return 'text-[10px] py-1';
+      if (level === 'sub-text') return 'text-[9px]';
+      if (level === 'legend-title') return 'text-[10px]';
+      return 'text-[10px]';
+    }
+    if (fontSize === 'lg') {
+      if (level === 'title') return 'text-4xl font-black';
+      if (level === 'subtitle') return 'text-2xl font-bold';
+      if (level === 'card-title') return 'text-base md:text-lg font-black';
+      if (level === 'section-header') return 'text-base font-black py-3.5';
+      if (level === 'table-head') return 'text-xs py-2';
+      if (level === 'table-body') return 'text-[13px] py-3';
+      if (level === 'sub-text') return 'text-[11.5px]';
+      if (level === 'legend-title') return 'text-sm';
+      return 'text-sm';
+    }
+    if (fontSize === 'xl') {
+      if (level === 'title') return 'text-5xl font-black';
+      if (level === 'subtitle') return 'text-3xl font-bold';
+      if (level === 'card-title') return 'text-lg md:text-xl font-black';
+      if (level === 'section-header') return 'text-lg font-black py-4.5';
+      if (level === 'table-head') return 'text-sm py-2.5';
+      if (level === 'table-body') return 'text-[15px] py-3.5';
+      if (level === 'sub-text') return 'text-xs';
+      if (level === 'legend-title') return 'text-base';
+      return 'text-base';
+    }
+    // 'base' default
+    if (level === 'title') return 'text-3xl font-black';
+    if (level === 'subtitle') return 'text-xl font-bold';
+    if (level === 'card-title') return 'text-xs md:text-sm font-black';
+    if (level === 'section-header') return 'text-sm font-black py-2.5';
+    if (level === 'table-head') return 'text-[11px] py-1.5';
+    if (level === 'table-body') return 'text-[11px] py-2';
+    if (level === 'sub-text') return 'text-[10px]';
+    if (level === 'legend-title') return 'text-xs';
+    return 'text-xs';
+  };
+
+  // Card Spacing and Padding Helper
+  const getSpacingClass = (type: 'grid' | 'card-padding' | 'card-header' | 'container-spacing') => {
+    if (cardSpacing === 'sm') {
+      if (type === 'grid') return 'gap-3';
+      if (type === 'card-padding') return 'p-2';
+      if (type === 'card-header') return 'p-2 px-3 text-xs';
+      if (type === 'container-spacing') return 'space-y-3';
+    }
+    if (cardSpacing === 'lg') {
+      if (type === 'grid') return 'gap-7';
+      if (type === 'card-padding') return 'p-5';
+      if (type === 'card-header') return 'p-4.5 px-6 text-base';
+      if (type === 'container-spacing') return 'space-y-8';
+    }
+    // 'md' default
+    if (type === 'grid') return 'gap-5';
+    if (type === 'card-padding') return 'p-3';
+    if (type === 'card-header') return 'p-3 px-4 text-sm';
+    if (type === 'container-spacing') return 'space-y-6';
+  };
 
   // Auto scale / zoom dashboard to fit any TV screen perfectly
   useEffect(() => {
@@ -722,6 +861,189 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
     }
   };
 
+  const handleDownloadCSVTemplate = () => {
+    const rows = [
+      ['Key', 'Name (En)', 'Name (Ar)', 'Actual / Value (الفعلي / القيمة)', 'Target / Planned (المستهدف / المخطط)', 'Notes / Downtime (ملاحظات / توقفات)'],
+      ['shift', 'Shift', 'الوردية', data.shift || '', '', ''],
+      ['notes', 'Notes', 'ملاحظات الوردية', data.notes || '', '', ''],
+      ['prodTotal', 'Total Production (Kg)', 'إجمالي الإنتاج (كجم)', data.prodTotal?.actual ?? 0, data.prodTotal?.target ?? 0, ''],
+      ['prodEfficiency', 'Productivity Efficiency (%)', 'الكفاءة الإنتاجية (%)', data.prodEfficiency?.actual ?? 0, data.prodEfficiency?.target ?? 0, ''],
+      ['prodWaste', 'Product Waste (%)', 'فقد المنتج (%)', data.prodWaste?.actual ?? 0, data.prodWaste?.target ?? 0, ''],
+      ['prodFilmWaste', 'Film Waste (%)', 'فقد الفيلم (%)', data.prodFilmWaste?.actual ?? 0, data.prodFilmWaste?.target ?? 0, ''],
+      ['prodRework', 'Rework (%)', 'إعادة التشغيل (%)', data.prodRework?.actual ?? 0, data.prodRework?.target ?? 0, ''],
+      ['qualHoldCases', 'Hold Cases', 'حالات الـ hold', data.qualHoldCases?.actual ?? 0, data.qualHoldCases?.target ?? 0, ''],
+      ['qualFoodSafety', 'Food Safety Violations', 'مخالفات سلامة الغذاء', data.qualFoodSafety?.actual ?? 0, data.qualFoodSafety?.target ?? 0, ''],
+      ['qualGmpScore', 'GMP Score (%)', 'تقييم الـ GMP (%)', data.qualGmpScore?.actual ?? 0, data.qualGmpScore?.target ?? 0, ''],
+      ['safeNearMisses', 'Near Misses', 'حوادث وشيكة', data.safeNearMisses?.actual ?? 0, data.safeNearMisses?.target ?? 0, ''],
+      ['safeOpenRisks', 'Open Safety Risks', 'مخاطر السلامة المفتوحة', data.safeOpenRisks?.actual ?? 0, data.safeOpenRisks?.target ?? 0, ''],
+      ['whShippedContainers', 'Shipped Containers', 'الحاويات المشحونة', data.whShippedContainers?.actual ?? 0, data.whShippedContainers?.target ?? 0, ''],
+      ['whExecutedOrders', 'Executed Loading Orders', 'أوامر التحميل المنفذة', data.whExecutedOrders?.actual ?? 0, data.whExecutedOrders?.target ?? 0, ''],
+      ['whOtif', 'OTIF (%)', 'الشحن في الموعد OTIF (%)', data.whOtif?.actual ?? 0, data.whOtif?.target ?? 0, ''],
+      ['linePacking1_prod', 'Packing Line 1 - Production (Kg)', 'خط التعبئة 1 - الإنتاج (كجم)', data.linePacking1?.prod ?? 0, data.linePacking1?.prodPlanned ?? 0, ''],
+      ['linePacking1_eff', 'Packing Line 1 - Efficiency (%)', 'خط التعبئة 1 - الكفاءة (%)', data.linePacking1?.eff ?? 0, data.linePacking1?.effPlanned ?? 0, ''],
+      ['linePacking1_waste', 'Packing Line 1 - Waste (%)', 'خط التعبئة 1 - الفاقد (%)', data.linePacking1?.waste ?? 0, data.linePacking1?.wastePlanned ?? 0, ''],
+      ['linePacking1_downtime', 'Packing Line 1 - Downtime (min)', 'خط التعبئة 1 - التوقفات (بالدقائق)', data.linePacking1?.downtime ?? 0, data.linePacking1?.downtimePlanned ?? 0, ''],
+      ['linePacking2_prod', 'Packing Line 2 - Production (Kg)', 'خط التعبئة 2 - الإنتاج (كجم)', data.linePacking2?.prod ?? 0, data.linePacking2?.prodPlanned ?? 0, ''],
+      ['linePacking2_eff', 'Packing Line 2 - Efficiency (%)', 'خط التعبئة 2 - الكفاءة (%)', data.linePacking2?.eff ?? 0, data.linePacking2?.effPlanned ?? 0, ''],
+      ['linePacking2_waste', 'Packing Line 2 - Waste (%)', 'خط التعبئة 2 - الفاقد (%)', data.linePacking2?.waste ?? 0, data.linePacking2?.wastePlanned ?? 0, ''],
+      ['linePacking2_downtime', 'Packing Line 2 - Downtime (min)', 'خط التعبئة 2 - التوقفات (بالدقائق)', data.linePacking2?.downtime ?? 0, data.linePacking2?.downtimePlanned ?? 0, ''],
+      ['linePackaging1_prod', 'Packaging Line 1 - Production (Kg)', 'خط التغليف 1 - الإنتاج (كجم)', data.linePackaging1?.prod ?? 0, data.linePackaging1?.prodPlanned ?? 0, ''],
+      ['linePackaging1_eff', 'Packaging Line 1 - Efficiency (%)', 'خط التغليف 1 - الكفاءة (%)', data.linePackaging1?.eff ?? 0, data.linePackaging1?.effPlanned ?? 0, ''],
+      ['linePackaging1_waste', 'Packaging Line 1 - Waste (%)', 'خط التغليف 1 - الفاقد (%)', data.linePackaging1?.waste ?? 0, data.linePackaging1?.wastePlanned ?? 0, ''],
+      ['linePackaging1_downtime', 'Packaging Line 1 - Downtime (min)', 'خط التغليف 1 - التوقفات (بالدقائق)', data.linePackaging1?.downtime ?? 0, data.linePackaging1?.downtimePlanned ?? 0, ''],
+      ['linePackaging2_prod', 'Packaging Line 2 - Production (Kg)', 'خط التغليف 2 - الإنتاج (كجم)', data.linePackaging2?.prod ?? 0, data.linePackaging2?.prodPlanned ?? 0, ''],
+      ['linePackaging2_eff', 'Packaging Line 2 - Efficiency (%)', 'خط التغليف 2 - الكفاءة (%)', data.linePackaging2?.eff ?? 0, data.linePackaging2?.effPlanned ?? 0, ''],
+      ['linePackaging2_waste', 'Packaging Line 2 - Waste (%)', 'خط التغليف 2 - الفاقد (%)', data.linePackaging2?.waste ?? 0, data.linePackaging2?.wastePlanned ?? 0, ''],
+      ['linePackaging2_downtime', 'Packaging Line 2 - Downtime (min)', 'خط التغليف 2 - التوقفات (بالدقائق)', data.linePackaging2?.downtime ?? 0, data.linePackaging2?.downtimePlanned ?? 0, '']
+    ];
+
+    const csvString = rows.map(row => 
+      row.map(val => {
+        const s = val === undefined || val === null ? '' : String(val);
+        if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      }).join(',')
+    ).join('\r\n');
+
+    const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `KPI_Template_${date}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(isRtl ? 'تم تحميل نموذج البيانات بنجاح!' : 'Data template downloaded successfully!');
+  };
+
+  const handleUploadCSV = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      if (!text) {
+        toast.error(isRtl ? 'فشل قراءة الملف' : 'Failed to read file');
+        return;
+      }
+
+      try {
+        const lines = text.split(/\r?\n/);
+        let updated = { ...data };
+        let updatedCount = 0;
+
+        lines.forEach((line, index) => {
+          if (index === 0 || !line.trim()) return;
+
+          const cells: string[] = [];
+          let currentCell = '';
+          let insideQuotes = false;
+
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              insideQuotes = !insideQuotes;
+            } else if (char === ',' && !insideQuotes) {
+              cells.push(currentCell.trim());
+              currentCell = '';
+            } else {
+              currentCell += char;
+            }
+          }
+          cells.push(currentCell.trim());
+
+          const cleanedCells = cells.map(c => c.replace(/^["']|["']$/g, '').trim());
+          if (cleanedCells.length < 4) return;
+
+          const key = cleanedCells[0];
+          const valStr = cleanedCells[3];
+          const targetStr = cleanedCells[4];
+
+          const valNum = parseFloat(valStr.replace(/[%,]/g, ''));
+          const targetNum = parseFloat(targetStr.replace(/[%,]/g, ''));
+
+          if (key === 'shift') {
+            if (valStr) {
+              updated.shift = valStr;
+              updatedCount++;
+            }
+          } else if (key === 'notes') {
+            updated.notes = valStr;
+            updatedCount++;
+          } else {
+            if (isNaN(valNum)) return;
+
+            if (['prodTotal', 'prodEfficiency', 'prodWaste', 'prodFilmWaste', 'prodRework', 
+                 'qualHoldCases', 'qualFoodSafety', 'qualGmpScore', 
+                 'safeNearMisses', 'safeOpenRisks', 
+                 'whShippedContainers', 'whExecutedOrders', 'whOtif'].includes(key)) {
+              if (!(updated as any)[key]) {
+                (updated as any)[key] = { actual: 0, target: 0 };
+              }
+              (updated as any)[key].actual = valNum;
+              if (!isNaN(targetNum)) {
+                (updated as any)[key].target = targetNum;
+              }
+              updatedCount++;
+            }
+            else if (key.startsWith('linePacking1_') || key.startsWith('linePacking2_') || key.startsWith('linePackaging1_') || key.startsWith('linePackaging2_')) {
+              const parts = key.split('_');
+              const lineKey = parts[0];
+              const field = parts[1];
+
+              if (!(updated as any)[lineKey]) {
+                (updated as any)[lineKey] = { prod: 0, prodPlanned: 0, eff: 0, effPlanned: 0, waste: 0, wastePlanned: 0, downtime: 0, downtimePlanned: 0 };
+              }
+              const lineObj = (updated as any)[lineKey];
+              if (lineObj) {
+                if (field === 'prod') {
+                  lineObj.prod = valNum;
+                  if (!isNaN(targetNum)) lineObj.prodPlanned = targetNum;
+                  updatedCount++;
+                } else if (field === 'eff') {
+                  lineObj.eff = valNum;
+                  if (!isNaN(targetNum)) lineObj.effPlanned = targetNum;
+                  updatedCount++;
+                } else if (field === 'waste') {
+                  lineObj.waste = valNum;
+                  if (!isNaN(targetNum)) lineObj.wastePlanned = targetNum;
+                  updatedCount++;
+                } else if (field === 'downtime') {
+                  lineObj.downtime = valNum;
+                  if (!isNaN(targetNum)) lineObj.downtimePlanned = targetNum;
+                  updatedCount++;
+                }
+              }
+            }
+          }
+        });
+
+        if (updatedCount > 0) {
+          toast.success(isRtl
+            ? `نجاح! تم استيراد وتحديث ${updatedCount} من البيانات والمؤشرات بنجاح!`
+            : `Success! Imported and updated ${updatedCount} data points and KPIs successfully!`
+          );
+          setData(updated);
+          await saveKPIData(updated);
+        } else {
+          toast.warning(isRtl
+            ? 'لم يتم التعرف على مصفوفة البيانات في الملف. يرجى استخدام النموذج الصحيح.'
+            : 'No recognized data found in the uploaded file. Please use the valid template.'
+          );
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error(isRtl ? 'حدث خطأ أثناء قراءة وتحليل ملف CSV.' : 'Error reading or parsing the CSV file.');
+      }
+    };
+
+    reader.readAsText(file, 'UTF-8');
+    event.target.value = '';
+  };
+
   const handleOpenManualEditor = () => {
     setEditFormData({ ...data });
     setShowEditor(true);
@@ -820,6 +1142,518 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
     });
   };
 
+  const renderCard = (cardId: string) => {
+    if (cardId === 'production') {
+      return (
+        <div key="production" id="kpi-card-production" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900 animate-fade-in`}>
+          <div className="p-3 px-4 bg-[#0E5F59] text-white flex items-center justify-between font-black">
+            <span className={getFontSizeClass('card-title')}>الإنتاج (Production)</span>
+            <Settings size={15} />
+          </div>
+          <div className={`flex-1 ${getSpacingClass('card-padding')}`}>
+            <table className="w-full text-right font-bold border-collapse">
+              <thead>
+                <tr className={`border-b border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-right font-black ${getFontSizeClass('table-head')}`}>
+                  <th className="py-1 pb-1.5 text-right">مؤشر الأداء</th>
+                  <th className="py-1 pb-1.5 text-center w-14">الفعلي</th>
+                  <th className="py-1 pb-1.5 text-center w-14">المستهدف</th>
+                  <th className="py-1 pb-1.5 text-center w-8">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>إجمالي الإنتاج (كجم)</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodTotal.actual.toLocaleString()}</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.prodTotal.target.toLocaleString()}</td>
+                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod1Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>(%) الكفاءة الإنتاجية</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodEfficiency.actual}%</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.prodEfficiency.target}%</td>
+                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod2Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Product Waste (%)</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodWaste.actual}%</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodWaste.target}%</td>
+                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod3Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Film Waste (%)</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodFilmWaste.actual}%</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodFilmWaste.target}%</td>
+                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod4Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Rework (%)</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodRework.actual}%</td>
+                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodRework.target}%</td>
+                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod5Status)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    if (cardId === 'quality') {
+      return (
+        <div key="quality" id="kpi-card-quality" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900`}>
+          <div className="p-3 px-4 bg-[#829E16] text-white flex items-center justify-between font-black">
+            <span className={getFontSizeClass('card-title')}>الجودة (Quality)</span>
+            <Info size={15} />
+          </div>
+          <div className={`flex-1 ${getSpacingClass('card-padding')}`}>
+            <table className="w-full text-right font-bold border-collapse">
+              <thead>
+                <tr className={`border-b border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-right font-black ${getFontSizeClass('table-head')}`}>
+                  <th className="py-1 pb-1.5 text-right">مؤشر الأداء</th>
+                  <th className="py-1 pb-1.5 text-center w-14">الفعلي</th>
+                  <th className="py-1 pb-1.5 text-center w-14">المستهدف</th>
+                  <th className="py-1 pb-1.5 text-center w-8">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد حالات الـ Hold</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualHoldCases.actual}</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.qualHoldCases.target}</td>
+                  <td className="py-2 flex justify-center">{renderStatusIcon(qual1Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>مخالفات الفود سيفتي</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualFoodSafety.actual}</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.qualFoodSafety.target}</td>
+                  <td className="py-2 flex justify-center">{renderStatusIcon(qual2Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>GMP Score (%)</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualGmpScore.actual}%</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≥ {data.qualGmpScore.target}%</td>
+                  <td className="py-2 flex justify-center">{renderStatusIcon(qual3Status)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    if (cardId === 'safety') {
+      return (
+        <div key="safety" id="kpi-card-safety" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900`}>
+          <div className="p-3 px-4 bg-[#007E72] text-white flex items-center justify-between font-black">
+            <span className={getFontSizeClass('card-title')}>السلامة (Safety)</span>
+            <AlertCircle size={15} />
+          </div>
+          <div className={`flex-1 ${getSpacingClass('card-padding')}`}>
+            <table className="w-full text-right font-bold border-collapse">
+              <thead>
+                <tr className={`border-b border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-right font-black ${getFontSizeClass('table-head')}`}>
+                  <th className="py-1 pb-1.5 text-right">مؤشر الأداء</th>
+                  <th className="py-1 pb-1.5 text-center w-14">الفعلي</th>
+                  <th className="py-1 pb-1.5 text-center w-14">المستهدف</th>
+                  <th className="py-1 pb-1.5 text-center w-8">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-3 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد الحوادث الوشيكة</td>
+                  <td className={`py-3 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.safeNearMisses.actual}</td>
+                  <td className={`py-3 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.safeNearMisses.target}</td>
+                  <td className="py-3 flex justify-center">{renderStatusIcon(safe1Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-3 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>مخاطر السلامة المفتوحة</td>
+                  <td className={`py-3 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.safeOpenRisks.actual}</td>
+                  <td className={`py-3 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.safeOpenRisks.target}</td>
+                  <td className="py-3 flex justify-center">{renderStatusIcon(safe2Status)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    if (cardId === 'warehouse') {
+      return (
+        <div key="warehouse" id="kpi-card-warehouse" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900`}>
+          <div className="p-3 px-4 bg-[#889E19] text-white flex items-center justify-between font-black">
+            <span className={getFontSizeClass('card-title')}>المستودعات والشحن (Warehouse)</span>
+            <Clock size={15} />
+          </div>
+          <div className={`flex-1 ${getSpacingClass('card-padding')}`}>
+            <table className="w-full text-right font-bold border-collapse">
+              <thead>
+                <tr className={`border-b border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-right font-black ${getFontSizeClass('table-head')}`}>
+                  <th className="py-1 pb-1.5 text-right">مؤشر الأداء</th>
+                  <th className="py-1 pb-1.5 text-center w-14">الفعلي</th>
+                  <th className="py-1 pb-1.5 text-center w-14">المستهدف</th>
+                  <th className="py-1 pb-1.5 text-center w-8">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد الحاويات المشحونة</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whShippedContainers.actual}</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.whShippedContainers.target}</td>
+                  <td className="py-2 flex justify-center">{renderStatusIcon(wh1Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد أوامر التحميل المنفذة</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whExecutedOrders.actual}</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.whExecutedOrders.target}</td>
+                  <td className="py-2 flex justify-center">{renderStatusIcon(wh2Status)}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
+                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الشحن في الموعد (% OTIF)</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whOtif.actual}%</td>
+                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≥ {data.whOtif.target}%</td>
+                  <td className="py-2 flex justify-center">{renderStatusIcon(wh3Status)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const renderTopKpis = () => (
+    /* SEGMENTS GRID (THE 4 CORE CATEGORY CARDS) */
+    <div key="top_kpis" className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-${topCardsCols} ${getSpacingClass('grid')}`}>
+      {topCardsOrder.map(cardId => renderCard(cardId))}
+    </div>
+  );
+
+  const renderLines = () => (
+    /* FULL-WIDTH SECTION: PRODUCTION LINES PERFORMANCE (أداء خطوط الإنتاج) */
+    <div key="lines" id="production-lines-block" className="space-y-3">
+      <div className={`bg-[#0D5F54] text-white p-2.5 rounded-2xl text-center font-black select-none tracking-widest shadow-sm ${getFontSizeClass('section-header')}`}>
+        أداء خطوط الإنتاج (Production Lines Performance)
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Packing Line 1 */}
+        <div className="border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow">
+          <div className="p-2 px-3 bg-[#134E4A] text-white flex items-center justify-between text-xs font-black">
+            <span>خط تعبئة 1 (Packing 1)</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+          </div>
+          <div className={`space-y-2 ${getSpacingClass('card-padding')}`}>
+            <table className="w-full text-right font-bold">
+              <thead>
+                <tr className={`text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 font-black ${getFontSizeClass('table-head')}`}>
+                  <th className="text-right">المؤشر</th>
+                  <th className="text-center w-12">المخطط</th>
+                  <th className="text-center w-12">الفعلي</th>
+                  <th className="text-center w-12">الكفاءة</th>
+                  <th className="text-center w-6">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الإنتاج (كجم)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.prodPlanned.toLocaleString()}</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.prod.toLocaleString()}</td>
+                  <td className={`text-center text-[#115E59] dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{line1_eff_calc}%</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon(getLineEffStatus(line1_eff_calc, 100))}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الكفاءة (%)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.effPlanned}%</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.eff}%</td>
+                  <td className={`text-center text-emerald-600 dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{data.linePacking1.effPlanned > 0 ? '102%' : '102%'}</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Product Waste</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>≤ {data.linePacking1.wastePlanned}%</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.waste}%</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-550 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>Downtime (د)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>35</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-550 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('warning')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Packing Line 2 */}
+        <div className="border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow">
+          <div className="p-2 px-3 bg-[#134E4A] text-white flex items-center justify-between text-xs font-black">
+            <span>خط تعبئة 2 (Packing 2)</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+          </div>
+          <div className={`space-y-2 ${getSpacingClass('card-padding')}`}>
+            <table className="w-full text-right font-bold">
+              <thead>
+                <tr className={`text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 font-black ${getFontSizeClass('table-head')}`}>
+                  <th className="text-right">المؤشر</th>
+                  <th className="text-center w-12">المخطط</th>
+                  <th className="text-center w-12">الفعلي</th>
+                  <th className="text-center w-12">الكفاءة</th>
+                  <th className="text-center w-6">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الإنتاج (كجم)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.prodPlanned.toLocaleString()}</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.prod.toLocaleString()}</td>
+                  <td className={`text-center text-[#115E59] dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{line2_eff_calc}%</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon(getLineEffStatus(line2_eff_calc, 100))}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الكفاءة (%)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.effPlanned}%</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.eff}%</td>
+                  <td className={`text-center text-amber-655 font-black ${getFontSizeClass('table-body')}`}>{data.linePacking2.effPlanned > 0 ? '98%' : '98%'}</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('warning')}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Product Waste</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>≤ {data.linePacking2.wastePlanned}%</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.waste}%</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-550 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('warning')}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>Downtime (د)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>42</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-550 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('danger')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Packaging Line 1 */}
+        <div className="border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow">
+          <div className="p-2 px-3 bg-[#134E4A] text-white flex items-center justify-between text-xs font-black">
+            <span>خط تغليف 1 (Packaging 1)</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          </div>
+          <div className={`space-y-2 ${getSpacingClass('card-padding')}`}>
+            <table className="w-full text-right font-bold">
+              <thead>
+                <tr className={`text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 font-black ${getFontSizeClass('table-head')}`}>
+                  <th className="text-right">المؤشر</th>
+                  <th className="text-center w-12">المخطط</th>
+                  <th className="text-center w-12">الفعلي</th>
+                  <th className="text-center w-12">الكفاءة</th>
+                  <th className="text-center w-6">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الإنتاج (كرتونة)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.prodPlanned.toLocaleString()}</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.prod.toLocaleString()}</td>
+                  <td className={`text-center text-[#115E59] dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{line3_eff_calc}%</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon(getLineEffStatus(line3_eff_calc, 100))}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الكفاءة (%)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.effPlanned}%</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.eff}%</td>
+                  <td className={`text-center text-emerald-600 dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>104%</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Film Waste</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>≤ {data.linePackaging1.wastePlanned}%</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.waste}%</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>Downtime (د)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>25</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.waste > 0 ? '-' : '-'}</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Packaging Line 2 */}
+        <div className="border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow">
+          <div className="p-2 px-3 bg-[#134E4A] text-white flex items-center justify-between text-xs font-black">
+            <span>خط تغليف 2 (Packaging 2)</span>
+            <div className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-bounce" style={{ animationDuration: '4s' }} />
+          </div>
+          <div className={`space-y-2 ${getSpacingClass('card-padding')}`}>
+            <table className="w-full text-right font-bold">
+              <thead>
+                <tr className={`text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 font-black ${getFontSizeClass('table-head')}`}>
+                  <th className="text-right">المؤشر</th>
+                  <th className="text-center w-12">المخطط</th>
+                  <th className="text-center w-12">الفعلي</th>
+                  <th className="text-center w-12">الكفاءة</th>
+                  <th className="text-center w-6">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/40">
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الإنتاج (كرتونة)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.prodPlanned.toLocaleString()}</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.prod.toLocaleString()}</td>
+                  <td className={`text-center text-[#115E59] dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{line4_eff_calc}%</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon(getLineEffStatus(line4_eff_calc, 100))}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الكفاءة (%)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.effPlanned}%</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.eff}%</td>
+                  <td className={`text-center text-amber-600 dark:text-amber-400 font-black ${getFontSizeClass('table-body')}`}>104%</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('warning')}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Film Waste</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>≤ {data.linePackaging2.wastePlanned}%</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.waste}%</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                </tr>
+                <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
+                  <td className={`text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>Downtime (د)</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>50</td>
+                  <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.waste > 0 ? '-' : '-'}</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className="py-1 flex justify-center">{renderStatusIcon('danger')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+
+  const renderCharts = () => (
+    /* CHARTS ROW, LEGEND & NOTES GRID (مؤشرات الاتجاه والرسوم البيانية والمذكرات) */
+    <div key="charts" className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1">
+      
+      {/* Left Column: Trend chart */}
+      <div id="chart-trend-container" className="lg:col-span-4 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 flex flex-col justify-between min-h-[290px]">
+        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 flex items-center justify-center gap-1.5 mb-2 border-b border-zinc-200 dark:border-zinc-800 pb-2 select-none ${getFontSizeClass('legend-title')}`}>
+          <TrendingUp size={14} className="text-[#0E5F59]" />
+          <span>مؤشرات الاتجاه (Trend)</span>
+        </h4>
+        <div className="w-full flex-1 h-44">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data.weeklyTrend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" />
+              <XAxis dataKey="date" tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#888" />
+              <YAxis tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#888" />
+              <Tooltip contentStyle={{ fontSize: 10, direction: 'rtl', borderRadius: 12 }} />
+              <Line type="monotone" name="efficiency" dataKey="efficiency" stroke="#0E5F59" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" name="waste" dataKey="waste" stroke="#98C21E" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" name="rework" dataKey="rework" stroke="#D48C00" strokeWidth={2.5} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex justify-center gap-3 text-[10px] font-black text-zinc-950 dark:text-zinc-200 pt-1 select-none">
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#0E5F59]" />الكفاءة الإنتاجية (%)</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#98C21E]" />Product Waste (%)</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#D48C00]" />Rework (%)</span>
+        </div>
+      </div>
+
+      {/* Middle Column: Shipped Containers */}
+      <div id="chart-containers-container" className="lg:col-span-4 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 flex flex-col justify-between min-h-[290px]">
+        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-2 select-none ${getFontSizeClass('legend-title')}`}>
+          أداء الحاويات المشحونة خلال الأسبوع
+        </h4>
+        <div className="w-full flex-1 h-44">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data.weeklyContainers}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" />
+              <XAxis dataKey="date" tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#888" />
+              <YAxis tick={{ fontSize: 9, fontWeight: 'bold' }} stroke="#888" />
+              <Tooltip contentStyle={{ fontSize: 10, direction: 'rtl', borderRadius: 12 }} />
+              <Bar dataKey="value" fill="#8DB825" radius={[4, 4, 0, 0]} barSize={24} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="text-center text-[11px] font-black text-zinc-950 dark:text-zinc-200 select-none">
+          عدد الحاويات المشحونة يومياً
+        </div>
+      </div>
+
+      {/* Right Column: Legend Key */}
+      <div className="lg:col-span-2 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 min-h-[290px] flex flex-col select-none">
+        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 ${getFontSizeClass('legend-title')}`}>
+          مفتاح الحالة
+        </h4>
+        <div className="flex-1 flex flex-col justify-center space-y-4 text-xs font-black px-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black shadow-sm">
+              <Check size={14} strokeWidth={3} />
+            </div>
+            <span className="dark:text-zinc-100">ضمن المستهدف</span>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-white font-black text-lg select-none leading-none">
+              -
+            </div>
+            <span className="dark:text-zinc-100">يحتاج إلى متابعة</span>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-full bg-[#E11D48] flex items-center justify-center text-white font-black shadow-sm">
+              <X size={14} strokeWidth={3} />
+            </div>
+            <span className="dark:text-zinc-100">خارج المستهدف</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Far Right Column: Notebook comments block */}
+      <div id="notes-notebook-container" className="lg:col-span-2 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-amber-50/20 dark:bg-zinc-900/10 min-h-[290px] flex flex-col">
+        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 select-none ${getFontSizeClass('legend-title')}`}>
+          ملاحظات
+        </h4>
+        
+        {/* Styled Lined Notebook paper look with spacing */}
+        <div className="flex-1 flex flex-col relative justify-between">
+          <p className={`leading-6 font-black text-zinc-950 dark:text-zinc-100 z-10 px-1 italic select-text ${getFontSizeClass('sub-text')}`}>
+            {data.notes || 'لا توجد ملاحظات إضافية مسجلة للوردية اليوم.'}
+          </p>
+          
+          {/* Visual background lines */}
+          <div className="absolute inset-0 flex flex-col justify-start select-none pointer-events-none opacity-45 mt-2">
+            <div className="h-6 border-b border-dashed border-amber-300" />
+            <div className="h-6 border-b border-dashed border-amber-300" />
+            <div className="h-6 border-b border-dashed border-amber-300" />
+            <div className="h-6 border-b border-dashed border-amber-300" />
+            <div className="h-6 border-b border-dashed border-amber-300" />
+            <div className="h-6 border-b border-dashed border-amber-300" />
+            <div className="h-6 border-b border-dashed border-amber-300" />
+            <div className="h-6 border-b border-dashed border-amber-300" />
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+
   const isTvThemeDark = isTvMode && tvTheme === 'dark';
   const isCurrentDark = isTvMode ? (tvTheme === 'dark') : isDark;
 
@@ -917,6 +1751,20 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
               {tvTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
 
+            {/* TV Customize Layout Panel toggle */}
+            <button
+              onClick={() => setShowCustomizer(!showCustomizer)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border text-[11px] font-bold transition-all cursor-pointer select-none ${
+                showCustomizer 
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30' 
+                  : (tvTheme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
+              }`}
+              title={isRtl ? 'تخصيص ترتيب وحجم الخط والبطاقات على التلفزيون' : 'Customize layouts, order, and font on TV'}
+            >
+              <Sliders size={13} />
+              <span>{isRtl ? 'تعديل الترتيب والمساحات' : 'Layout & Order'}</span>
+            </button>
+
             {/* Exit Mode button */}
             <button
               onClick={handleToggleFullscreen}
@@ -972,6 +1820,22 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
               <span>{isRtl ? 'تعديل يدوي' : 'Manual Edit'}</span>
             </button>
 
+            {/* Customize Layout Trigger */}
+            <button
+              onClick={() => {
+                setShowCustomizer(!showCustomizer);
+                setShowConfig(false);
+              }}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl text-xs font-black transition-all border cursor-pointer ${
+                showCustomizer 
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30' 
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/15'
+              }`}
+            >
+              <Sliders size={14} />
+              <span>{isRtl ? 'تعديل الترتيب والمساحات' : 'Customize Layout'}</span>
+            </button>
+
             {/* TV Broadcast launch button */}
             <button
               onClick={handleToggleFullscreen}
@@ -1013,7 +1877,7 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
               
               {/* Option 1: Direct link sync */}
               <div className="space-y-3 bg-zinc-50 dark:bg-zinc-950/30 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-850">
@@ -1084,6 +1948,246 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
                 </div>
               </div>
 
+              {/* Option 3: Download/Upload Full CSV Template */}
+              <div className="space-y-3 bg-zinc-50 dark:bg-zinc-950/30 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-850">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 px-2.5 bg-purple-500 text-white rounded-xl text-[10px] font-black">3</div>
+                  <h4 className="text-xs font-extrabold text-zinc-800 dark:text-zinc-200">
+                    {isRtl ? 'تحميل ورفع النموذج الكامل للبيانات' : 'Option C: Full CSV Data Template'}
+                  </h4>
+                </div>
+
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-semibold">
+                  {isRtl 
+                    ? "قم بتنزيل ملف النموذج المحتوي على كامل بيانات الوردية والخطوط والمؤشرات، قم بتعديله، ثم أعد رفعه هنا:"
+                    : "Download template containing all KPIs, lines performance, shift details. Edit in Excel, then upload back:"}
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={handleDownloadCSVTemplate}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm text-center"
+                    title={isRtl ? 'تنزيل النموذج بصيغة CSV' : 'Download template CSV'}
+                  >
+                    <Download size={13} />
+                    <span>{isRtl ? 'تنزيل النموذج' : 'Download'}</span>
+                  </button>
+
+                  <label className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm text-center">
+                    <Upload size={13} />
+                    <span>{isRtl ? 'رفع الملف المعدل' : 'Upload File'}</span>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleUploadCSV}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Customizer Collapsible Panel */}
+      <AnimatePresence>
+        {showCustomizer && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className={`overflow-hidden rounded-3xl p-5 shadow-xl border transition-colors duration-300 ${
+              isCurrentDark 
+                ? 'bg-zinc-900 border-zinc-850 text-zinc-100' 
+                : 'bg-white border-amber-500/15 text-zinc-850'
+            }`}
+          >
+            <div className="flex justify-between items-center pb-3 border-b border-zinc-200 dark:border-zinc-800">
+              <h3 className="font-bold text-sm flex items-center gap-1.5">
+                <Sliders size={16} className="text-amber-500" />
+                <span>{isRtl ? 'لوحة التحكم في المساحات، الترتيب وحجم البطاقات والخطوط' : 'Dashboard Layout, Spaces & Sizing Control'}</span>
+              </h3>
+              <button 
+                onClick={() => setShowCustomizer(false)} 
+                className="text-zinc-400 hover:text-zinc-650 dark:hover:text-zinc-200"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pt-4 text-xs font-bold">
+              {/* Col 1: Font and Spacing (4 cols) */}
+              <div className="md:col-span-4 space-y-4">
+                {/* Font Size controls */}
+                <div className="space-y-1.5">
+                  <span className="text-zinc-500 dark:text-zinc-400 block">{isRtl ? 'حجم الخط العام:' : 'General Font Size:'}</span>
+                  <div className="grid grid-cols-4 gap-1">
+                    {(['sm', 'base', 'lg', 'xl'] as const).map((sz) => {
+                      const label = sz === 'sm' ? (isRtl ? 'صغير' : 'Small')
+                                  : sz === 'base' ? (isRtl ? 'طبيعي' : 'Normal')
+                                  : sz === 'lg' ? (isRtl ? 'كبير' : 'Large')
+                                  : (isRtl ? 'ضخم' : 'Huge');
+                      return (
+                        <button
+                          key={sz}
+                          onClick={() => setFontSize(sz)}
+                          className={`py-1.5 px-2 rounded-xl border text-[11px] font-black transition-all cursor-pointer ${
+                            fontSize === sz 
+                              ? 'bg-amber-500 text-white border-amber-500' 
+                              : 'bg-zinc-100 dark:bg-zinc-850 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Card Spacing controls */}
+                <div className="space-y-1.5">
+                  <span className="text-zinc-500 dark:text-zinc-400 block">{isRtl ? 'تباعد ومساحات البطاقات والبادئات:' : 'Card Spacing & Padding:'}</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(['sm', 'md', 'lg'] as const).map((sp) => {
+                      const label = sp === 'sm' ? (isRtl ? 'مدمج' : 'Compact')
+                                  : sp === 'md' ? (isRtl ? 'متوازن' : 'Balanced')
+                                  : (isRtl ? 'واسع' : 'Spacious');
+                      return (
+                        <button
+                          key={sp}
+                          onClick={() => setCardSpacing(sp)}
+                          className={`py-1.5 px-2 rounded-xl border text-[11px] font-black transition-all cursor-pointer ${
+                            cardSpacing === sp 
+                              ? 'bg-amber-500 text-white border-amber-500' 
+                              : 'bg-zinc-100 dark:bg-zinc-850 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Top Grid Column controls */}
+                <div className="space-y-1.5">
+                  <span className="text-zinc-500 dark:text-zinc-400 block">{isRtl ? 'توزيع الأعمدة للمؤشرات الأربعة:' : 'Top Row Grid Columns:'}</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {([2, 3, 4] as const).map((cols) => {
+                      const label = cols === 2 ? (isRtl ? 'عمودين' : '2 Columns')
+                                  : cols === 3 ? (isRtl ? '3 أعمدة' : '3 Columns')
+                                  : (isRtl ? '4 أعمدة' : '4 Columns');
+                      return (
+                        <button
+                          key={cols}
+                          onClick={() => setTopCardsCols(cols)}
+                          className={`py-1.5 px-2 rounded-xl border text-[11px] font-black transition-all cursor-pointer ${
+                            topCardsCols === cols 
+                              ? 'bg-amber-500 text-white border-amber-500' 
+                              : 'bg-zinc-100 dark:bg-zinc-850 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Col 2: Top Cards Order shifting (4 cols) */}
+              <div className="md:col-span-4 space-y-2">
+                <span className="text-zinc-500 dark:text-zinc-400 block">{isRtl ? 'ترتيب البطاقات الأربع (يمين ⇆ يسار):' : 'Reorder top 4 cards (swap positions):'}</span>
+                <div className="space-y-1.5">
+                  {topCardsOrder.map((cardId, idx) => {
+                    const labelAr = cardId === 'production' ? (isRtl ? 'الإنتاج (Production)' : 'Production')
+                                  : cardId === 'quality' ? (isRtl ? 'الجودة (Quality)' : 'Quality')
+                                  : cardId === 'safety' ? (isRtl ? 'السلامة (Safety)' : 'Safety')
+                                  : (isRtl ? 'المستودعات والشحن (Warehouse)' : 'Warehouse');
+                    return (
+                      <div 
+                        key={cardId} 
+                        className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/80"
+                      >
+                        <span className="text-[11px] font-black">{labelAr}</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => moveCardInOrder(idx, 'left')}
+                            disabled={idx === 0}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-800 hover:bg-amber-500 hover:text-white disabled:opacity-30 cursor-pointer text-xs"
+                            title={isRtl ? 'نقل لليمين' : 'Move right'}
+                          >
+                            →
+                          </button>
+                          <button
+                            onClick={() => moveCardInOrder(idx, 'right')}
+                            disabled={idx === topCardsOrder.length - 1}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-800 hover:bg-amber-500 hover:text-white disabled:opacity-30 cursor-pointer text-xs"
+                            title={isRtl ? 'نقل لليسار' : 'Move left'}
+                          >
+                            ←
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Col 3: Sections reorder (4 cols) */}
+              <div className="md:col-span-4 space-y-2">
+                <span className="text-zinc-500 dark:text-zinc-400 block">{isRtl ? 'ترتيب الأقسام الرئيسية للوحة (أعلى ⇆ أسفل):' : 'Reorder Main Layout Blocks (up/down):'}</span>
+                <div className="space-y-1.5">
+                  {mainSectionsOrder.map((secId, idx) => {
+                    const labelAr = secId === 'top_kpis' ? (isRtl ? 'بطاقات المؤشرات الرئيسية' : 'Top 4 KPIs')
+                                  : secId === 'lines' ? (isRtl ? 'أداء خطوط الإنتاج' : 'Production Lines Performance')
+                                  : (isRtl ? 'الرسوم البيانية والمذكرات' : 'Charts & Trends');
+                    return (
+                      <div 
+                        key={secId} 
+                        className="flex items-center justify-between p-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/80"
+                      >
+                        <span className="text-[11px] font-black">{labelAr}</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => moveSectionInOrder(idx, 'up')}
+                            disabled={idx === 0}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-800 hover:bg-amber-500 hover:text-white disabled:opacity-30 cursor-pointer text-xs font-extrabold"
+                            title={isRtl ? 'نقل لأعلى' : 'Move up'}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            onClick={() => moveSectionInOrder(idx, 'down')}
+                            disabled={idx === mainSectionsOrder.length - 1}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-800 hover:bg-amber-500 hover:text-white disabled:opacity-30 cursor-pointer text-xs font-extrabold"
+                            title={isRtl ? 'نقل لأسفل' : 'Move down'}
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Actions of panel */}
+            <div className="flex justify-between items-center mt-5 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+              <p className="text-[10px] text-zinc-400 font-medium">
+                {isRtl 
+                  ? '* سيتم حفظ تفضيلات المظهر وتخصيصات الشاشة في المتصفح تلقائياً لكل جهاز على حدة.' 
+                  : '* Layout configurations are saved locally for this specific browser or TV client.'}
+              </p>
+              <button
+                onClick={handleResetLayout}
+                className="px-3.5 py-1.5 bg-zinc-200 hover:bg-zinc-350 dark:bg-zinc-800 dark:hover:bg-zinc-750 rounded-xl text-[10px] font-black transition-colors"
+              >
+                {isRtl ? 'إعادة التعيين للإعدادات الافتراضية' : 'Reset to Original Grid'}
+              </button>
             </div>
           </motion.div>
         )}
@@ -1169,179 +2273,20 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
               </div>
             </div>
 
-            {/* SEGMENTS GRID (THE 4 CORE CATEGORY CARDS) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-              
-              {/* CARD 1: Production (الإنتاج) */}
-              <div id="kpi-card-production" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white animate-fade-in">
-                <div className="p-3 px-4 bg-[#0E5F59] text-white flex items-center justify-between font-black">
-                  <span className="text-sm tracking-wide">الإنتاج (Production)</span>
-                  <Settings size={15} />
-                </div>
-                <div className="flex-1 p-2">
-                  <table className="w-full text-[11px] font-bold border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-950 text-right font-black">
-                        <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
-                        <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
-                        <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
-                        <th className="py-1.5 pb-2 text-center w-8">الحالة</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black text-zinc-950">إجمالي الإنتاج (كجم)</td>
-                        <td className="py-2 text-center text-zinc-950 font-black">{data.prodTotal.actual.toLocaleString()}</td>
-                        <td className="py-2 text-center text-zinc-950 font-bold">{data.prodTotal.target.toLocaleString()}</td>
-                        <td className="py-2 flex justify-center">{renderStatusIcon(prod1Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black text-zinc-950">(%) الكفاءة الإنتاجية</td>
-                        <td className="py-2 text-center text-zinc-950 font-black">{data.prodEfficiency.actual}%</td>
-                        <td className="py-2 text-center text-zinc-950 font-bold">{data.prodEfficiency.target}%</td>
-                        <td className="py-2 flex justify-center">{renderStatusIcon(prod2Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black text-zinc-950">Product Waste (%)</td>
-                        <td className="py-2 text-center text-zinc-950 font-black">{data.prodWaste.actual}%</td>
-                        <td className="py-2 text-center text-zinc-950 font-bold">≤ {data.prodWaste.target}%</td>
-                        <td className="py-2 flex justify-center">{renderStatusIcon(prod3Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black text-zinc-950">Film Waste (%)</td>
-                        <td className="py-2 text-center text-zinc-950 font-black">{data.prodFilmWaste.actual}%</td>
-                        <td className="py-2 text-center text-zinc-950 font-bold">≤ {data.prodFilmWaste.target}%</td>
-                        <td className="py-2 flex justify-center">{renderStatusIcon(prod4Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2 text-right font-black text-zinc-950">Rework (%)</td>
-                        <td className="py-2 text-center text-zinc-950 font-black">{data.prodRework.actual}%</td>
-                        <td className="py-2 text-center text-zinc-950 font-bold">≤ {data.prodRework.target}%</td>
-                        <td className="py-2 flex justify-center">{renderStatusIcon(prod5Status)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* CARD 2: Quality (الجودة) */}
-              <div id="kpi-card-quality" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
-                <div className="p-3 px-4 bg-[#829E16] text-white flex items-center justify-between font-black">
-                  <span className="text-sm tracking-wide">الجودة (Quality)</span>
-                  <Info size={15} />
-                </div>
-                <div className="flex-1 p-2">
-                  <table className="w-full text-[11px] font-bold border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-950 text-right font-black">
-                        <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
-                        <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
-                        <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
-                        <th className="py-1.5 pb-2 text-center w-8">الحالة</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black text-zinc-950">عدد حالات الـ Hold</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualHoldCases.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-bold">{data.qualHoldCases.target}</td>
-                        <td className="py-2.5 flex justify-center">{renderStatusIcon(qual1Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black text-zinc-950">مخالفات الفود سيفتي</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualFoodSafety.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-bold">{data.qualFoodSafety.target}</td>
-                        <td className="py-2.5 flex justify-center">{renderStatusIcon(qual2Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black text-zinc-950">GMP Score (%)</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-black">{data.qualGmpScore.actual}%</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-bold">≥ {data.qualGmpScore.target}%</td>
-                        <td className="py-2.5 flex justify-center">{renderStatusIcon(qual3Status)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* CARD 3: Safety (السلامة) */}
-              <div id="kpi-card-safety" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
-                <div className="p-3 px-4 bg-[#007E72] text-white flex items-center justify-between font-black">
-                  <span className="text-sm tracking-wide">السلامة (Safety)</span>
-                  <AlertCircle size={15} />
-                </div>
-                <div className="flex-1 p-2">
-                  <table className="w-full text-[11px] font-bold border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-950 text-right font-black">
-                        <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
-                        <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
-                        <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
-                        <th className="py-1.5 pb-2 text-center w-8">الحالة</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-3.5 text-right font-black text-zinc-950">عدد الحوادث الوشيكة</td>
-                        <td className="py-3.5 text-center text-zinc-950 font-black">{data.safeNearMisses.actual}</td>
-                        <td className="py-3.5 text-center text-zinc-950 font-bold">{data.safeNearMisses.target}</td>
-                        <td className="py-3.5 flex justify-center">{renderStatusIcon(safe1Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-3.5 text-right font-black text-zinc-950">مخاطر السلامة المفتوحة</td>
-                        <td className="py-3.5 text-center text-zinc-950 font-black">{data.safeOpenRisks.actual}</td>
-                        <td className="py-3.5 text-center text-zinc-950 font-bold">{data.safeOpenRisks.target}</td>
-                        <td className="py-3.5 flex justify-center">{renderStatusIcon(safe2Status)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* CARD 4: Warehouse & Dispatch */}
-              <div id="kpi-card-warehouse" className="border border-zinc-200 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white">
-                <div className="p-3 px-4 bg-[#889E19] text-white flex items-center justify-between font-black">
-                  <span className="text-sm tracking-wide">المستودعات والشحن (Warehouse)</span>
-                  <Clock size={15} />
-                </div>
-                <div className="flex-1 p-2">
-                  <table className="w-full text-[11px] font-bold border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-200 text-zinc-950 text-right font-black">
-                        <th className="py-1.5 pb-2 text-right">مؤشر الأداء</th>
-                        <th className="py-1.5 pb-2 text-center w-14">الفعلي</th>
-                        <th className="py-1.5 pb-2 text-center w-14">المستهدف</th>
-                        <th className="py-1.5 pb-2 text-center w-8">الحالة</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black text-zinc-950">عدد الحاويات المشحونة</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-black">{data.whShippedContainers.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-bold">{data.whShippedContainers.target}</td>
-                        <td className="py-2.5 flex justify-center">{renderStatusIcon(wh1Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black text-zinc-950">عدد أوامر التحميل المنفذة</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-black">{data.whExecutedOrders.actual}</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-bold">{data.whExecutedOrders.target}</td>
-                        <td className="py-2.5 flex justify-center">{renderStatusIcon(wh2Status)}</td>
-                      </tr>
-                      <tr className="hover:bg-zinc-50">
-                        <td className="py-2.5 text-right font-black text-zinc-950">الشحن في الموعد (% OTIF)</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-black">{data.whOtif.actual}%</td>
-                        <td className="py-2.5 text-center text-zinc-950 font-bold">≥ {data.whOtif.target}%</td>
-                        <td className="py-2.5 flex justify-center">{renderStatusIcon(wh3Status)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
+            {/* DYNAMIC SECTIONS GRID BASED ON SECTIONS ORDER AND STYLING PREFERENCES */}
+            <div className="space-y-6">
+              {mainSectionsOrder.map(sectionId => {
+                if (sectionId === 'top_kpis') return renderTopKpis();
+                if (sectionId === 'lines') return renderLines();
+                if (sectionId === 'charts') return renderCharts();
+                return null;
+              })}
             </div>
 
+            {/* DELETED STATIC_PLACEHOLDER_BLOCK_1 */}
+
             {/* FULL-WIDTH SECTION: PRODUCTION LINES PERFORMANCE (أداء خطوط الإنتاج) */}
-            <div id="production-lines-block" className="space-y-3">
+            {false && <div id="production-lines-block" className="space-y-3">
               <div className="bg-[#0D5F54] text-white p-2.5 rounded-2xl text-center font-black text-sm select-none tracking-widest shadow-sm">
                 أداء خطوط الإنتاج (Production Lines Performance)
               </div>
@@ -1553,10 +2498,10 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
                 </div>
 
               </div>
-            </div>
+            </div>}
 
             {/* CHARTS ROW, LEGEND & NOTES GRID (مؤشرات الاتجاه والرسوم البيانية والمذكرات) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1">
+            {false && <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1">
               
               {/* Left Column: Trend chart */}
               <div id="chart-trend-container" className="lg:col-span-4 border border-zinc-200 rounded-[24px] p-4 bg-white flex flex-col justify-between min-h-[290px]">
@@ -1658,7 +2603,7 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
                 </div>
               </div>
 
-            </div>
+            </div>}
 
             {/* CORPORATE IMMERSIVE FOOTER SLOGAN */}
             <div className="bg-[#0E5F59] text-white p-3.5 rounded-[20px] text-center text-sm font-black tracking-widest select-none shadow-md">

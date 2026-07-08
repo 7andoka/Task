@@ -84,9 +84,9 @@ const CATEGORIES_REF = {
 };
 
 const ANALYSIS_CATEGORIES = [
-  { id: 'Within Limits', labelAr: 'مطابق (Within Limits)', labelEn: 'Within Limits' },
-  { id: 'Not Comply', labelAr: 'غير مطابق (Not Comply)', labelEn: 'Not Comply' },
-  { id: 'Free', labelAr: 'حر (Free)', labelEn: 'Free' }
+  { id: 'Not free', labelAr: 'مبيدات (Pesticides)', labelEn: 'Pesticides' },
+  { id: 'free', labelAr: 'خالي مبيدات (Pesticide-free)', labelEn: 'Pesticide-free' },
+  { id: 'none', labelAr: 'بدون تحليل (No Analysis)', labelEn: 'No Analysis' }
 ];
 
 interface MultiSelectProps {
@@ -318,19 +318,19 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   };
 
   const getAnalysisLabel = (id: string) => {
-    if (id === 'Within Limits') return isRtl ? 'مطابق (Within Limits)' : 'Within Limits';
-    if (id === 'Not Comply') return isRtl ? 'غير مطابق (Not Comply)' : 'Not Comply';
-    return isRtl ? 'حر (Free)' : 'Free';
+    if (id === 'Not free') return isRtl ? 'مبيدات' : 'Pesticides';
+    if (id === 'free') return isRtl ? 'خالي مبيدات' : 'Pesticide-free';
+    return isRtl ? 'بدون تحليل' : 'No Analysis';
   };
 
   const getAnalysisColor = (id: string) => {
-    if (id === 'Within Limits') {
-      return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-400 dark:border-emerald-500/10';
-    }
-    if (id === 'Not Comply') {
+    if (id === 'Not free') {
       return 'bg-rose-500/10 text-rose-600 border-rose-500/20 dark:bg-rose-500/5 dark:text-rose-400 dark:border-rose-500/10';
     }
-    return 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/5 dark:text-blue-400 dark:border-blue-500/10';
+    if (id === 'free') {
+      return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-400 dark:border-emerald-500/10';
+    }
+    return 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20 dark:bg-zinc-500/5 dark:text-zinc-400 dark:border-zinc-500/10';
   };
 
   const detectAttribute = (descr: string, type: 'size' | 'process' | 'direction'): string => {
@@ -614,11 +614,12 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       // Determine batch analysis
       const batchVal = batchIdx !== -1 && row[batchIdx] ? row[batchIdx].trim() : '';
       const prefix = batchVal.substring(0, 3).toUpperCase();
-      let rowAnalysis = 'Free';
-      if (prefix === 'PWL') {
-        rowAnalysis = 'Within Limits';
-      } else if (prefix === 'PNC') {
-        rowAnalysis = 'Not Comply';
+      const normalizedBatch = batchVal.toUpperCase();
+      let rowAnalysis = 'none';
+      if (prefix === 'PWL' || prefix === 'PNC' || prefix === 'RAN' || normalizedBatch.endsWith('NOT')) {
+        rowAnalysis = 'Not free';
+      } else if (prefix === 'FRE') {
+        rowAnalysis = 'free';
       }
 
       if (!pivotMap.has(code)) {
