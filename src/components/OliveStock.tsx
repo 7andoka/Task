@@ -152,20 +152,30 @@ function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSe
             }`}
           >
             <div className="space-y-1">
-              {options.map(option => (
-                <button
-                  key={option.id}
-                  onClick={() => toggleOption(option.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                    selected.includes(option.id)
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      : 'hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300'
-                  }`}
-                >
-                  <span className="truncate">{option.label}</span>
-                  {selected.includes(option.id) && <Check size={14} />}
-                </button>
-              ))}
+              {options.map(option => {
+                const isChecked = selected.includes(option.id);
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => toggleOption(option.id)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                      isChecked
+                        ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-zinc-600 dark:text-zinc-300'
+                    }`}
+                    dir={isRtl ? 'rtl' : 'ltr'}
+                  >
+                    <div className={`w-4 h-4 rounded-[6px] border flex items-center justify-center transition-all shrink-0 ${
+                      isChecked 
+                        ? 'bg-emerald-500 border-emerald-500 text-white' 
+                        : 'border-zinc-350 dark:border-zinc-700 bg-white dark:bg-zinc-800'
+                    }`}>
+                      {isChecked && <Check size={10} strokeWidth={3} />}
+                    </div>
+                    <span className="truncate flex-1 text-right">{option.label}</span>
+                  </button>
+                );
+              })}
             </div>
             {selected.length > 0 && (
               <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
@@ -1484,19 +1494,19 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           </div>
 
           {/* Pivot Data Grid Table */}
-          <div className="bg-white dark:bg-zinc-900/60 rounded-3xl border border-zinc-200/60 dark:border-zinc-800/60 overflow-hidden shadow-sm">
+          <div className="bg-white dark:bg-zinc-900/60 rounded-[28px] border border-zinc-200/60 dark:border-zinc-800/60 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
             <div className="overflow-x-auto max-h-[700px] scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-800 scroll-smooth">
               <table className="w-full text-sm text-right border-separate border-spacing-0" dir={isRtl ? 'rtl' : 'ltr'}>
-                <thead className="text-[10px] uppercase bg-zinc-50/95 dark:bg-zinc-900/95 border-b border-zinc-100 dark:border-zinc-800 text-zinc-500 font-black sticky top-0 z-30 backdrop-blur-md shadow-sm">
+                <thead className="text-[10px] bg-zinc-50/95 dark:bg-zinc-900/95 border-b-2 border-zinc-200 dark:border-zinc-800 text-zinc-500 font-black sticky top-0 z-30 backdrop-blur-md">
                   <tr>
                     <th 
                       scope="col" 
-                      className={`px-4 py-3 whitespace-nowrap w-[100px] min-w-[100px] border-b dark:border-zinc-800 transition-all ${pinnedColumns.includes('material_code') ? 'sticky right-0 z-40 bg-zinc-50/95 dark:bg-zinc-900/95 border-l' : ''}`}
+                      className={`px-4 py-3.5 whitespace-nowrap w-[120px] min-w-[120px] border-b border-zinc-200 dark:border-zinc-800 transition-all ${pinnedColumns.includes('material_code') ? 'sticky right-0 z-40 bg-zinc-50/95 dark:bg-zinc-900/95 border-l border-zinc-200 dark:border-zinc-800 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : ''}`}
                       style={pinnedColumns.includes('material_code') ? { right: 0 } : {}}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{isRtl ? 'كود الخام' : 'Material Code'}</span>
-                        <button onClick={() => togglePin('material_code')} className={`p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors ${pinnedColumns.includes('material_code') ? 'text-blue-500' : 'text-zinc-300'}`}>
+                      <div className="flex items-center justify-between gap-2 text-zinc-700 dark:text-zinc-300">
+                        <span className="font-black tracking-wider uppercase text-[9px]">{isRtl ? 'كود الخام' : 'Material Code'}</span>
+                        <button onClick={() => togglePin('material_code')} className={`p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors ${pinnedColumns.includes('material_code') ? 'text-blue-500 bg-blue-500/5' : 'text-zinc-300'}`}>
                           <Pin size={10} className={pinnedColumns.includes('material_code') ? 'fill-current' : ''} />
                         </button>
                       </div>
@@ -1504,12 +1514,12 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                     
                     <th 
                       scope="col" 
-                      className={`px-4 py-3 whitespace-nowrap min-w-[250px] w-[250px] border-b dark:border-zinc-800 transition-all ${pinnedColumns.includes('material_desc') ? 'sticky z-40 bg-zinc-50/95 dark:bg-zinc-900/95 border-l' : ''}`}
+                      className={`px-4 py-3.5 whitespace-nowrap min-w-[250px] w-[250px] border-b border-zinc-200 dark:border-zinc-800 transition-all ${pinnedColumns.includes('material_desc') ? 'sticky z-40 bg-zinc-50/95 dark:bg-zinc-900/95 border-l border-zinc-200 dark:border-zinc-800 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : ''}`}
                       style={pinnedColumns.includes('material_desc') ? { right: getPinnedOffset('material_desc', []) } : {}}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{isRtl ? 'وصف الصنف' : 'Material Description'}</span>
-                        <button onClick={() => togglePin('material_desc')} className={`p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors ${pinnedColumns.includes('material_desc') ? 'text-blue-500' : 'text-zinc-300'}`}>
+                      <div className="flex items-center justify-between gap-2 text-zinc-700 dark:text-zinc-300">
+                        <span className="font-black tracking-wider uppercase text-[9px]">{isRtl ? 'وصف الصنف' : 'Material Description'}</span>
+                        <button onClick={() => togglePin('material_desc')} className={`p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors ${pinnedColumns.includes('material_desc') ? 'text-blue-500 bg-blue-500/5' : 'text-zinc-300'}`}>
                           <Pin size={10} className={pinnedColumns.includes('material_desc') ? 'fill-current' : ''} />
                         </button>
                       </div>
@@ -1517,12 +1527,12 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
                     <th 
                       scope="col" 
-                      className={`px-4 py-3 whitespace-nowrap min-w-[200px] w-[200px] border-b dark:border-zinc-800 transition-all ${pinnedColumns.includes('details') ? 'sticky z-40 bg-zinc-50/95 dark:bg-zinc-900/95 border-l' : ''}`}
+                      className={`px-4 py-3.5 whitespace-nowrap min-w-[200px] w-[200px] border-b border-zinc-200 dark:border-zinc-800 transition-all ${pinnedColumns.includes('details') ? 'sticky z-40 bg-zinc-50/95 dark:bg-zinc-900/95 border-l border-zinc-200 dark:border-zinc-800 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : ''}`}
                       style={pinnedColumns.includes('details') ? { right: getPinnedOffset('details', []) } : {}}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{isRtl ? 'التفاصيل' : 'Details'}</span>
-                        <button onClick={() => togglePin('details')} className={`p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors ${pinnedColumns.includes('details') ? 'text-blue-500' : 'text-zinc-300'}`}>
+                      <div className="flex items-center justify-between gap-2 text-zinc-700 dark:text-zinc-300">
+                        <span className="font-black tracking-wider uppercase text-[9px]">{isRtl ? 'التفاصيل' : 'Details'}</span>
+                        <button onClick={() => togglePin('details')} className={`p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors ${pinnedColumns.includes('details') ? 'text-blue-500 bg-blue-500/5' : 'text-zinc-300'}`}>
                           <Pin size={10} className={pinnedColumns.includes('details') ? 'fill-current' : ''} />
                         </button>
                       </div>
@@ -1530,12 +1540,12 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
                     <th 
                       scope="col" 
-                      className={`px-4 py-3 whitespace-nowrap w-[100px] font-black border-b dark:border-zinc-800 transition-all ${pinnedColumns.includes('total_qty') ? 'sticky z-40 bg-zinc-50/95 dark:bg-zinc-900/95 border-l' : 'bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-x border-zinc-200 dark:border-zinc-700'}`}
+                      className={`px-4 py-3.5 whitespace-nowrap w-[120px] font-black border-b border-zinc-200 dark:border-zinc-800 transition-all ${pinnedColumns.includes('total_qty') ? 'sticky z-40 bg-zinc-50/95 dark:bg-zinc-900/95 border-l border-zinc-200 dark:border-zinc-800 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : 'bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-x border-zinc-200/50 dark:border-zinc-800'}`}
                       style={pinnedColumns.includes('total_qty') ? { right: getPinnedOffset('total_qty', []) } : {}}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span>{isRtl ? 'إجمالي' : 'Total'}</span>
-                        <button onClick={() => togglePin('total_qty')} className={`p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors ${pinnedColumns.includes('total_qty') ? 'text-blue-500' : 'text-zinc-300'}`}>
+                        <span className="font-black tracking-wider uppercase text-[9px] text-emerald-600 dark:text-emerald-400">{isRtl ? 'إجمالي الرصيد' : 'Total Stock'}</span>
+                        <button onClick={() => togglePin('total_qty')} className={`p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors ${pinnedColumns.includes('total_qty') ? 'text-blue-500 bg-blue-500/5' : 'text-zinc-400'}`}>
                           <Pin size={10} className={pinnedColumns.includes('total_qty') ? 'fill-current' : ''} />
                         </button>
                       </div>
@@ -1549,17 +1559,17 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                         <th 
                           key={loc} 
                           scope="col" 
-                          className={`px-4 py-3 whitespace-nowrap text-center border-l border-b border-zinc-100 dark:border-zinc-800/50 min-w-[120px] w-[120px] transition-all ${isPinned ? 'sticky z-40 bg-zinc-50/95 dark:bg-zinc-900/95 font-black text-blue-600 dark:text-blue-400' : ''}`}
+                          className={`px-4 py-3.5 whitespace-nowrap text-center border-l border-b border-zinc-200 dark:border-zinc-800/80 min-w-[120px] w-[120px] transition-all ${isPinned ? 'sticky z-40 bg-zinc-50/95 dark:bg-zinc-900/95 font-black text-blue-600 dark:text-blue-400 border-r border-zinc-200 dark:border-zinc-800 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : ''}`}
                           style={isPinned ? { right: offset } : {}}
                         >
-                          <div className="flex flex-col items-center gap-0.5 group">
+                          <div className="flex flex-col items-center gap-1 group">
                             <div className="flex items-center justify-between w-full">
                               <MapPin size={10} className={loc.includes('Olive') ? 'text-fuchsia-500' : 'text-blue-500'} />
-                              <button onClick={() => togglePin(loc)} className={`p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-opacity ${isPinned ? 'opacity-100 text-blue-500' : 'opacity-20 group-hover:opacity-100 text-zinc-400'}`}>
+                              <button onClick={() => togglePin(loc)} className={`p-1 rounded-md hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-opacity ${isPinned ? 'opacity-100 text-blue-500 bg-blue-500/5' : 'opacity-25 group-hover:opacity-100 text-zinc-400'}`}>
                                 <Pin size={10} className={isPinned ? 'fill-current' : ''} />
                               </button>
                             </div>
-                            <span className="truncate max-w-[100px] inline-block">{getLocationName(loc)}</span>
+                            <span className="truncate max-w-[100px] inline-block font-black text-zinc-600 dark:text-zinc-300 text-[10px] uppercase tracking-wide">{getLocationName(loc)}</span>
                           </div>
                         </th>
                       );
@@ -1582,61 +1592,66 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                     filteredDataset.map((row) => (
                       <tr 
                         key={row.materialCode} 
-                        className="group hover:bg-zinc-50/80 dark:hover:bg-zinc-800/20 transition-all duration-150 even:bg-zinc-50/20 dark:even:bg-zinc-800/5"
+                        className="group hover:bg-emerald-500/[0.015] dark:hover:bg-emerald-500/[0.025] transition-all duration-150 even:bg-zinc-50/10 dark:even:bg-zinc-800/5"
                       >
                         <td 
-                          className={`px-4 py-3 font-mono font-black text-[12px] text-zinc-500 dark:text-zinc-400 transition-all ${pinnedColumns.includes('material_code') ? 'sticky right-0 z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 border-l dark:border-zinc-800 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)]' : ''}`}
+                          className={`px-4 py-3 transition-all ${pinnedColumns.includes('material_code') ? 'sticky right-0 z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)]' : ''}`}
                           style={pinnedColumns.includes('material_code') ? { right: 0 } : {}}
                         >
-                          {row.materialCode}
+                          <span className="font-mono text-xs font-black text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/80 px-2.5 py-1 rounded-lg border border-zinc-200/50 dark:border-zinc-700/60 select-all shadow-xs inline-block">
+                            {row.materialCode}
+                          </span>
                         </td>
                         <td 
-                          className={`px-4 py-3 font-bold text-zinc-800 dark:text-zinc-200 text-[13px] tracking-tight transition-all ${pinnedColumns.includes('material_desc') ? 'sticky z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 border-l dark:border-zinc-800 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)]' : ''}`}
+                          className={`px-4 py-3 transition-all ${pinnedColumns.includes('material_desc') ? 'sticky z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)]' : ''}`}
                           style={pinnedColumns.includes('material_desc') ? { right: getPinnedOffset('material_desc', []) } : {}}
                         >
-                          {row.description || '—'}
+                          <span className="font-bold text-zinc-800 dark:text-zinc-100 text-[13px] tracking-tight leading-relaxed block max-w-xs truncate">
+                            {row.description || '—'}
+                          </span>
                         </td>
                         <td 
-                          className={`px-4 py-3 whitespace-nowrap transition-all ${pinnedColumns.includes('details') ? 'sticky z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 border-l dark:border-zinc-800 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)]' : ''}`}
+                          className={`px-4 py-3 whitespace-nowrap transition-all ${pinnedColumns.includes('details') ? 'sticky z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)]' : ''}`}
                           style={pinnedColumns.includes('details') ? { right: getPinnedOffset('details', []) } : {}}
                         >
                           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5 max-w-[200px]">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tight border w-fit whitespace-nowrap ${getVarietyColor(row.variety)}`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-tight border w-fit whitespace-nowrap shadow-xs select-none ${getVarietyColor(row.variety)}`}>
                               {getVarietyName(row.variety)}
                             </span>
                             {row.size && (
-                              <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[9px] px-1.5 py-0.5 rounded-lg font-black border border-zinc-200 dark:border-zinc-700 whitespace-nowrap">
+                              <span className="bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[9px] px-2 py-0.5 rounded-lg font-extrabold border border-zinc-200/50 dark:border-zinc-750 whitespace-nowrap shadow-xs">
                                 {row.size}
                               </span>
                             )}
                             {row.processType && (
-                              <span className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[9px] px-1.5 py-0.5 rounded-lg font-black border border-indigo-100 dark:border-indigo-900/30 whitespace-nowrap">
+                              <span className="bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 text-[9px] px-2 py-0.5 rounded-lg font-extrabold border border-indigo-100 dark:border-indigo-900/30 whitespace-nowrap shadow-xs">
                                 {getAttributeLabel(row.processType, 'process')}
                               </span>
                             )}
                             {row.treatment && (
-                              <span className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[9px] px-1.5 py-0.5 rounded-lg font-black border border-emerald-100 dark:border-emerald-900/30 whitespace-nowrap">
+                              <span className="bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 text-[9px] px-2 py-0.5 rounded-lg font-extrabold border border-emerald-100 dark:border-emerald-900/30 whitespace-nowrap shadow-xs">
                                 {getAttributeLabel(row.treatment, 'direction')}
                               </span>
                             )}
-                            {row.analyses && row.analyses.map(analysis => (
-                              <span 
-                                key={analysis} 
-                                className={`px-1.5 py-0.5 rounded-lg text-[9px] font-black border whitespace-nowrap ${getAnalysisColor(analysis)}`}
-                              >
-                                {getAnalysisLabel(analysis)}
-                              </span>
-                            ))}
                           </div>
                         </td>
                         <td 
-                          className={`px-4 py-3 font-black font-mono text-center transition-all ${pinnedColumns.includes('total_qty') ? 'sticky z-20 bg-white group-hover:bg-emerald-50 dark:bg-emerald-950 dark:group-hover:bg-emerald-900 border-l dark:border-zinc-800 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)] text-emerald-600 dark:text-emerald-400' : 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/30 dark:bg-emerald-500/5 border-x border-zinc-100 dark:border-zinc-800/60 shadow-inner'}`}
+                          className={`px-4 py-3 font-black text-center transition-all ${pinnedColumns.includes('total_qty') ? 'sticky z-20 bg-white group-hover:bg-emerald-50 dark:bg-emerald-950 dark:group-hover:bg-emerald-900 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)]' : 'bg-emerald-50/30 dark:bg-emerald-500/5 border-x border-zinc-100 dark:border-zinc-800/60 shadow-inner'}`}
                           style={pinnedColumns.includes('total_qty') ? { right: getPinnedOffset('total_qty', []) } : {}}
                         >
                           <div className="flex flex-col items-center">
-                            <span className={row.totalQuantity < 500 ? 'text-rose-500 dark:text-rose-400' : ''}>
-                              {formatNumber(row.totalQuantity)}
-                            </span>
+                            {row.totalQuantity < 500 ? (
+                              <div className="flex items-center gap-1 bg-rose-500/5 border border-rose-500/15 px-2.5 py-1 rounded-xl text-rose-600 dark:text-rose-400 animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                                <span className="font-extrabold font-mono text-[13px]">{formatNumber(row.totalQuantity)}</span>
+                                <span className="text-[8px] font-black uppercase text-rose-400">{isRtl ? 'كجم' : 'kg'}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 bg-emerald-500/5 border border-emerald-500/15 px-2.5 py-1 rounded-xl text-emerald-600 dark:text-emerald-400 shadow-xs">
+                                <span className="font-extrabold font-mono text-[13px]">{formatNumber(row.totalQuantity)}</span>
+                                <span className="text-[8px] font-black uppercase text-emerald-500/60">{isRtl ? 'كجم' : 'kg'}</span>
+                              </div>
+                            )}
                           </div>
                         </td>
                         
@@ -1644,16 +1659,25 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                         {visibleLocations.map(loc => {
                           const val = row.locationQuantities[loc] || 0;
                           const isPinned = pinnedColumns.includes(loc);
+                          const isOlive = loc.includes('Olive');
                           return (
                             <td 
                               key={loc} 
-                              className={`px-4 py-3 text-center border-l border-zinc-50 dark:border-zinc-800/30 transition-all ${val > 0 ? 'bg-zinc-50/10' : ''} ${isPinned ? 'sticky z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)] font-bold' : ''}`}
+                              className={`px-4 py-3 text-center border-l border-zinc-100 dark:border-zinc-800/30 transition-all ${val > 0 ? 'bg-zinc-50/5' : ''} ${isPinned ? 'sticky z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800/80 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)] font-bold' : ''}`}
                               style={isPinned ? { right: getPinnedOffset(loc, visibleLocations) } : {}}
                             >
                               <div className="flex flex-col items-center">
-                                <span className={`font-mono text-xs ${val > 0 ? 'text-zinc-900 dark:text-zinc-100 font-bold' : 'text-zinc-200 dark:text-zinc-800'}`}>
-                                  {val > 0 ? formatNumber(val) : '—'}
-                                </span>
+                                {val > 0 ? (
+                                  <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded-lg border ${
+                                    isOlive 
+                                      ? 'text-fuchsia-700 bg-fuchsia-500/5 border-fuchsia-500/10 dark:text-fuchsia-400' 
+                                      : 'text-blue-700 bg-blue-500/5 border-blue-500/10 dark:text-blue-400'
+                                  }`}>
+                                    {formatNumber(val)}
+                                  </span>
+                                ) : (
+                                  <span className="font-mono text-zinc-300 dark:text-zinc-800/60 font-semibold">—</span>
+                                )}
                               </div>
                             </td>
                           );
@@ -1663,44 +1687,60 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                   )}
                 </tbody>
                 {filteredDataset.length > 0 && (
-                  <tfoot className="border-t-2 border-zinc-100 dark:border-zinc-800 font-black bg-zinc-50/80 dark:bg-zinc-900/60 text-zinc-900 dark:text-white sticky bottom-0 z-30 backdrop-blur-md">
+                  <tfoot className="border-t-2 border-zinc-200 dark:border-zinc-800 font-black bg-zinc-50/90 dark:bg-zinc-900/90 text-zinc-900 dark:text-white sticky bottom-0 z-30 backdrop-blur-md shadow-[0_-2px_10px_rgba(0,0,0,0.02)]">
                     <tr>
                       <td 
-                        className={`px-4 py-4 border-l dark:border-zinc-800 transition-all ${pinnedColumns.includes('material_code') ? 'sticky right-0 z-40 bg-zinc-50 dark:bg-zinc-950' : ''}`}
+                        className={`px-4 py-4 border-l border-zinc-200 dark:border-zinc-800 transition-all ${pinnedColumns.includes('material_code') ? 'sticky right-0 z-40 bg-zinc-50 dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : ''}`}
                         style={pinnedColumns.includes('material_code') ? { right: 0 } : {}}
                       >
-                        <span className="text-[10px] font-black uppercase text-zinc-400">{isRtl ? 'الإجمالي' : 'Total'}</span>
+                        <span className="text-[10px] font-black uppercase text-zinc-500 dark:text-zinc-400 tracking-wider">{isRtl ? 'الإجمالي' : 'Total'}</span>
                       </td>
                       
                       <td 
-                        className={`px-4 py-4 transition-all ${pinnedColumns.includes('material_desc') ? 'sticky z-40 bg-zinc-50 dark:bg-zinc-950 border-l dark:border-zinc-800' : ''}`}
+                        className={`px-4 py-4 transition-all ${pinnedColumns.includes('material_desc') ? 'sticky z-40 bg-zinc-50 dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : ''}`}
                         style={pinnedColumns.includes('material_desc') ? { right: getPinnedOffset('material_desc', []) } : {}}
                       >
                         <span className="text-[10px] text-zinc-400 uppercase tracking-widest">{isRtl ? 'الأرصدة المعروضة' : 'Displayed Stocks'}</span>
                       </td>
 
                       <td 
-                        className={`px-4 py-4 transition-all ${pinnedColumns.includes('details') ? 'sticky z-40 bg-zinc-50 dark:bg-zinc-950 border-l dark:border-zinc-800' : ''}`}
+                        className={`px-4 py-4 transition-all ${pinnedColumns.includes('details') ? 'sticky z-40 bg-zinc-50 dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : ''}`}
                         style={pinnedColumns.includes('details') ? { right: getPinnedOffset('details', []) } : {}}
                       />
 
                       <td 
-                        className={`px-4 py-4 font-mono text-center text-sm font-black text-emerald-600 dark:text-emerald-400 transition-all ${pinnedColumns.includes('total_qty') ? 'sticky z-40 bg-emerald-100 dark:bg-emerald-900/40 border-l dark:border-zinc-800' : 'border-x border-zinc-200 dark:border-zinc-700 bg-emerald-50/50 dark:bg-emerald-500/10'}`}
+                        className={`px-4 py-4 font-mono text-center transition-all ${pinnedColumns.includes('total_qty') ? 'sticky z-40 bg-zinc-50 dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : 'border-x border-zinc-200/50 dark:border-zinc-800 bg-emerald-50/50 dark:bg-emerald-500/10'}`}
                         style={pinnedColumns.includes('total_qty') ? { right: getPinnedOffset('total_qty', []) } : {}}
                       >
-                        {formatNumber(filteredDataset.reduce((sum, row) => sum + row.totalQuantity, 0))}
+                        <div className="flex items-center justify-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-xl text-emerald-600 dark:text-emerald-400 font-extrabold text-xs shadow-xs inline-flex">
+                          <span className="font-black font-mono text-[13px]">
+                            {formatNumber(filteredDataset.reduce((sum, row) => sum + row.totalQuantity, 0))}
+                          </span>
+                          <span className="text-[8px] font-black uppercase text-emerald-500">{isRtl ? 'كجم' : 'kg'}</span>
+                        </div>
                       </td>
 
                       {visibleLocations.map(loc => {
                         const colSum = filteredDataset.reduce((sum, row) => sum + (row.locationQuantities[loc] || 0), 0);
                         const isPinned = pinnedColumns.includes(loc);
+                        const isOlive = loc.includes('Olive');
                         return (
                           <td 
                             key={loc} 
-                            className={`px-4 py-4 text-center font-mono font-black text-xs text-zinc-600 dark:text-zinc-300 border-l border-zinc-100 dark:border-zinc-800/50 transition-all ${isPinned ? 'sticky z-40 bg-zinc-50 dark:bg-zinc-950' : ''}`}
+                            className={`px-4 py-4 text-center font-mono transition-all ${isPinned ? 'sticky z-40 bg-zinc-50 dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[1px_0_4px_rgba(0,0,0,0.05)]' : 'border-l border-zinc-100 dark:border-zinc-850'}`}
                             style={isPinned ? { right: getPinnedOffset(loc, visibleLocations) } : {}}
                           >
-                            {colSum > 0 ? formatNumber(colSum) : '0'}
+                            {colSum > 0 ? (
+                              <span className={`font-mono text-xs font-black px-2 py-1 rounded-lg border ${
+                                isOlive 
+                                  ? 'text-fuchsia-800 bg-fuchsia-500/10 border-fuchsia-500/20 dark:text-fuchsia-400' 
+                                  : 'text-blue-800 bg-blue-500/10 border-blue-500/20 dark:text-blue-400'
+                              }`}>
+                                {formatNumber(colSum)}
+                              </span>
+                            ) : (
+                              <span className="font-mono text-xs text-zinc-350 dark:text-zinc-700">0</span>
+                            )}
                           </td>
                         );
                       })}
