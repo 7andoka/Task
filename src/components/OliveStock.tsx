@@ -917,13 +917,32 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       });
     });
 
+    // Analysis breakdown
+    const analysisBreakdown: Record<string, number> = {
+      'Not free': 0,
+      'free': 0,
+      'none': 0
+    };
+
+    filteredDataset.forEach(row => {
+      row.rawRows.forEach(raw => {
+        const analysis = raw.analysis || 'none';
+        if (analysis === 'Not free' || analysis === 'free' || analysis === 'none') {
+          analysisBreakdown[analysis] += raw.quantity;
+        } else {
+          analysisBreakdown['none'] += raw.quantity;
+        }
+      });
+    });
+
     return {
       totalQty,
       uniqueItems,
       uniqueLocs,
       topVariety,
       varietyBreakdown,
-      locationBreakdown
+      locationBreakdown,
+      analysisBreakdown
     };
   }, [filteredDataset, varieties, storageLocations]);
 
@@ -958,6 +977,60 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       .filter(item => item.value > 0)
       .sort((a, b) => b.value - a.value);
   }, [stats.locationBreakdown, stats.totalQty, lang]);
+
+  const analysisChartData = useMemo(() => {
+    return Object.entries(stats.analysisBreakdown)
+      .map(([id, qty]) => ({
+        id,
+        name: getAnalysisLabel(id),
+        value: qty,
+        percentage: stats.totalQty > 0 ? (qty / stats.totalQty) * 100 : 0,
+        color: id === 'Not free' ? '#f43f5e' : id === 'free' ? '#10b981' : '#71717a'
+      }))
+      .filter(item => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [stats.analysisBreakdown, stats.totalQty, lang]);
+
+  const [drillDown, setDrillDown] = useState<{ type: 'variety' | 'location' | 'analysis', id: string, label: string } | null>(null);
+
+  const drillDownData = useMemo(() => {
+    if (!drillDown) return [];
+    
+    const results: { name: string, code: string, qty: number }[] = [];
+    const itemMap: Record<string, { name: string, qty: number }> = {};
+
+    filteredDataset.forEach(row => {
+      let matches = false;
+      let relevantQty = 0;
+
+      if (drillDown.type === 'variety' && row.variety === drillDown.id) {
+        matches = true;
+        relevantQty = row.totalQuantity;
+      } else if (drillDown.type === 'location') {
+        relevantQty = row.locationQuantities[drillDown.id] || 0;
+        if (relevantQty > 0) matches = true;
+      } else if (drillDown.type === 'analysis') {
+        row.rawRows.forEach(raw => {
+          const analysis = raw.analysis || 'none';
+          const targetAnalysis = drillDown.id === 'none' ? 'none' : drillDown.id;
+          if (analysis === targetAnalysis) {
+            matches = true;
+            relevantQty += raw.quantity;
+          }
+        });
+      }
+
+      if (matches && relevantQty > 0) {
+        results.push({
+          name: row.description,
+          code: row.materialCode,
+          qty: relevantQty
+        });
+      }
+    });
+
+    return results.sort((a, b) => b.qty - a.qty);
+  }, [drillDown, filteredDataset]);
 
   const VARIETY_COLORS: Record<string, string> = {
     Manzanilla: '#f59e0b', // Amber
@@ -1132,30 +1205,37 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       ) : (
         <>
           {/* Charts & Reports Section */}
-          <div className="bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl p-5 flex flex-col md:flex-row items-center gap-8">
-            <div className="flex flex-col items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
+            {/* Varieties Chart */}
+            <div className={`bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl p-5 flex flex-col items-center transition-all ${drillDown?.type === 'variety' ? 'ring-2 ring-emerald-500/20 border-emerald-500/30' : ''}`}>
               <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2 self-start px-2">
                 <PieChartIcon size={14} className="text-emerald-500" />
                 {isRtl ? 'تحليل الأصناف والنسب' : 'Varieties & Percentages'}
               </h3>
-              <div className="w-48 h-48 relative">
+              <div className="w-44 h-44 relative mb-6">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={chartData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={55}
-                      outerRadius={75}
+                      innerRadius={50}
+                      outerRadius={70}
                       paddingAngle={4}
                       cornerRadius={6}
                       dataKey="value"
+                      onClick={(data) => {
+                        const item = data.payload || data;
+                        setDrillDown(prev => prev?.id === item.id ? null : { type: 'variety', id: item.id, label: item.name });
+                      }}
+                      className="cursor-pointer"
                     >
                       {chartData.map((entry) => (
                         <Cell 
                           key={`cell-${entry.id}`} 
                           fill={VARIETY_COLORS[entry.id] || '#71717a'} 
                           stroke="transparent"
+                          className={`transition-opacity duration-300 ${drillDown && drillDown.id !== entry.id ? 'opacity-40' : 'opacity-100'}`}
                         />
                       ))}
                     </Pie>
@@ -1174,7 +1254,6 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                   </PieChart>
                 </ResponsiveContainer>
                 
-                {/* Center Total Metric */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
                   <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter leading-none mb-1">
                     {isRtl ? 'إجمالي' : 'Total'}
@@ -1185,60 +1264,68 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                   </p>
                 </div>
               </div>
+
+              <div className="w-full space-y-2.5">
+                {chartData.map((item) => (
+                  <button 
+                    key={item.id} 
+                    onClick={() => setDrillDown(prev => prev?.id === item.id ? null : { type: 'variety', id: item.id, label: item.name })}
+                    className={`w-full flex flex-col group py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0 text-right transition-colors rounded-lg px-2 ${drillDown?.id === item.id ? 'bg-zinc-50 dark:bg-zinc-800/40' : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: VARIETY_COLORS[item.id] || '#71717a' }} />
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-black text-zinc-900 dark:text-zinc-100">{item.percentage.toFixed(1)}%</span>
+                        <span className="text-[10px] text-zinc-400 font-medium">({(item.value/1000).toFixed(1)}t)</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full transition-all duration-1000 ease-out" 
+                        style={{ 
+                          width: `${item.percentage}%`,
+                          backgroundColor: VARIETY_COLORS[item.id] || '#71717a'
+                        }} 
+                      />
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 w-full">
-              {chartData.map((item) => (
-                <div key={item.id} className="flex flex-col group py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: VARIETY_COLORS[item.id] || '#71717a' }} />
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase">{item.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-black text-zinc-900 dark:text-zinc-100">{item.percentage.toFixed(1)}%</span>
-                      <span className="text-[10px] text-zinc-400 font-medium">({(item.value/1000).toFixed(1)}t)</span>
-                    </div>
-                  </div>
-                  <div className="w-full h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full transition-all duration-1000 ease-out" 
-                      style={{ 
-                        width: `${item.percentage}%`,
-                        backgroundColor: VARIETY_COLORS[item.id] || '#71717a'
-                      }} 
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Storage Locations Balances Section - Styled EXACTLY like the varieties block with localized support & custom colors */}
-          <div className="mt-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl p-5 flex flex-col md:flex-row items-center gap-8">
-            <div className="flex flex-col items-center">
+            {/* Warehouse Balances Chart */}
+            <div className={`bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl p-5 flex flex-col items-center transition-all ${drillDown?.type === 'location' ? 'ring-2 ring-blue-500/20 border-blue-500/30' : ''}`}>
               <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2 self-start px-2">
                 <MapPin size={14} className="text-blue-500" />
-                {isRtl ? 'تحليل أرصدة ونسب المخازن' : 'Warehouse Balances & Percentages'}
+                {isRtl ? 'تحليل أرصدة المخازن' : 'Warehouse Balances'}
               </h3>
-              <div className="w-48 h-48 relative">
+              <div className="w-44 h-44 relative mb-6">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={locationChartData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={55}
-                      outerRadius={75}
+                      innerRadius={50}
+                      outerRadius={70}
                       paddingAngle={4}
                       cornerRadius={6}
                       dataKey="value"
+                      onClick={(data) => {
+                        const item = data.payload || data;
+                        setDrillDown(prev => prev?.id === item.id ? null : { type: 'location', id: item.id, label: item.name });
+                      }}
+                      className="cursor-pointer"
                     >
                       {locationChartData.map((entry) => (
                         <Cell 
                           key={`cell-${entry.id}`} 
                           fill={entry.color} 
                           stroke="transparent"
+                          className={`transition-opacity duration-300 ${drillDown && drillDown.id !== entry.id ? 'opacity-40' : 'opacity-100'}`}
                         />
                       ))}
                     </Pie>
@@ -1257,10 +1344,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                   </PieChart>
                 </ResponsiveContainer>
                 
-                {/* Center Total Metric */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
                   <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter leading-none mb-1">
-                    {isRtl ? 'إجمالي المخزون' : 'Total Stock'}
+                    {isRtl ? 'إجمالي' : 'Total'}
                   </p>
                   <p className="text-lg font-black text-zinc-900 dark:text-white leading-none">
                     {Math.round(stats.totalQty / 1000)}
@@ -1268,34 +1354,206 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                   </p>
                 </div>
               </div>
+
+              <div className="w-full space-y-2.5">
+                {locationChartData.map((item) => (
+                  <button 
+                    key={item.id} 
+                    onClick={() => setDrillDown(prev => prev?.id === item.id ? null : { type: 'location', id: item.id, label: item.name })}
+                    className={`w-full flex flex-col group py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0 text-right transition-colors rounded-lg px-2 ${drillDown?.id === item.id ? 'bg-zinc-50 dark:bg-zinc-800/40' : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-black text-zinc-900 dark:text-zinc-100">{item.percentage.toFixed(1)}%</span>
+                        <span className="text-[10px] text-zinc-400 font-medium">({(item.value/1000).toFixed(1)}t)</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full transition-all duration-1000 ease-out" 
+                        style={{ 
+                          width: `${item.percentage}%`,
+                          backgroundColor: item.color
+                        }} 
+                      />
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 w-full">
-              {locationChartData.map((item) => (
-                <div key={item.id} className="flex flex-col group py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0" dir={isRtl ? 'rtl' : 'ltr'}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase">{item.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-black text-zinc-900 dark:text-zinc-100">{item.percentage.toFixed(1)}%</span>
-                      <span className="text-[10px] text-zinc-400 font-medium">({(item.value/1000).toFixed(1)}t)</span>
-                    </div>
-                  </div>
-                  <div className="w-full h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full transition-all duration-1000 ease-out" 
-                      style={{ 
-                        width: `${item.percentage}%`,
-                        backgroundColor: item.color
-                      }} 
+            {/* Stock Analysis Chart */}
+            <div className={`bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl p-5 flex flex-col items-center transition-all ${drillDown?.type === 'analysis' ? 'ring-2 ring-amber-500/20 border-amber-500/30' : ''}`}>
+              <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-2 self-start px-2">
+                <TrendingUp size={14} className="text-amber-500" />
+                {isRtl ? 'تقرير تحليل المخزون' : 'Stock Analysis Report'}
+              </h3>
+              <div className="w-44 h-44 relative mb-6">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={analysisChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={70}
+                      paddingAngle={4}
+                      cornerRadius={6}
+                      dataKey="value"
+                      onClick={(data) => {
+                        const item = data.payload || data;
+                        setDrillDown(prev => prev?.id === item.id ? null : { type: 'analysis', id: item.id, label: item.name });
+                      }}
+                      className="cursor-pointer"
+                    >
+                      {analysisChartData.map((entry) => (
+                        <Cell 
+                          key={`cell-${entry.id}`} 
+                          fill={entry.color} 
+                          stroke="transparent"
+                          className={`transition-opacity duration-300 ${drillDown && drillDown.id !== entry.id ? 'opacity-40' : 'opacity-100'}`}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number) => [`${formatNumber(value)} kg`, '']}
+                      contentStyle={{ 
+                        backgroundColor: '#18181b', 
+                        border: 'none', 
+                        borderRadius: '12px',
+                        fontSize: '10px',
+                        color: '#fff',
+                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+                      }}
+                      itemStyle={{ color: '#fff' }}
                     />
-                  </div>
+                  </PieChart>
+                </ResponsiveContainer>
+                
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                  <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-tighter leading-none mb-1">
+                    {isRtl ? 'تحليلات' : 'Analysis'}
+                  </p>
+                  <p className="text-lg font-black text-zinc-900 dark:text-white leading-none">
+                    {analysisChartData.length}
+                    <span className="text-[9px] font-bold ml-0.5">CAT</span>
+                  </p>
                 </div>
-              ))}
+              </div>
+
+              <div className="w-full space-y-2.5">
+                {analysisChartData.map((item) => (
+                  <button 
+                    key={item.id} 
+                    onClick={() => setDrillDown(prev => prev?.id === item.id ? null : { type: 'analysis', id: item.id, label: item.name })}
+                    className={`w-full flex flex-col group py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0 text-right transition-colors rounded-lg px-2 ${drillDown?.id === item.id ? 'bg-zinc-50 dark:bg-zinc-800/40' : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20'}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 uppercase">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-black text-zinc-900 dark:text-zinc-100">{item.percentage.toFixed(1)}%</span>
+                        <span className="text-[10px] text-zinc-400 font-medium">({(item.value/1000).toFixed(1)}t)</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full transition-all duration-1000 ease-out" 
+                        style={{ 
+                          width: `${item.percentage}%`,
+                          backgroundColor: item.color
+                        }} 
+                      />
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
+
+          {/* Drill-down Details Section */}
+          <AnimatePresence>
+            {drillDown && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: 20, height: 0 }}
+                className="mb-6 overflow-hidden"
+              >
+                <div className="bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-[32px] p-6 shadow-xl relative">
+                  <button 
+                    onClick={() => setDrillDown(null)}
+                    className="absolute top-6 left-6 p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400"
+                  >
+                    <X size={18} />
+                  </button>
+
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-2xl ${
+                        drillDown.type === 'variety' ? 'bg-emerald-500/10 text-emerald-500' :
+                        drillDown.type === 'location' ? 'bg-blue-500/10 text-blue-500' :
+                        'bg-amber-500/10 text-amber-500'
+                      }`}>
+                        {drillDown.type === 'variety' ? <PieChartIcon size={24} /> :
+                         drillDown.type === 'location' ? <MapPin size={24} /> :
+                         <TrendingUp size={24} />}
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-black text-zinc-900 dark:text-white">
+                          {drillDown.label}
+                        </h4>
+                        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                          {isRtl ? `تفاصيل الكميات حسب ${drillDown.type === 'variety' ? 'الصنف' : drillDown.type === 'location' ? 'المخزن' : 'التحليل'}` : 
+                                   `Quantity details by ${drillDown.type}`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-50 dark:bg-zinc-800/50 px-5 py-2.5 rounded-2xl border border-zinc-100 dark:border-zinc-700/50">
+                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">
+                        {isRtl ? 'إجمالي الكمية' : 'Total Quantity'}
+                      </span>
+                      <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                        {formatNumber(drillDownData.reduce((sum, item) => sum + item.qty, 0))}
+                        <span className="text-[10px] ml-1 uppercase">{isRtl ? 'كجم' : 'kg'}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {drillDownData.map((item, idx) => (
+                      <motion.div 
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        key={item.code} 
+                        className="bg-zinc-50/50 dark:bg-zinc-900/40 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800/50 hover:border-emerald-500/30 transition-all group"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-mono text-[10px] font-black text-zinc-400 bg-white dark:bg-zinc-800 px-2 py-0.5 rounded-lg border border-zinc-100 dark:border-zinc-700">
+                            {item.code}
+                          </span>
+                          <span className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">
+                            {formatNumber(item.qty)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200 line-clamp-2 leading-snug group-hover:text-emerald-600 transition-colors">
+                          {item.name}
+                        </p>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Statistics summary */}
           <div className="space-y-4 mt-4">
