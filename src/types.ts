@@ -199,6 +199,10 @@ export interface ProcessingJob {
     quantity: number;
     unit: string;
   }[];
+  scrapQty?: number;
+  farzaQty?: number;
+  seedQty?: number;
+  wasteQty?: number;
   notes?: string;
   processOperation?: string;
   status: JobStatus;

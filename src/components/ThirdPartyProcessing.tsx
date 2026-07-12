@@ -471,7 +471,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     warehouseCode: '',
     inputs: [],
     outputs: [],
-    status: hasRole('Admin') ? 'Completed' : (hasRole('Warehouse Operations') ? 'Pending Quality' : 'Pending Warehouse'),
+    scrapQty: 0,
+    farzaQty: 0,
+    seedQty: 0,
+    wasteQty: 0,
+    status: 'Pending Warehouse',
     notes: '',
     qualityComments: '',
     poNumber: '',
@@ -1375,7 +1379,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const jobData = {
         ...newJob,
         jobCode: editingJobId ? jobs.find(j => j.id === editingJobId)?.jobCode : jobCode,
-        status: hasRole(['Admin', 'Warehouse Operations']) ? newJob.status : 'Pending Warehouse',
+        status: editingJobId ? newJob.status : 'Pending Warehouse',
         warehouseName: selectedWh?.name || '',
         warehouseCode: selectedWh?.systemCode || '',
         updatedAt: new Date().toISOString(),
@@ -1428,7 +1432,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         warehouseCode: '',
         inputs: [],
         outputs: [],
-        status: hasRole('Admin') ? 'Completed' : (hasRole('Warehouse Operations') ? 'Pending Quality' : 'Pending Warehouse'),
+        scrapQty: 0,
+        farzaQty: 0,
+        seedQty: 0,
+        wasteQty: 0,
+        status: 'Pending Warehouse',
         notes: '',
         processOperation: ''
       });
@@ -1458,6 +1466,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       warehouseCode: job.warehouseCode,
       inputs: job.inputs,
       outputs: job.outputs,
+      scrapQty: job.scrapQty || 0,
+      farzaQty: job.farzaQty || 0,
+      seedQty: job.seedQty || 0,
+      wasteQty: job.wasteQty || 0,
       status: job.status,
       notes: job.notes || '',
       processOperation: job.processOperation || ''
@@ -1966,6 +1978,67 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       if (job.notes) allComments.push({ label: isRtl ? "ملاحظات العميل: " : "Customer Notes: ", text: job.notes });
       if (job.qualityComments) allComments.push({ label: isRtl ? "تعليقات الجودة: " : "Quality Comments: ", text: job.qualityComments });
 
+      // 3. Secondary Outputs & Losses Table
+      const showSecondaryTable = !!(job.scrapQty || job.farzaQty || job.seedQty || job.wasteQty);
+      
+      const secondaryTableTitle = new Paragraph({
+        children: [new TextRun({ 
+          text: isRtl ? "المخرجات الفرعية والفواقد" : "Secondary Outputs & Losses",
+          bold: true,
+          size: 24,
+          color: "B45309"
+        })],
+        alignment: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        spacing: { before: 300, after: 120 }
+      });
+
+      const secondaryTableRows = [
+        new TableRow({
+          children: [
+            createCell(isRtl ? "نوع المخرج الفرعي / الفاقد" : "Secondary Output / Loss Category", { bg: "FEF3C7", bold: true, width: 70, align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(isRtl ? "الكمية" : "Quantity", { bg: "FEF3C7", bold: true, width: 30 })
+          ]
+        })
+      ];
+
+      if (job.scrapQty) {
+        secondaryTableRows.push(new TableRow({
+          children: [
+            createCell(isRtl ? "هري التشغيل" : "Processing Scrap", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(`${job.scrapQty.toLocaleString()} kg`, { bold: true, color: "B45309" })
+          ]
+        }));
+      }
+      if (job.farzaQty) {
+        secondaryTableRows.push(new TableRow({
+          children: [
+            createCell(isRtl ? "الفرزة" : "Reject (Farza)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(`${job.farzaQty.toLocaleString()} kg`, { bold: true, color: "B45309" })
+          ]
+        }));
+      }
+      if (job.seedQty) {
+        secondaryTableRows.push(new TableRow({
+          children: [
+            createCell(isRtl ? "البذرة" : "Seed", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(`${job.seedQty.toLocaleString()} kg`, { bold: true, color: "B45309" })
+          ]
+        }));
+      }
+      if (job.wasteQty) {
+        secondaryTableRows.push(new TableRow({
+          children: [
+            createCell(isRtl ? "الهالك" : "Waste / Loss", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(`${job.wasteQty.toLocaleString()} kg`, { bold: true, color: "B45309" })
+          ]
+        }));
+      }
+
+      const secondaryTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: secondaryTableRows
+      });
+
       const showQualityReport = (job.processOperation === 'Grading' && job.defectTotalDefect !== undefined) ||
                                 (job.processOperation === 'PittingAndSlicing' && (
                                   job.slicingTime !== undefined ||
@@ -2163,6 +2236,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             metadataTable,
             new Paragraph({ text: "", spacing: { after: 200 } }),
             mainTables,
+            ...(showSecondaryTable ? [
+              secondaryTableTitle,
+              secondaryTable
+            ] : []),
             ...(showQualityReport ? [
               qualityReportTitle,
               qualityTable,
@@ -2433,6 +2510,48 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             </div>
           </div>
 
+          ${(job.scrapQty || job.farzaQty || job.seedQty || job.wasteQty) ? `
+            <div style="margin-top: 40px; border-top: 2px solid #e5e7eb; padding-top: 24px;">
+              <div class="section-header" style="font-size: 14px; font-weight: 800; color: #1e293b; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 16px;">
+                ${lang === 'ar' ? 'المخرجات الفرعية والفواقد' : 'Secondary Outputs & Losses'}
+              </div>
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr style="border-bottom: 2px solid #e5e7eb;">
+                    <th style="padding: 10px; text-align: ${isRtl ? 'right' : 'left'}; font-size: 12px; color: #4b5563; font-weight: bold; width: 60%;">${lang === 'ar' ? 'نوع المخرج الفرعي / الفاقد' : 'Secondary Output / Loss Category'}</th>
+                    <th style="padding: 10px; text-align: ${isRtl ? 'right' : 'left'}; font-size: 12px; color: #4b5563; font-weight: bold; width: 40%;">${lang === 'ar' ? 'الكمية' : 'Quantity'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${job.scrapQty ? `
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                      <td style="padding: 12px 10px; font-size: 13px; color: #374151; font-weight: 600;">${lang === 'ar' ? 'هري التشغيل' : 'Processing Scrap'}</td>
+                      <td style="padding: 12px 10px; font-size: 13px; font-weight: 800; color: #b45309;">${job.scrapQty.toLocaleString()} kg</td>
+                    </tr>
+                  ` : ''}
+                  ${job.farzaQty ? `
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                      <td style="padding: 12px 10px; font-size: 13px; color: #374151; font-weight: 600;">${lang === 'ar' ? 'الفرزة' : 'Reject (Farza)'}</td>
+                      <td style="padding: 12px 10px; font-size: 13px; font-weight: 800; color: #b45309;">${job.farzaQty.toLocaleString()} kg</td>
+                    </tr>
+                  ` : ''}
+                  ${job.seedQty ? `
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                      <td style="padding: 12px 10px; font-size: 13px; color: #374151; font-weight: 600;">${lang === 'ar' ? 'البذرة' : 'Seed'}</td>
+                      <td style="padding: 12px 10px; font-size: 13px; font-weight: 800; color: #b45309;">${job.seedQty.toLocaleString()} kg</td>
+                    </tr>
+                  ` : ''}
+                  ${job.wasteQty ? `
+                    <tr style="border-bottom: 1px solid #f3f4f6;">
+                      <td style="padding: 12px 10px; font-size: 13px; color: #374151; font-weight: 600;">${lang === 'ar' ? 'الهالك' : 'Waste / Loss'}</td>
+                      <td style="padding: 12px 10px; font-size: 13px; font-weight: 800; color: #b45309;">${job.wasteQty.toLocaleString()} kg</td>
+                    </tr>
+                  ` : ''}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
+
           ${job.notes ? `
             <div class="footer-notes">
               <span class="info-label">${t.comments}</span>
@@ -2580,6 +2699,15 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           ['Code', 'Name', 'Qty'],
           ...job.outputs.map(i => [i.itemCode, i.itemName, i.quantity])
         ];
+
+        if (job.scrapQty || job.farzaQty || job.seedQty || job.wasteQty) {
+          reportRows.push([], [isRtl ? 'المخرجات الفرعية والفواقد' : 'Secondary Outputs & Losses']);
+          if (job.scrapQty) reportRows.push([isRtl ? 'هري التشغيل' : 'Processing Scrap', `${job.scrapQty} kg`]);
+          if (job.farzaQty) reportRows.push([isRtl ? 'الفرزة' : 'Reject (Farza)', `${job.farzaQty} kg`]);
+          if (job.seedQty) reportRows.push([isRtl ? 'البذرة' : 'Seed', `${job.seedQty} kg`]);
+          if (job.wasteQty) reportRows.push([isRtl ? 'الهالك' : 'Waste / Loss', `${job.wasteQty} kg`]);
+        }
+
         worksheet = XLSX.utils.aoa_to_sheet(reportRows);
         workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
@@ -2837,6 +2965,67 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       if (job.notes) allComments.push({ label: isRtl ? "ملاحظات العميل: " : "Customer Notes: ", text: job.notes });
       if (job.qualityComments) allComments.push({ label: isRtl ? "تعليقات الجودة: " : "Quality Comments: ", text: job.qualityComments });
 
+      // 3. Secondary Outputs & Losses Table
+      const showSecondaryTable = !!(job.scrapQty || job.farzaQty || job.seedQty || job.wasteQty);
+      
+      const secondaryTableTitle = new Paragraph({
+        children: [new TextRun({ 
+          text: isRtl ? "المخرجات الفرعية والفواقد" : "Secondary Outputs & Losses",
+          bold: true,
+          size: 24,
+          color: "B45309"
+        })],
+        alignment: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT,
+        spacing: { before: 300, after: 120 }
+      });
+
+      const secondaryTableRows = [
+        new TableRow({
+          children: [
+            createCell(isRtl ? "نوع المخرج الفرعي / الفاقد" : "Secondary Output / Loss Category", { bg: "FEF3C7", bold: true, width: 70, align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(isRtl ? "الكمية" : "Quantity", { bg: "FEF3C7", bold: true, width: 30 })
+          ]
+        })
+      ];
+
+      if (job.scrapQty) {
+        secondaryTableRows.push(new TableRow({
+          children: [
+            createCell(isRtl ? "هري التشغيل" : "Processing Scrap", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(`${job.scrapQty.toLocaleString()} kg`, { bold: true, color: "B45309" })
+          ]
+        }));
+      }
+      if (job.farzaQty) {
+        secondaryTableRows.push(new TableRow({
+          children: [
+            createCell(isRtl ? "الفرزة" : "Reject (Farza)", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(`${job.farzaQty.toLocaleString()} kg`, { bold: true, color: "B45309" })
+          ]
+        }));
+      }
+      if (job.seedQty) {
+        secondaryTableRows.push(new TableRow({
+          children: [
+            createCell(isRtl ? "البذرة" : "Seed", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(`${job.seedQty.toLocaleString()} kg`, { bold: true, color: "B45309" })
+          ]
+        }));
+      }
+      if (job.wasteQty) {
+        secondaryTableRows.push(new TableRow({
+          children: [
+            createCell(isRtl ? "الهالك" : "Waste / Loss", { align: isRtl ? AlignmentType.RIGHT : AlignmentType.LEFT }),
+            createCell(`${job.wasteQty.toLocaleString()} kg`, { bold: true, color: "B45309" })
+          ]
+        }));
+      }
+
+      const secondaryTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: secondaryTableRows
+      });
+
       const showQualityReport = (job.processOperation === 'Grading' && job.defectTotalDefect !== undefined) ||
                                 (job.processOperation === 'PittingAndSlicing' && (
                                   job.slicingTime !== undefined ||
@@ -3034,6 +3223,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             metadataTable,
             new Paragraph({ text: "", spacing: { after: 200 } }),
             mainTables,
+            ...(showSecondaryTable ? [
+              secondaryTableTitle,
+              secondaryTable
+            ] : []),
             ...(showQualityReport ? [
               qualityReportTitle,
               qualityTable,
@@ -3614,7 +3807,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   warehouseCode: '',
                   inputs: [],
                   outputs: [],
-                  status: hasRole('Admin') ? 'Completed' : 'Pending Warehouse',
+                  scrapQty: 0,
+                  farzaQty: 0,
+                  seedQty: 0,
+                  wasteQty: 0,
+                  status: 'Pending Warehouse',
                   notes: '',
                   processOperation: ''
                 });
@@ -3844,6 +4041,56 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* Secondary Outputs & Losses */}
+            <div className="p-5 rounded-3xl bg-amber-50/10 dark:bg-amber-900/5 border border-amber-100/50 dark:border-amber-900/20 space-y-4">
+              <h3 className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2 text-xs uppercase tracking-wider">
+                <Trash2 size={16} />
+                {lang === 'ar' ? 'كميات المخرجات الفرعية والفواقد (كجم)' : 'Secondary Outputs & Losses (kg)'}
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase">{lang === 'ar' ? 'هري التشغيل' : 'Processing Scrap'}</span>
+                  <input 
+                    type="number" 
+                    value={newJob.scrapQty || ''}
+                    onChange={(e) => setNewJob({ ...newJob, scrapQty: parseFloat(e.target.value) || 0 })}
+                    placeholder="0"
+                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase">{lang === 'ar' ? 'الفرزة' : 'Reject (Farza)'}</span>
+                  <input 
+                    type="number" 
+                    value={newJob.farzaQty || ''}
+                    onChange={(e) => setNewJob({ ...newJob, farzaQty: parseFloat(e.target.value) || 0 })}
+                    placeholder="0"
+                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase">{lang === 'ar' ? 'البذرة' : 'Seed'}</span>
+                  <input 
+                    type="number" 
+                    value={newJob.seedQty || ''}
+                    onChange={(e) => setNewJob({ ...newJob, seedQty: parseFloat(e.target.value) || 0 })}
+                    placeholder="0"
+                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase">{lang === 'ar' ? 'الهالك' : 'Waste / Loss'}</span>
+                  <input 
+                    type="number" 
+                    value={newJob.wasteQty || ''}
+                    onChange={(e) => setNewJob({ ...newJob, wasteQty: parseFloat(e.target.value) || 0 })}
+                    placeholder="0"
+                    className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-amber-500 outline-none"
+                  />
                 </div>
               </div>
             </div>
@@ -4419,6 +4666,14 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                             >
                               <FileText size={18} />
                             </button>
+
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handlePrint(job); }}
+                              className="p-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
+                              title={lang === 'ar' ? 'طباعة' : 'Print'}
+                            >
+                              <Printer size={18} />
+                            </button>
                             <div className="h-6 w-[1px] bg-zinc-200 dark:bg-zinc-700 mx-1 xl:block" />
                             <div className="flex items-center gap-1">
                               {(hasRole('Admin') || (hasRole('Warehouse Operations') && job.status === 'Pending Warehouse') || (hasRole('Purchasing Operations') && job.status === 'Pending Purchasing') || job.createdBy === user.uid) && (
@@ -4682,6 +4937,42 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                             </div>
                           </div>
                         </div>
+
+                        {/* Secondary Outputs & Losses details */}
+                        {(job.scrapQty || job.farzaQty || job.seedQty || job.wasteQty) ? (
+                          <div className="mt-4 p-4 rounded-2xl bg-amber-50/10 dark:bg-amber-900/5 border border-amber-100/50 dark:border-amber-900/20">
+                            <h4 className="text-[10px] font-black tracking-wider text-amber-600 dark:text-amber-400 uppercase mb-3 flex items-center gap-2">
+                              <Trash2 size={12} />
+                              {lang === 'ar' ? 'المخرجات الفرعية والفواقد' : 'Secondary Outputs & Losses'}
+                            </h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              {job.scrapQty ? (
+                                <div className="bg-white dark:bg-zinc-800 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-700/50">
+                                  <span className="text-[9px] text-zinc-400 font-bold block leading-none mb-1">{lang === 'ar' ? 'هري التشغيل' : 'Processing Scrap'}</span>
+                                  <span className="text-xs font-black text-amber-600 font-mono">{job.scrapQty.toLocaleString()} kg</span>
+                                </div>
+                              ) : null}
+                              {job.farzaQty ? (
+                                <div className="bg-white dark:bg-zinc-800 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-700/50">
+                                  <span className="text-[9px] text-zinc-400 font-bold block leading-none mb-1">{lang === 'ar' ? 'الفرزة' : 'Reject (Farza)'}</span>
+                                  <span className="text-xs font-black text-amber-600 font-mono">{job.farzaQty.toLocaleString()} kg</span>
+                                </div>
+                              ) : null}
+                              {job.seedQty ? (
+                                <div className="bg-white dark:bg-zinc-800 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-700/50">
+                                  <span className="text-[9px] text-zinc-400 font-bold block leading-none mb-1">{lang === 'ar' ? 'البذرة' : 'Seed'}</span>
+                                  <span className="text-xs font-black text-amber-600 font-mono">{job.seedQty.toLocaleString()} kg</span>
+                                </div>
+                              ) : null}
+                              {job.wasteQty ? (
+                                <div className="bg-white dark:bg-zinc-800 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-700/50">
+                                  <span className="text-[9px] text-zinc-400 font-bold block leading-none mb-1">{lang === 'ar' ? 'الهالك' : 'Waste / Loss'}</span>
+                                  <span className="text-xs font-black text-amber-600 font-mono">{job.wasteQty.toLocaleString()} kg</span>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
 
                         {/* Comments/Notes section */}
                         {job.notes && (
