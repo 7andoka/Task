@@ -41,6 +41,7 @@ import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
 import { 
   Document, 
@@ -638,8 +639,27 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       return { id: matchedEntry.id, terms: allTerms };
     };
 
-    const matchesFilter = (itemValue: string, filterValue: string, categoryKey: keyof typeof CATEGORIES, itemName: string) => {
+    const matchesFilter = (itemValue: string, filterValue: string, categoryKey: keyof typeof CATEGORIES, itemName: string, itemProcess?: string) => {
       if (!filterValue) return true;
+
+      const normItemName = itemName.toLowerCase();
+      const isFarzaName = normItemName.includes('farza') || 
+                          normItemName.includes('bi product') || 
+                          normItemName.includes('bi products') || 
+                          itemName.includes('فرزة') || 
+                          itemName.includes('فرزه');
+      
+      const isFarza = itemProcess === 'FARZA' || isFarzaName;
+
+      // Special exception: FARZA items are general and can bypass type, size, or direction filter restrictions
+      if (isFarza && (categoryKey === 'type' || categoryKey === 'size' || categoryKey === 'direction')) {
+        return true;
+      }
+
+      // If filtering by process and the filter is 'FARZA', also accept any item that is Farza by name
+      if (categoryKey === 'process' && filterValue === 'FARZA' && isFarza) {
+        return true;
+      }
 
       const filtInfo = getTargetInfo(filterValue, categoryKey);
       if (!filtInfo) return true; // Shouldn't happen but fallback to match all
@@ -681,10 +701,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
     return dynamicItems.filter(item => {
       // 1. Check Dropdown Filters (Must match all selected)
-      if (!matchesFilter(item.process, filters.process, 'process', item.name)) return false;
-      if (!matchesFilter(item.direction, filters.direction, 'direction', item.name)) return false;
-      if (!matchesFilter(item.type, filters.type, 'type', item.name)) return false;
-      if (!matchesFilter(item.size, filters.size, 'size', item.name)) return false;
+      if (!matchesFilter(item.process, filters.process, 'process', item.name, item.process)) return false;
+      if (!matchesFilter(item.direction, filters.direction, 'direction', item.name, item.process)) return false;
+      if (!matchesFilter(item.type, filters.type, 'type', item.name, item.process)) return false;
+      if (!matchesFilter(item.size, filters.size, 'size', item.name, item.process)) return false;
 
       // 2. Check Global Text Search (Search against code, name, and attributes)
       if (search) {
@@ -767,7 +787,20 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     // Load Dynamic Items
     const unsubItems = onSnapshot(collection(db, COLLECTIONS.PROCESS_ITEMS), (snap) => {
       if (!snap.empty) {
-        setDynamicItems(snap.docs.map(d => d.data() as ProcessItem));
+        const dbItems = snap.docs.map(d => d.data() as ProcessItem);
+        const mergedMap = new Map<string, ProcessItem>();
+        
+        // Load defaults first to ensure they are always present
+        PROCESS_ITEMS_LIST.forEach(item => {
+          mergedMap.set(item.code, item);
+        });
+        
+        // Override with DB items (DB items take precedence)
+        dbItems.forEach(item => {
+          mergedMap.set(item.code, item);
+        });
+        
+        setDynamicItems(Array.from(mergedMap.values()));
       } else {
         setDynamicItems(PROCESS_ITEMS_LIST);
       }
@@ -2578,143 +2611,379 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     const isRtl = lang === 'ar';
     const trans = translations[lang];
     const toastId = toast.loading(isRtl ? 'جاري تحضير ملف Excel...' : 'Preparing Excel file...');
+
     try {
-      let workbook;
-      let worksheet;
+      // 1. Prepare data rows
+      const inputRows: { code: string; name: string | number; qty: number | string }[] = [];
+      job.inputs.forEach(input => {
+        inputRows.push({
+          code: input.itemCode,
+          name: input.itemName,
+          qty: input.quantity
+        });
+      });
+
+      if (job.scrapQty) {
+        inputRows.push({
+          code: isRtl ? 'هري التشغيل' : 'Processing Scrap',
+          name: job.scrapQty,
+          qty: ''
+        });
+      }
+      if (job.farzaQty) {
+        inputRows.push({
+          code: isRtl ? 'الفرزة' : 'Reject (Farza)',
+          name: job.farzaQty,
+          qty: ''
+        });
+      }
+      if (job.seedQty) {
+        inputRows.push({
+          code: isRtl ? 'البذرة' : 'Seed',
+          name: job.seedQty,
+          qty: ''
+        });
+      }
+      if (job.wasteQty) {
+        inputRows.push({
+          code: isRtl ? 'الهالك' : 'Waste / Loss',
+          name: job.wasteQty,
+          qty: ''
+        });
+      }
+
+      const outputRows: { code: string; name: string; qty: number | string }[] = [];
+      job.outputs.forEach(output => {
+        outputRows.push({
+          code: output.itemCode,
+          name: output.itemName,
+          qty: output.quantity
+        });
+      });
+
+      const numDataRows = Math.max(inputRows.length, outputRows.length, 1);
+
+      const warehouse = warehouses.find(w => w.id === job.warehouseId);
+      const pricePerKg = job.confirmedPrice || warehouse?.processingPricePerKg || 0;
+      const supplierCode = warehouse?.supplierCode || job.warehouseCode || '';
+      const supplierName = job.supplierName || job.thirdPartyName || warehouse?.name || '';
+      const warehouseCode = job.warehouseCode || '';
+
+      let workbook = new ExcelJS.Workbook();
+      let worksheet: ExcelJS.Worksheet;
       let loadedFromTemplate = false;
 
       try {
-        const response = await fetch('/sub.xlsx');
-        if (!response.ok) {
-          throw new Error('Template file sub.xlsx not found in public folder');
+        const response = await fetch('/op.xlsx');
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          await workbook.xlsx.load(arrayBuffer);
+          worksheet = workbook.worksheets[0] || workbook.getWorksheet(1);
+          loadedFromTemplate = true;
         }
-        const arrayBuffer = await response.arrayBuffer();
-        workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        worksheet = workbook.Sheets[sheetName];
-        loadedFromTemplate = true;
       } catch (templateError) {
-        console.warn("Could not load sub.xlsx template, falling back to clean sheet", templateError);
+        console.warn("Could not load template, using fallback styling from scratch", templateError);
       }
 
-      if (loadedFromTemplate && worksheet) {
-        const setCellValue = (ws: any, r: number, c: number, val: any) => {
-          const cellRef = XLSX.utils.encode_cell({ r, c });
-          if (!ws[cellRef]) {
-            ws[cellRef] = { t: 's', v: '' };
+      if (loadedFromTemplate && worksheet!) {
+        // Adjust sheet row counts
+        const defaultTemplateDataRows = 3; // rows 2, 3, 4 are template data rows
+        const originalTotalRowIdx = 5;
+
+        if (numDataRows > defaultTemplateDataRows) {
+          const rowsToAdd = numDataRows - defaultTemplateDataRows;
+          for (let k = 0; k < rowsToAdd; k++) {
+            const insertIdx = originalTotalRowIdx + k;
+            worksheet.insertRow(insertIdx, []);
+            
+            // Copy cell styles from Row 2 to the newly inserted row
+            const srcRow = worksheet.getRow(2);
+            const destRow = worksheet.getRow(insertIdx);
+            destRow.height = srcRow.height;
+            for (let c = 1; c <= 16; c++) {
+              const srcCell = srcRow.getCell(c);
+              const destCell = destRow.getCell(c);
+              destCell.style = JSON.parse(JSON.stringify(srcCell.style || {}));
+            }
           }
-          if (val === null || val === undefined || val === '') {
-            ws[cellRef].v = '';
-            ws[cellRef].t = 's';
-          } else if (typeof val === 'number') {
-            ws[cellRef].v = val;
-            ws[cellRef].t = 'n';
-          } else {
-            ws[cellRef].v = String(val);
-            ws[cellRef].t = 's';
-          }
-        };
-
-        const setCellFormula = (ws: any, r: number, c: number, formula: string) => {
-          const cellRef = XLSX.utils.encode_cell({ r, c });
-          if (!ws[cellRef]) {
-            ws[cellRef] = {};
-          }
-          ws[cellRef].t = 'n';
-          ws[cellRef].f = formula;
-          delete ws[cellRef].v; // Allow Excel to compute
-        };
-
-        // Write supplier / warehouse metadata in Column D rows 2, 3, 4 (0-indexed: row indexes 1, 2, 3)
-        // D2 value for "كود المورد"
-        setCellValue(worksheet, 1, 3, job.supplierName || job.thirdPartyName || '');
-        // D3 value for "المورد" / "اسم المورد"
-        setCellValue(worksheet, 2, 3, job.supplierName || job.thirdPartyName || '');
-        // D4 value for "كود المخزن"
-        setCellValue(worksheet, 3, 3, job.warehouseCode || '');
-
-        // G2, G3, G4, G5 are labels. Value cells are H2, H3, H4, H5 in Column H (col index 7)
-        setCellValue(worksheet, 1, 7, 0); // "سعر التشغيل" (Default to 0)
-        setCellFormula(worksheet, 2, 7, 'H2*H27'); // "اجمالى سعر التشغيل"
-        setCellFormula(worksheet, 3, 7, 'D27-H27'); // "الفرق"
-        setCellFormula(worksheet, 4, 7, 'IF(D27>0,H4/D27,0)'); // "النسبة"
-
-        const maxItems = Math.max(job.inputs.length, job.outputs.length);
-        
-        // Loop through the 18 pre-styled data rows: from template row index 8 to 25 (Excel rows 9 to 26)
-        for (let i = 0; i < 18; i++) {
-          const rowNum = 8 + i; 
-
-          // Date in Col 0 (Col A)
-          if (i < maxItems) {
-            setCellValue(worksheet, rowNum, 0, job.date);
-          } else {
-            setCellValue(worksheet, rowNum, 0, '');
-          }
-
-          // Inputs (Col 1: SAP code, Col 2: Name, Col 3: Qty)
-          if (i < job.inputs.length) {
-            const input = job.inputs[i];
-            setCellValue(worksheet, rowNum, 1, input.itemCode);
-            setCellValue(worksheet, rowNum, 2, input.itemName);
-            setCellValue(worksheet, rowNum, 3, input.quantity);
-          } else {
-            setCellValue(worksheet, rowNum, 1, '');
-            setCellValue(worksheet, rowNum, 2, '');
-            setCellValue(worksheet, rowNum, 3, '');
-          }
-
-          // Outputs (Col 5: SAP code, Col 6: Name, Col 7: Qty)
-          if (i < job.outputs.length) {
-            const output = job.outputs[i];
-            setCellValue(worksheet, rowNum, 5, output.itemCode);
-            setCellValue(worksheet, rowNum, 6, output.itemName);
-            setCellValue(worksheet, rowNum, 7, output.quantity);
-          } else {
-            setCellValue(worksheet, rowNum, 5, '');
-            setCellValue(worksheet, rowNum, 6, '');
-            setCellValue(worksheet, rowNum, 7, '');
+        } else if (numDataRows < defaultTemplateDataRows) {
+          const rowsToRemove = defaultTemplateDataRows - numDataRows;
+          for (let k = 0; k < rowsToRemove; k++) {
+            const deleteIdx = 4 - k;
+            worksheet.spliceRows(deleteIdx, 1);
           }
         }
-        worksheet['!ref'] = 'A1:H27';
+
+        const totalRowIdx = numDataRows + 2;
+
+        // Populate Data Rows
+        for (let i = 0; i < numDataRows; i++) {
+          const r = i + 2;
+          const row = worksheet.getRow(r);
+
+          // Date in Column A
+          if (i === 0) {
+            row.getCell(1).value = job.date;
+          } else {
+            row.getCell(1).value = '';
+          }
+
+          // Input Columns (B, C, D)
+          if (i < inputRows.length) {
+            const item = inputRows[i];
+            row.getCell(2).value = item.code;
+            row.getCell(3).value = item.name;
+            row.getCell(4).value = item.qty !== '' ? Number(item.qty) : '';
+          } else {
+            row.getCell(2).value = '';
+            row.getCell(3).value = '';
+            row.getCell(4).value = '';
+          }
+
+          // Output Columns (E, F, G)
+          if (i < outputRows.length) {
+            const item = outputRows[i];
+            row.getCell(5).value = item.code;
+            row.getCell(6).value = item.name;
+            row.getCell(7).value = item.qty !== '' ? Number(item.qty) : '';
+          } else {
+            row.getCell(5).value = '';
+            row.getCell(6).value = '';
+            row.getCell(7).value = '';
+          }
+
+          // Metadata Columns (J, K, L, M) - on first data row only
+          if (i === 0) {
+            row.getCell(10).value = supplierCode;
+            row.getCell(11).value = supplierName;
+            row.getCell(12).value = warehouseCode;
+            row.getCell(13).value = job.notes || '';
+          } else {
+            row.getCell(10).value = '';
+            row.getCell(11).value = '';
+            row.getCell(12).value = '';
+            row.getCell(13).value = '';
+          }
+
+          // Clear remaining cells on data rows for safe formatting
+          row.getCell(8).value = ''; // H (سعر التشغيل)
+          row.getCell(9).value = ''; // I (اجمالى سعر التشغيل)
+          row.getCell(14).value = ''; // N (الفرق)
+          row.getCell(15).value = ''; // O (النسبة)
+          row.getCell(16).value = ''; // P (السعر)
+        }
+
+        // Populate Total Row
+        const totalRow = worksheet.getRow(totalRowIdx);
+        totalRow.getCell(1).value = isRtl ? 'الاجمالي' : 'Total';
+        totalRow.getCell(4).value = { formula: `SUM(D2:D${totalRowIdx - 1})` };
+        totalRow.getCell(7).value = { formula: `SUM(G2:G${totalRowIdx - 1})` };
+        totalRow.getCell(8).value = Number(pricePerKg);
+        totalRow.getCell(9).value = { formula: `H${totalRowIdx}*D${totalRowIdx}` };
+        totalRow.getCell(14).value = { formula: `D${totalRowIdx}-G${totalRowIdx}` };
+        totalRow.getCell(15).value = { formula: `N${totalRowIdx}/D${totalRowIdx}` };
+
+        // Ensure proper percentage styling is retained
+        const cellO = totalRow.getCell(15);
+        cellO.numFmt = '0.0%';
+
+        // Force RTL view state and gridlines visible
+        worksheet.views = [{ showGridLines: true, rightToLeft: true }];
+
+        // Explicitly set column widths to ensure perfect readability and avoid "#####"
+        worksheet.getColumn(1).width = 14;  // التاريخ
+        worksheet.getColumn(2).width = 16;  // كود ساب مدخل
+        worksheet.getColumn(3).width = 42;  // اسم الصنف مدخل
+        worksheet.getColumn(4).width = 16;  // الكمية مدخل
+        worksheet.getColumn(5).width = 16;  // كود ساب مخرج
+        worksheet.getColumn(6).width = 42;  // اسم الصنف مخرج
+        worksheet.getColumn(7).width = 16;  // الكمية مخرج
+        worksheet.getColumn(8).width = 16;  // سعر التشغيل
+        worksheet.getColumn(9).width = 22;  // اجمالى سعر التشغيل
+        worksheet.getColumn(10).width = 16; // كود المورد
+        worksheet.getColumn(11).width = 28; // المورد
+        worksheet.getColumn(12).width = 16; // كود المخزن
+        worksheet.getColumn(13).width = 30; // ملاحظات
+        worksheet.getColumn(14).width = 16; // الفرق
+        worksheet.getColumn(15).width = 16; // النسبة
+        worksheet.getColumn(16).width = 16; // السعر
+
       } else {
-        const totalIn = job.inputs.reduce((sum, i) => sum + i.quantity, 0);
-        const totalOut = job.outputs.reduce((sum, i) => sum + i.quantity, 0);
-        const yieldPercentage = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(1) : '0.0';
-        const lossPercentage = totalIn > 0 ? (((totalIn - totalOut) / totalIn) * 100).toFixed(1) : '0.0';
-        const reportRows = [
-          [isRtl ? 'تقرير عملية تشغيل' : 'Processing Report'],
-          [trans.processDate, job.date],
-          [`${isRtl ? 'المخزن' : 'Warehouse'}: ${job.warehouseName} (${job.warehouseCode})`],
-          [isRtl ? 'إجمالي المدخلات' : 'Total Inputs', `${totalIn} kg`],
-          [isRtl ? 'إجمالي المخرجات' : 'Total Outputs', `${totalOut} kg`],
-          [isRtl ? 'نسبة التشغيل' : 'Yield', `${yieldPercentage}%`],
-          [isRtl ? 'نسبة الفقد' : 'Loss %', `${lossPercentage}%`],
-          [],
-          [trans.inputs],
-          ['Code', 'Name', 'Qty'],
-          ...job.inputs.map(i => [i.itemCode, i.itemName, i.quantity]),
-          [],
-          [trans.outputs],
-          ['Code', 'Name', 'Qty'],
-          ...job.outputs.map(i => [i.itemCode, i.itemName, i.quantity])
+        // High fidelity styled manual fallback
+        worksheet = workbook.addWorksheet('Sheet1', { views: [{ showGridLines: true, rightToLeft: true }] });
+
+        // Set column widths
+        worksheet.getColumn(1).width = 14;  // التاريخ
+        worksheet.getColumn(2).width = 16;  // كود ساب مدخل
+        worksheet.getColumn(3).width = 42;  // اسم الصنف مدخل
+        worksheet.getColumn(4).width = 16;  // الكمية مدخل
+        worksheet.getColumn(5).width = 16;  // كود ساب مخرج
+        worksheet.getColumn(6).width = 42;  // اسم الصنف مخرج
+        worksheet.getColumn(7).width = 16;  // الكمية مخرج
+        worksheet.getColumn(8).width = 16;  // سعر التشغيل
+        worksheet.getColumn(9).width = 22;  // اجمالى سعر التشغيل
+        worksheet.getColumn(10).width = 16; // كود المورد
+        worksheet.getColumn(11).width = 28; // المورد
+        worksheet.getColumn(12).width = 16; // كود المخزن
+        worksheet.getColumn(13).width = 30; // ملاحظات
+        worksheet.getColumn(14).width = 16; // الفرق
+        worksheet.getColumn(15).width = 16; // النسبة
+        worksheet.getColumn(16).width = 16; // السعر
+
+        // Define styling objects
+        const headerFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 11, bold: true, color: { argb: '000000' } };
+        const dataFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 10, color: { argb: '000000' } };
+        const boldDataFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 10, bold: true, color: { argb: '000000' } };
+        const redBoldFont: Partial<ExcelJS.Font> = { name: 'Arial', size: 10, bold: true, color: { argb: '9C0006' } };
+
+        const headerFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D9D9D9' } }; // Light gray header
+        const qtyFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2CC' } }; // Soft gold/yellow
+        const supplierFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FCE4D6' } }; // Soft orange
+        const codeFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'DDEBF7' } }; // Soft blue
+        const totalRowFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } }; // Yellow
+        const ratioFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } }; // Special ratio row column
+        
+        const thinBorder: Partial<ExcelJS.Borders> = {
+          top: { style: 'thin' as const, color: { argb: 'A0A0A0' } },
+          left: { style: 'thin' as const, color: { argb: 'A0A0A0' } },
+          bottom: { style: 'thin' as const, color: { argb: 'A0A0A0' } },
+          right: { style: 'thin' as const, color: { argb: 'A0A0A0' } }
+        };
+
+        const centerAlignment: Partial<ExcelJS.Alignment> = { 
+          vertical: 'middle' as const, 
+          horizontal: 'center' as const, 
+          wrapText: true 
+        };
+
+        // 1. Write Header Row
+        const headers = [
+          isRtl ? 'التاريخ' : 'Date',
+          isRtl ? 'كود ساب مدخل' : 'Input SAP Code',
+          isRtl ? 'اسم الصنف مدخل' : 'Input Item Name',
+          isRtl ? 'الكمية مدخل' : 'Input Qty',
+          isRtl ? 'كود ساب مخرج' : 'Output SAP Code',
+          isRtl ? 'اسم الصنف مخرج' : 'Output Item Name',
+          isRtl ? 'الكمية مخرج' : 'Output Qty',
+          isRtl ? 'سعر التشغيل' : 'Processing Price',
+          isRtl ? 'اجمالى سعر التشغيل' : 'Total Processing Price',
+          isRtl ? 'كود المورد' : 'Supplier Code',
+          isRtl ? 'المورد' : 'Supplier',
+          isRtl ? 'كود المخزن' : 'Warehouse Code',
+          isRtl ? 'ملاحظات' : 'Notes',
+          isRtl ? 'الفرق' : 'Difference',
+          isRtl ? 'النسبة' : 'Percentage',
+          isRtl ? 'السعر' : 'Price'
         ];
 
-        if (job.scrapQty || job.farzaQty || job.seedQty || job.wasteQty) {
-          reportRows.push([], [isRtl ? 'المخرجات الفرعية والفواقد' : 'Secondary Outputs & Losses']);
-          if (job.scrapQty) reportRows.push([isRtl ? 'هري التشغيل' : 'Processing Scrap', `${job.scrapQty} kg`]);
-          if (job.farzaQty) reportRows.push([isRtl ? 'الفرزة' : 'Reject (Farza)', `${job.farzaQty} kg`]);
-          if (job.seedQty) reportRows.push([isRtl ? 'البذرة' : 'Seed', `${job.seedQty} kg`]);
-          if (job.wasteQty) reportRows.push([isRtl ? 'الهالك' : 'Waste / Loss', `${job.wasteQty} kg`]);
+        const headerRow = worksheet.getRow(1);
+        headerRow.height = 30;
+        for (let c = 1; c <= 16; c++) {
+          const cell = headerRow.getCell(c);
+          cell.value = headers[c - 1];
+          cell.font = headerFont;
+          cell.fill = headerFill;
+          cell.border = thinBorder;
+          cell.alignment = centerAlignment;
         }
 
-        worksheet = XLSX.utils.aoa_to_sheet(reportRows);
-        workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Report");
+        // 2. Populate Data Rows
+        for (let i = 0; i < numDataRows; i++) {
+          const r = i + 2;
+          const row = worksheet.getRow(r);
+          row.height = 24;
+
+          for (let c = 1; c <= 16; c++) {
+            const cell = row.getCell(c);
+            cell.font = dataFont;
+            cell.border = thinBorder;
+            cell.alignment = centerAlignment;
+          }
+
+          // Date Col A
+          if (i === 0) {
+            row.getCell(1).value = job.date;
+          }
+
+          // Input B, C, D
+          if (i < inputRows.length) {
+            const item = inputRows[i];
+            row.getCell(2).value = item.code;
+            row.getCell(3).value = item.name;
+            if (item.qty !== '') {
+              row.getCell(4).value = Number(item.qty);
+              row.getCell(4).fill = qtyFill;
+              row.getCell(4).numFmt = '#,##0';
+            }
+          }
+
+          // Output E, F, G
+          if (i < outputRows.length) {
+            const item = outputRows[i];
+            row.getCell(5).value = item.code;
+            row.getCell(6).value = item.name;
+            if (item.qty !== '') {
+              row.getCell(7).value = Number(item.qty);
+              row.getCell(7).fill = qtyFill;
+              row.getCell(7).numFmt = '#,##0';
+            }
+          }
+
+          // Metadata J, K, L, M
+          if (i === 0) {
+            row.getCell(10).value = supplierCode;
+            row.getCell(10).fill = codeFill;
+            row.getCell(11).value = supplierName;
+            row.getCell(11).fill = supplierFill;
+            row.getCell(12).value = warehouseCode;
+            row.getCell(13).value = job.notes || '';
+          }
+        }
+
+        // 3. Populate Total Row (Row numDataRows + 2)
+        const totalRowIdx = numDataRows + 2;
+        const totalRow = worksheet.getRow(totalRowIdx);
+        totalRow.height = 28;
+
+        for (let c = 1; c <= 16; c++) {
+          const cell = totalRow.getCell(c);
+          cell.font = boldDataFont;
+          cell.border = thinBorder;
+          cell.alignment = centerAlignment;
+          cell.fill = totalRowFill;
+        }
+
+        totalRow.getCell(1).value = isRtl ? 'الاجمالي' : 'Total';
+        
+        const cellD = totalRow.getCell(4);
+        cellD.value = { formula: `SUM(D2:D${totalRowIdx - 1})` };
+        cellD.numFmt = '#,##0';
+
+        const cellG = totalRow.getCell(7);
+        cellG.value = { formula: `SUM(G2:G${totalRowIdx - 1})` };
+        cellG.numFmt = '#,##0';
+
+        const cellH = totalRow.getCell(8);
+        cellH.value = Number(pricePerKg);
+        cellH.numFmt = '#,##0.00';
+
+        const cellI = totalRow.getCell(9);
+        cellI.value = { formula: `H${totalRowIdx}*D${totalRowIdx}` };
+        cellI.numFmt = '#,##0.00';
+
+        const cellN = totalRow.getCell(14);
+        cellN.value = { formula: `D${totalRowIdx}-G${totalRowIdx}` };
+        cellN.numFmt = '#,##0';
+
+        const cellO = totalRow.getCell(15);
+        cellO.value = { formula: `N${totalRowIdx}/D${totalRowIdx}` };
+        cellO.numFmt = '0.0%';
+        cellO.font = redBoldFont; // Red text for loss ratio
       }
 
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      // Write and save
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const fileName = `Job_${job.warehouseCode || 'Report'}_${job.date}.xlsx`;
 
       const url = URL.createObjectURL(blob);
@@ -4665,6 +4934,14 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                               title={lang === 'ar' ? 'تصدير Word' : 'Export Word'}
                             >
                               <FileText size={18} />
+                            </button>
+
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); exportSingleJobToExcel(job); }}
+                              className="p-2 text-emerald-600 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
+                              title={lang === 'ar' ? 'تصدير Excel' : 'Export Excel'}
+                            >
+                              <FileSpreadsheet size={18} />
                             </button>
 
                             <button 
