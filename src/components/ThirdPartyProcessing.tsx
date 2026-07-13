@@ -418,6 +418,23 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     }
     return userRoles.includes(rolesToCheck as any);
   };
+
+  const canEditJob = (job: ProcessingJob) => {
+    if (hasRole('Admin')) return true;
+    if (job.status === 'Completed' || job.status === 'Rejected') return false;
+
+    // Creator can only edit if status is Pending Warehouse
+    if (job.createdBy === user?.uid && job.status === 'Pending Warehouse') return true;
+
+    // Warehouse Operations can edit in Pending Warehouse or Pending Completion
+    if (hasRole('Warehouse Operations') && (job.status === 'Pending Warehouse' || job.status === 'Pending Completion')) return true;
+
+    // Purchasing Operations can edit in Pending Purchasing
+    if (hasRole('Purchasing Operations') && job.status === 'Pending Purchasing') return true;
+
+    return false;
+  };
+
   const t = translations[lang];
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -1513,9 +1530,6 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   };
 
   const filteredJobs = jobs.filter(job => {
-    // Admin sees everything
-    if (hasRole('Admin')) return true;
-
     // Search filter
     const matchesSearch = (
       job.warehouseName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1523,32 +1537,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     );
     if (!matchesSearch) return false;
 
-    // Role-based workflow visibility logic
-    const userRoles = user?.roles || (user?.role ? [user.role] : []);
-    
-    // If user has multiple roles, they should see everything relevant to any of them
-    let isVisible = false;
-
-    if (userRoles.includes('Customer Operations')) {
-      if (job.createdBy === user.uid || job.status === 'Completed') isVisible = true;
-    }
-
-    if (userRoles.includes('Warehouse Operations')) {
-      // Warehouse sees everything they need to approve or complete
-      isVisible = true;
-    }
-
-    if (userRoles.includes('Quality Operations')) {
-      // Quality sees jobs waiting for their inspection and completed jobs
-      if (job.status === 'Pending Quality' || job.status === 'Completed') isVisible = true;
-    }
-
-    if (userRoles.includes('Purchasing Operations')) {
-      // Purchasing sees jobs waiting for their price confirmation and completed jobs
-      if (job.status === 'Pending Purchasing' || job.status === 'Completed') isVisible = true;
-    }
-
-    return isVisible;
+    // All jobs are visible to all users
+    return true;
   });
 
   const handleApproveWarehouse = async (job: ProcessingJob) => {
@@ -4953,7 +4943,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                             </button>
                             <div className="h-6 w-[1px] bg-zinc-200 dark:bg-zinc-700 mx-1 xl:block" />
                             <div className="flex items-center gap-1">
-                              {(hasRole('Admin') || (hasRole('Warehouse Operations') && job.status === 'Pending Warehouse') || (hasRole('Purchasing Operations') && job.status === 'Pending Purchasing') || job.createdBy === user.uid) && (
+                              {canEditJob(job) && (
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
                                   className="p-2 text-blue-500 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-all"
