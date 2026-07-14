@@ -53,6 +53,7 @@ interface KPIDashboardProps {
   lang: Language;
   user: UserProfile;
   isDark?: boolean;
+  setIsDark?: (dark: boolean) => void;
 }
 
 // Full interface matching the image structures
@@ -170,7 +171,7 @@ const DEFAULT_KPI_DATA: KPIData = {
 const SHIFTS_AR = ['الصباحية', 'المسائية', 'الليلية'];
 const SHIFTS_EN = ['Morning', 'Evening', 'Night'];
 
-export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboardProps) {
+export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: KPIDashboardProps) {
   const isRtl = lang === 'ar';
   const boardRef = useRef<HTMLDivElement>(null);
 
@@ -191,7 +192,15 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
 
   // TV Presentation/Fullscreen mode settings
   const [isTvMode, setIsTvMode] = useState<boolean>(false);
-  const [tvTheme, setTvTheme] = useState<'light' | 'dark'>('light');
+  const [localIsDark, setLocalIsDark] = useState<boolean>(isDark);
+  const activeDark = setIsDark ? isDark : localIsDark;
+  const toggleDark = () => {
+    if (setIsDark) {
+      setIsDark(!isDark);
+    } else {
+      setLocalIsDark(!localIsDark);
+    }
+  };
   const [tvZoom, setTvZoom] = useState<number>(1.0);
   const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
   const [refreshTimer, setRefreshTimer] = useState<number>(60);
@@ -1654,8 +1663,8 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
     </div>
   );
 
-  const isTvThemeDark = isTvMode && tvTheme === 'dark';
-  const isCurrentDark = isTvMode ? (tvTheme === 'dark') : isDark;
+  const isTvThemeDark = isTvMode && activeDark;
+  const isCurrentDark = activeDark;
 
   return (
     <div 
@@ -1670,7 +1679,7 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
       {isTvMode ? (
         /* GORGEOUS AUTOPLAYING INDUSTRIAL WIDESCREEN TV FLOATING CONTROL BAR */
         <div id="tv-control-bar" className={`flex flex-wrap items-center justify-between gap-4 p-4 rounded-3xl mb-1 border transition-colors duration-300 ${
-          tvTheme === 'dark' 
+          activeDark 
             ? 'bg-zinc-900/90 border-zinc-800 text-zinc-200' 
             : 'bg-white/95 border-zinc-200 text-zinc-800'
         } backdrop-blur-md shadow-lg sticky top-0 z-[10000] select-none`}>
@@ -1702,7 +1711,7 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
               className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[11px] font-bold transition-all cursor-pointer select-none ${
                 isAutoFit 
                   ? 'bg-emerald-505/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' 
-                  : (tvTheme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
+                  : (activeDark ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
               }`}
               title={isRtl ? 'تفعيل ملاءمة الشاشة التلقائية لحجم التلفزيون' : 'Auto fit dashboard to screen size'}
             >
@@ -1712,7 +1721,7 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
 
             {/* Sizing Scaling Keyboard instructions & buttons */}
             <div className={`flex items-center gap-2 border px-3 py-1 rounded-2xl ${
-              tvTheme === 'dark' ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-50'
+              activeDark ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-50'
             }`}>
               <span className="text-[10px] font-bold text-zinc-400">{isRtl ? 'حجم الشاشة (+ / -):' : 'TV Zoom (+/-):'}</span>
               <button 
@@ -1740,15 +1749,15 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
 
             {/* TV Day Night theme toggler */}
             <button
-              onClick={() => setTvTheme(t => t === 'light' ? 'dark' : 'light')}
+              onClick={toggleDark}
               className={`p-2 rounded-2xl border transition-colors ${
-                tvTheme === 'dark' 
-                  ? 'bg-zinc-800 border-zinc-700 text-amber-400 hover:bg-zinc-700' 
+                activeDark 
+                  ? 'bg-zinc-800 border-zinc-700 text-amber-400 hover:bg-zinc-750' 
                   : 'bg-zinc-50 border-zinc-200 text-indigo-900 hover:bg-zinc-100'
               }`}
               title={isRtl ? 'تبديل المظهر النهاري/المسائي للتلفزيون' : 'Switch TV Widescreen Dark/Light colors'}
             >
-              {tvTheme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              {activeDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
 
             {/* TV Customize Layout Panel toggle */}
@@ -1757,7 +1766,7 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border text-[11px] font-bold transition-all cursor-pointer select-none ${
                 showCustomizer 
                   ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30' 
-                  : (tvTheme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
+                  : (activeDark ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
               }`}
               title={isRtl ? 'تخصيص ترتيب وحجم الخط والبطاقات على التلفزيون' : 'Customize layouts, order, and font on TV'}
             >

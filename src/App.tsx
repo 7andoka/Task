@@ -480,7 +480,7 @@ export default function App() {
       case 'finishedProduct':
         return <CsvDataView lang={lang} />;
       case 'kpis':
-        return <KPIDashboard lang={lang} user={user} isDark={isDark} />;
+        return <KPIDashboard lang={lang} user={user} isDark={isDark} setIsDark={setIsDark} />;
       case 'tasks':
         return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':
