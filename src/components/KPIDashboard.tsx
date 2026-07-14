@@ -208,6 +208,7 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
   // Layout customization settings
   const [showCustomizer, setShowCustomizer] = useState<boolean>(false);
+  const [showControlPanel, setShowControlPanel] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg' | 'xl'>(() => {
     return (localStorage.getItem('kpi_font_size') as any) || 'base';
   });
@@ -1807,86 +1808,8 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
           </div>
         </div>
       ) : (
-        /* Configuration Header Action buttons */
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-zinc-100/50 dark:bg-zinc-800/30 p-4 rounded-3xl border border-zinc-200/50 dark:border-zinc-800/30">
-          <div className="flex items-center gap-3">
-            <LayoutGrid className="text-emerald-500 w-6 h-6 animate-pulse" />
-            <div>
-              <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                {isRtl ? 'لوحة متابعة مؤشرات الأداء اليومية' : 'Daily KPI Monitoring Dashboard'}
-              </h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                {isRtl ? 'استعراض حالة الإنتاج، الجودة والسلامة ومزامنتها مباشرة من جوجل شيت' : 'Inspect production, quality & safety metrics compiled or pulled from web sheets'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Calendar Picker */}
-            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-1.5 shadow-sm text-xs font-bold text-zinc-700 dark:text-zinc-300">
-              <Calendar size={14} className="text-zinc-400 mr-1.5 ml-1.5" />
-              <input 
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="bg-transparent outline-none cursor-pointer focus:ring-0 text-xs w-28 md:w-auto"
-              />
-            </div>
-
-            {/* Sync Button */}
-            <button
-              onClick={() => setShowConfig(!showConfig)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-2xl text-xs font-black transition-all border border-emerald-500/15"
-            >
-              <FileSpreadsheet size={14} />
-              <span>{isRtl ? 'ربط جوجل شيت' : 'Sync Google Sheet'}</span>
-            </button>
-
-            {/* Manual Editor Trigger */}
-            <button
-              onClick={handleOpenManualEditor}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-2xl text-xs font-black transition-all border border-blue-500/15"
-            >
-              <Edit3 size={14} />
-              <span>{isRtl ? 'تعديل يدوي' : 'Manual Edit'}</span>
-            </button>
-
-            {/* Customize Layout Trigger */}
-            <button
-              onClick={() => {
-                setShowCustomizer(!showCustomizer);
-                setShowConfig(false);
-              }}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl text-xs font-black transition-all border cursor-pointer ${
-                showCustomizer 
-                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30' 
-                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/15'
-              }`}
-            >
-              <Sliders size={14} />
-              <span>{isRtl ? 'تعديل الترتيب والمساحات' : 'Customize Layout'}</span>
-            </button>
-
-            {/* TV Broadcast launch button */}
-            <button
-              onClick={handleToggleFullscreen}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400 rounded-2xl text-xs font-black transition-all border border-teal-500/15"
-              title={isRtl ? 'بث على شاشة التلفزيون' : 'Broadcast to TV Screen'}
-            >
-              <Tv size={14} className="animate-pulse" />
-              <span>{isRtl ? 'بث التلفزيون (كامل الشاشة)' : 'TV Broadcast Mode'}</span>
-            </button>
-
-            {/* PDF Exporter */}
-            <button
-              onClick={handleExportPDF}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white rounded-2xl text-xs font-black transition-all shadow-md"
-            >
-              <Printer size={14} />
-              <span>{isRtl ? 'تحميل كـ PDF' : 'Download PDF'}</span>
-            </button>
-          </div>
-        </div>
+        /* The old action bar has been removed to free up screen space. All controls are now accessible via the floating control panel button next to the logo or the persistent FAB. */
+        null
       )}
 
       {/* Sheets Sync Collapsible Panel - Hidden on TV Mode */}
@@ -2290,7 +2213,17 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
               </div>
 
               {/* Brand and Logo (Last in JSX renders on the left in RTL, achieving "top-left" position) */}
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-4 shrink-0">
+                {/* Elegant, clean header trigger button for our floating Quick Control Panel */}
+                <button
+                  onClick={() => setShowControlPanel(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#0E5F59] dark:bg-emerald-650 hover:bg-[#0C4E49] dark:hover:bg-emerald-600 text-white rounded-2xl text-xs font-black shadow-lg transition-all duration-300 select-none hover:scale-[1.03] active:scale-[0.97]"
+                  title={isRtl ? 'لوحة التحكم وإعدادات العرض' : 'Control Panel & Display Settings'}
+                >
+                  <Settings size={15} className="animate-spin-slow" />
+                  <span>{isRtl ? 'لوحة التحكم' : 'Control Panel'}</span>
+                </button>
+
                 <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-zinc-200/60 flex items-center justify-center select-none">
                   <img 
                     src="/logo.png" 
@@ -2879,6 +2812,165 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
                   <Save size={14} />
                   <span>{isRtl ? 'حفظ التعديلات' : 'Save Changes'}</span>
                 </button>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* PERSISTENT FLOATING CONTROL BUTTON */}
+      {!isTvMode && (
+        <div className="fixed bottom-6 left-6 z-[999]">
+          <button
+            onClick={() => setShowControlPanel(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-650 hover:from-emerald-700 hover:to-teal-700 text-white rounded-full text-xs font-black shadow-2xl transition-all duration-300 select-none hover:scale-105 active:scale-95 border-2 border-white dark:border-zinc-800"
+          >
+            <Settings size={15} className="animate-spin-slow" />
+            <span>{isRtl ? 'لوحة التحكم والخيارات' : 'Control Panel'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* FLOATING ACTION CONTROL PANEL MODAL (الشاشة العائمة) */}
+      <AnimatePresence>
+        {showControlPanel && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+            {/* Backdrop with blur */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowControlPanel(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+
+            {/* Modal Content container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={`relative w-full max-w-md p-6 rounded-[28px] shadow-2xl border transition-all overflow-hidden ${
+                isCurrentDark 
+                  ? 'bg-zinc-900 border-zinc-800 text-zinc-100' 
+                  : 'bg-white border-zinc-200 text-zinc-850'
+              }`}
+              dir="rtl"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center pb-4 mb-4 border-b border-zinc-200 dark:border-zinc-800">
+                <h3 className="text-sm font-black flex items-center gap-2 text-[#0D5F54] dark:text-emerald-400">
+                  <Settings size={16} className="animate-spin-slow" />
+                  <span>{isRtl ? 'لوحة التحكم وإعدادات العرض' : 'Control Panel & Display Settings'}</span>
+                </h3>
+                <button
+                  onClick={() => setShowControlPanel(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-750 transition-colors text-zinc-500 dark:text-zinc-400"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Grid of operational buttons */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                
+                {/* Button 1: TV Broadcast Mode Toggle (بث التلفزيون / خروج من البث) */}
+                <button
+                  onClick={() => {
+                    setShowControlPanel(false);
+                    handleToggleFullscreen();
+                  }}
+                  className="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 text-teal-600 dark:text-teal-400 font-bold transition-all text-center gap-2 active:scale-95"
+                >
+                  <Tv size={20} className="text-teal-500" />
+                  <span className="text-[11px] font-black">
+                    {isTvMode 
+                      ? (isRtl ? 'خروج من البث' : 'Exit TV Broadcast') 
+                      : (isRtl ? 'بث التلفزيون (كامل الشاشة)' : 'TV Broadcast Mode')}
+                  </span>
+                </button>
+
+                {/* Button 2: Customize Spaces & Layout (تعديل المساحات) */}
+                <button
+                  onClick={() => {
+                    setShowControlPanel(false);
+                    setShowCustomizer(!showCustomizer);
+                    setShowConfig(false);
+                  }}
+                  className="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-bold transition-all text-center gap-2 active:scale-95"
+                >
+                  <Sliders size={20} className="text-amber-500" />
+                  <span className="text-[11px] font-black">
+                    {isRtl ? 'تعديل الترتيب والمساحات' : 'Adjust Layout & Spaces'}
+                  </span>
+                </button>
+
+                {/* Button 3: Manual Edit (التعديل اليدوي) */}
+                <button
+                  onClick={() => {
+                    setShowControlPanel(false);
+                    handleOpenManualEditor();
+                  }}
+                  className="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-400 font-bold transition-all text-center gap-2 active:scale-95"
+                >
+                  <Edit3 size={20} className="text-blue-500" />
+                  <span className="text-[11px] font-black">
+                    {isRtl ? 'تعديل يدوي للمؤشرات' : 'Manual Edit'}
+                  </span>
+                </button>
+
+                {/* Button 4: Google Sheets Sync (ربط جوجل) */}
+                <button
+                  onClick={() => {
+                    setShowControlPanel(false);
+                    setShowConfig(!showConfig);
+                    setShowCustomizer(false);
+                  }}
+                  className="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold transition-all text-center gap-2 active:scale-95"
+                >
+                  <FileSpreadsheet size={20} className="text-emerald-500" />
+                  <span className="text-[11px] font-black">
+                    {isRtl ? 'ربط جوجل شيت' : 'Google Sheet Sync'}
+                  </span>
+                </button>
+
+                {/* Button 5: Download PDF */}
+                <button
+                  onClick={() => {
+                    setShowControlPanel(false);
+                    handleExportPDF();
+                  }}
+                  className="flex flex-col items-center justify-center p-3.5 rounded-2xl bg-zinc-500/10 hover:bg-zinc-500/20 border border-zinc-500/20 text-zinc-650 dark:text-zinc-300 font-bold transition-all text-center gap-2 active:scale-95 col-span-2"
+                >
+                  <Printer size={18} className="text-zinc-500 dark:text-zinc-400" />
+                  <span className="text-[11px] font-black">
+                    {isRtl ? 'تحميل التقرير كـ PDF' : 'Download PDF Report'}
+                  </span>
+                </button>
+
+              </div>
+
+              {/* Date selection field integrated natively in the floating screen */}
+              <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/30 space-y-1.5">
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-bold block">تاريخ عرض البيانات ومزامنته:</span>
+                <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-250 dark:border-zinc-700/80 rounded-xl px-3 py-1.5 font-mono">
+                  <Calendar size={13} className="text-zinc-400" />
+                  <input 
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="bg-transparent outline-none cursor-pointer focus:ring-0 text-xs w-full text-right"
+                  />
+                </div>
+              </div>
+
+              {/* Footer notes */}
+              <div className="mt-4 text-center">
+                <p className="text-[10px] text-zinc-400 font-bold">
+                  {isRtl 
+                    ? 'ريتش لاند للصناعات الغذائية - لوحة مؤشرات الأداء' 
+                    : 'Rich Land Food Industries - KPI Dashboard'}
+                </p>
               </div>
 
             </motion.div>
