@@ -276,6 +276,17 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
   // Typography Scaling Helper
   const getFontSizeClass = (level: 'title' | 'subtitle' | 'table-head' | 'table-body' | 'text' | 'section-header' | 'sub-text' | 'legend-title' | 'card-title') => {
+    if (isTvMode) {
+      if (level === 'title') return 'text-lg md:text-xl font-black';
+      if (level === 'subtitle') return 'text-[10px] md:text-[11px] font-bold';
+      if (level === 'card-title') return 'text-[10px] md:text-[11px] font-black';
+      if (level === 'section-header') return 'text-[10px] md:text-[11px] font-black py-1';
+      if (level === 'table-head') return 'text-[9px] md:text-[10px] py-0.5';
+      if (level === 'table-body') return 'text-[10px] md:text-[11.5px] py-0.5';
+      if (level === 'sub-text') return 'text-[8.5px] md:text-[9.5px]';
+      if (level === 'legend-title') return 'text-[10px]';
+      return 'text-[10px]';
+    }
     if (fontSize === 'sm') {
       if (level === 'title') return 'text-xl md:text-2xl font-black';
       if (level === 'subtitle') return 'text-[11px] md:text-xs font-bold';
@@ -323,6 +334,12 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
   // Card Spacing and Padding Helper
   const getSpacingClass = (type: 'grid' | 'card-padding' | 'card-header' | 'container-spacing') => {
+    if (isTvMode) {
+      if (type === 'grid') return 'gap-2';
+      if (type === 'card-padding') return 'p-2 md:p-3';
+      if (type === 'card-header') return 'p-1.5 px-3.5 text-[11px]';
+      if (type === 'container-spacing') return 'space-y-1.5';
+    }
     if (cardSpacing === 'sm') {
       if (type === 'grid') return 'gap-3';
       if (type === 'card-padding') return 'p-2';
@@ -340,6 +357,11 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
     if (type === 'card-padding') return 'p-3';
     if (type === 'card-header') return 'p-3 px-4 text-sm';
     if (type === 'container-spacing') return 'space-y-6';
+  };
+
+  // Dynamic Table Cell Padding Helper
+  const getTdPadding = (defaultPy: string) => {
+    return isTvMode ? 'py-0.5 md:py-1' : defaultPy;
   };
 
   // Auto scale / zoom dashboard to fit any TV screen perfectly
@@ -1154,12 +1176,12 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
   const renderCard = (cardId: string) => {
     if (cardId === 'production') {
       return (
-        <div key="production" id="kpi-card-production" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900 animate-fade-in`}>
+        <div key="production" id="kpi-card-production" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900 animate-fade-in ${isTvMode ? 'h-full flex-1' : ''}`}>
           <div className="p-3 px-4 bg-[#0E5F59] text-white flex items-center justify-between font-black">
             <span className={getFontSizeClass('card-title')}>الإنتاج (Production)</span>
             <Settings size={15} />
           </div>
-          <div className={`flex-1 ${getSpacingClass('card-padding')}`}>
+          <div className={`flex-1 ${getSpacingClass('card-padding')} ${isTvMode ? 'flex flex-col justify-center min-h-0 overflow-hidden' : ''}`}>
             <table className="w-full text-right font-bold border-collapse">
               <thead>
                 <tr className={`border-b border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-right font-black ${getFontSizeClass('table-head')}`}>
@@ -1171,34 +1193,34 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>إجمالي الإنتاج (كجم)</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodTotal.actual.toLocaleString()}</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.prodTotal.target.toLocaleString()}</td>
-                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod1Status)}</td>
+                  <td className={`${getTdPadding('py-1.5')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>إجمالي الإنتاج (كجم)</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodTotal.actual.toLocaleString()}</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.prodTotal.target.toLocaleString()}</td>
+                  <td className={`${getTdPadding('py-1.5')} flex justify-center`}>{renderStatusIcon(prod1Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>(%) الكفاءة الإنتاجية</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodEfficiency.actual}%</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.prodEfficiency.target}%</td>
-                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod2Status)}</td>
+                  <td className={`${getTdPadding('py-1.5')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>(%) الكفاءة الإنتاجية</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodEfficiency.actual}%</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.prodEfficiency.target}%</td>
+                  <td className={`${getTdPadding('py-1.5')} flex justify-center`}>{renderStatusIcon(prod2Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Product Waste (%)</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodWaste.actual}%</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodWaste.target}%</td>
-                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod3Status)}</td>
+                  <td className={`${getTdPadding('py-1.5')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Product Waste (%)</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodWaste.actual}%</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodWaste.target}%</td>
+                  <td className={`${getTdPadding('py-1.5')} flex justify-center`}>{renderStatusIcon(prod3Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Film Waste (%)</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodFilmWaste.actual}%</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodFilmWaste.target}%</td>
-                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod4Status)}</td>
+                  <td className={`${getTdPadding('py-1.5')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Film Waste (%)</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodFilmWaste.actual}%</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodFilmWaste.target}%</td>
+                  <td className={`${getTdPadding('py-1.5')} flex justify-center`}>{renderStatusIcon(prod4Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-1.5 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Rework (%)</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodRework.actual}%</td>
-                  <td className={`py-1.5 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodRework.target}%</td>
-                  <td className="py-1.5 flex justify-center">{renderStatusIcon(prod5Status)}</td>
+                  <td className={`${getTdPadding('py-1.5')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Rework (%)</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.prodRework.actual}%</td>
+                  <td className={`${getTdPadding('py-1.5')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≤ {data.prodRework.target}%</td>
+                  <td className={`${getTdPadding('py-1.5')} flex justify-center`}>{renderStatusIcon(prod5Status)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1209,12 +1231,12 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
     if (cardId === 'quality') {
       return (
-        <div key="quality" id="kpi-card-quality" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900`}>
+        <div key="quality" id="kpi-card-quality" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900 ${isTvMode ? 'h-full flex-1' : ''}`}>
           <div className="p-3 px-4 bg-[#829E16] text-white flex items-center justify-between font-black">
             <span className={getFontSizeClass('card-title')}>الجودة (Quality)</span>
             <Info size={15} />
           </div>
-          <div className={`flex-1 ${getSpacingClass('card-padding')}`}>
+          <div className={`flex-1 ${getSpacingClass('card-padding')} ${isTvMode ? 'flex flex-col justify-center min-h-0 overflow-hidden' : ''}`}>
             <table className="w-full text-right font-bold border-collapse">
               <thead>
                 <tr className={`border-b border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-right font-black ${getFontSizeClass('table-head')}`}>
@@ -1226,22 +1248,22 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد حالات الـ Hold</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualHoldCases.actual}</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.qualHoldCases.target}</td>
-                  <td className="py-2 flex justify-center">{renderStatusIcon(qual1Status)}</td>
+                  <td className={`${getTdPadding('py-2')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد حالات الـ Hold</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualHoldCases.actual}</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.qualHoldCases.target}</td>
+                  <td className={`${getTdPadding('py-2')} flex justify-center`}>{renderStatusIcon(qual1Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>مخالفات الفود سيفتي</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualFoodSafety.actual}</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.qualFoodSafety.target}</td>
-                  <td className="py-2 flex justify-center">{renderStatusIcon(qual2Status)}</td>
+                  <td className={`${getTdPadding('py-2')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>مخالفات الفود سيفتي</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualFoodSafety.actual}</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.qualFoodSafety.target}</td>
+                  <td className={`${getTdPadding('py-2')} flex justify-center`}>{renderStatusIcon(qual2Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>GMP Score (%)</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualGmpScore.actual}%</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≥ {data.qualGmpScore.target}%</td>
-                  <td className="py-2 flex justify-center">{renderStatusIcon(qual3Status)}</td>
+                  <td className={`${getTdPadding('py-2')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>GMP Score (%)</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.qualGmpScore.actual}%</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≥ {data.qualGmpScore.target}%</td>
+                  <td className={`${getTdPadding('py-2')} flex justify-center`}>{renderStatusIcon(qual3Status)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1252,12 +1274,12 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
     if (cardId === 'safety') {
       return (
-        <div key="safety" id="kpi-card-safety" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900`}>
+        <div key="safety" id="kpi-card-safety" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900 ${isTvMode ? 'h-full flex-1' : ''}`}>
           <div className="p-3 px-4 bg-[#007E72] text-white flex items-center justify-between font-black">
             <span className={getFontSizeClass('card-title')}>السلامة (Safety)</span>
             <AlertCircle size={15} />
           </div>
-          <div className={`flex-1 ${getSpacingClass('card-padding')}`}>
+          <div className={`flex-1 ${getSpacingClass('card-padding')} ${isTvMode ? 'flex flex-col justify-center min-h-0 overflow-hidden' : ''}`}>
             <table className="w-full text-right font-bold border-collapse">
               <thead>
                 <tr className={`border-b border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-right font-black ${getFontSizeClass('table-head')}`}>
@@ -1269,16 +1291,16 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-3 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد الحوادث الوشيكة</td>
-                  <td className={`py-3 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.safeNearMisses.actual}</td>
-                  <td className={`py-3 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.safeNearMisses.target}</td>
-                  <td className="py-3 flex justify-center">{renderStatusIcon(safe1Status)}</td>
+                  <td className={`${getTdPadding('py-3')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد الحوادث الوشيكة</td>
+                  <td className={`${getTdPadding('py-3')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.safeNearMisses.actual}</td>
+                  <td className={`${getTdPadding('py-3')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.safeNearMisses.target}</td>
+                  <td className={`${getTdPadding('py-3')} flex justify-center`}>{renderStatusIcon(safe1Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-3 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>مخاطر السلامة المفتوحة</td>
-                  <td className={`py-3 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.safeOpenRisks.actual}</td>
-                  <td className={`py-3 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.safeOpenRisks.target}</td>
-                  <td className="py-3 flex justify-center">{renderStatusIcon(safe2Status)}</td>
+                  <td className={`${getTdPadding('py-3')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>مخاطر السلامة المفتوحة</td>
+                  <td className={`${getTdPadding('py-3')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.safeOpenRisks.actual}</td>
+                  <td className={`${getTdPadding('py-3')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.safeOpenRisks.target}</td>
+                  <td className={`${getTdPadding('py-3')} flex justify-center`}>{renderStatusIcon(safe2Status)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1289,12 +1311,12 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
     if (cardId === 'warehouse') {
       return (
-        <div key="warehouse" id="kpi-card-warehouse" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900`}>
+        <div key="warehouse" id="kpi-card-warehouse" className={`border border-zinc-200 dark:border-zinc-800 rounded-[24px] overflow-hidden shadow-sm flex flex-col bg-white dark:bg-zinc-900 ${isTvMode ? 'h-full flex-1' : ''}`}>
           <div className="p-3 px-4 bg-[#889E19] text-white flex items-center justify-between font-black">
             <span className={getFontSizeClass('card-title')}>المستودعات والشحن (Warehouse)</span>
             <Clock size={15} />
           </div>
-          <div className={`flex-1 ${getSpacingClass('card-padding')}`}>
+          <div className={`flex-1 ${getSpacingClass('card-padding')} ${isTvMode ? 'flex flex-col justify-center min-h-0 overflow-hidden' : ''}`}>
             <table className="w-full text-right font-bold border-collapse">
               <thead>
                 <tr className={`border-b border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-200 text-right font-black ${getFontSizeClass('table-head')}`}>
@@ -1306,22 +1328,22 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد الحاويات المشحونة</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whShippedContainers.actual}</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.whShippedContainers.target}</td>
-                  <td className="py-2 flex justify-center">{renderStatusIcon(wh1Status)}</td>
+                  <td className={`${getTdPadding('py-2')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد الحاويات المشحونة</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whShippedContainers.actual}</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.whShippedContainers.target}</td>
+                  <td className={`${getTdPadding('py-2')} flex justify-center`}>{renderStatusIcon(wh1Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد أوامر التحميل المنفذة</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whExecutedOrders.actual}</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.whExecutedOrders.target}</td>
-                  <td className="py-2 flex justify-center">{renderStatusIcon(wh2Status)}</td>
+                  <td className={`${getTdPadding('py-2')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>عدد أوامر التحميل المنفذة</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whExecutedOrders.actual}</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>{data.whExecutedOrders.target}</td>
+                  <td className={`${getTdPadding('py-2')} flex justify-center`}>{renderStatusIcon(wh2Status)}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/10">
-                  <td className={`py-2 text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الشحن في الموعد (% OTIF)</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whOtif.actual}%</td>
-                  <td className={`py-2 text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≥ {data.whOtif.target}%</td>
-                  <td className="py-2 flex justify-center">{renderStatusIcon(wh3Status)}</td>
+                  <td className={`${getTdPadding('py-2')} text-right font-black text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الشحن في الموعد (% OTIF)</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>{data.whOtif.actual}%</td>
+                  <td className={`${getTdPadding('py-2')} text-center text-zinc-950 dark:text-zinc-300 font-bold ${getFontSizeClass('table-body')}`}>≥ {data.whOtif.target}%</td>
+                  <td className={`${getTdPadding('py-2')} flex justify-center`}>{renderStatusIcon(wh3Status)}</td>
                 </tr>
               </tbody>
             </table>
@@ -1334,27 +1356,27 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
   const renderTopKpis = () => (
     /* SEGMENTS GRID (THE 4 CORE CATEGORY CARDS) */
-    <div key="top_kpis" className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-${topCardsCols} ${getSpacingClass('grid')}`}>
+    <div key="top_kpis" className={`grid grid-cols-1 md:grid-cols-${topCardsCols >= 4 ? 4 : 2} lg:grid-cols-${topCardsCols} xl:grid-cols-${topCardsCols} ${getSpacingClass('grid')}`}>
       {topCardsOrder.map(cardId => renderCard(cardId))}
     </div>
   );
 
   const renderLines = () => (
     /* FULL-WIDTH SECTION: PRODUCTION LINES PERFORMANCE (أداء خطوط الإنتاج) */
-    <div key="lines" id="production-lines-block" className="space-y-3">
-      <div className={`bg-[#0D5F54] text-white p-2.5 rounded-2xl text-center font-black select-none tracking-widest shadow-sm ${getFontSizeClass('section-header')}`}>
+    <div key="lines" id="production-lines-block" className={`space-y-3 ${isTvMode ? 'flex-1 min-h-0 h-full flex flex-col justify-between' : ''}`}>
+      <div className={`bg-[#0D5F54] text-white rounded-2xl text-center font-black select-none tracking-widest shadow-sm ${isTvMode ? 'p-1 py-1.5 text-xs font-black' : 'p-2.5 ' + getFontSizeClass('section-header')}`}>
         أداء خطوط الإنتاج (Production Lines Performance)
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 ${isTvMode ? 'flex-1 min-h-0 h-full' : ''}`}>
         
         {/* Packing Line 1 */}
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow">
+        <div className={`border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow ${isTvMode ? 'h-full flex flex-col justify-between' : ''}`}>
           <div className="p-2 px-3 bg-[#134E4A] text-white flex items-center justify-between text-xs font-black">
             <span>خط تعبئة 1 (Packing 1)</span>
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
           </div>
-          <div className={`space-y-2 ${getSpacingClass('card-padding')}`}>
+          <div className={`flex-grow space-y-2 ${getSpacingClass('card-padding')} ${isTvMode ? 'flex flex-col justify-center min-h-0 overflow-hidden' : ''}`}>
             <table className="w-full text-right font-bold">
               <thead>
                 <tr className={`text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 font-black ${getFontSizeClass('table-head')}`}>
@@ -1371,28 +1393,28 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.prodPlanned.toLocaleString()}</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.prod.toLocaleString()}</td>
                   <td className={`text-center text-[#115E59] dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{line1_eff_calc}%</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon(getLineEffStatus(line1_eff_calc, 100))}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon(getLineEffStatus(line1_eff_calc, 100))}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الكفاءة (%)</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.effPlanned}%</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.eff}%</td>
                   <td className={`text-center text-emerald-600 dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{data.linePacking1.effPlanned > 0 ? '102%' : '102%'}</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('success')}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Product Waste</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>≤ {data.linePacking1.wastePlanned}%</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking1.waste}%</td>
                   <td className={`text-center text-zinc-500 dark:text-zinc-550 ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('success')}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>Downtime (د)</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>35</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>-</td>
                   <td className={`text-center text-zinc-500 dark:text-zinc-550 ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('warning')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('warning')}</td>
                 </tr>
               </tbody>
             </table>
@@ -1400,12 +1422,12 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
         </div>
 
         {/* Packing Line 2 */}
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow">
+        <div className={`border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow ${isTvMode ? 'h-full flex flex-col justify-between' : ''}`}>
           <div className="p-2 px-3 bg-[#134E4A] text-white flex items-center justify-between text-xs font-black">
             <span>خط تعبئة 2 (Packing 2)</span>
             <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
           </div>
-          <div className={`space-y-2 ${getSpacingClass('card-padding')}`}>
+          <div className={`flex-grow space-y-2 ${getSpacingClass('card-padding')} ${isTvMode ? 'flex flex-col justify-center min-h-0 overflow-hidden' : ''}`}>
             <table className="w-full text-right font-bold">
               <thead>
                 <tr className={`text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 font-black ${getFontSizeClass('table-head')}`}>
@@ -1422,28 +1444,28 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.prodPlanned.toLocaleString()}</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.prod.toLocaleString()}</td>
                   <td className={`text-center text-[#115E59] dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{line2_eff_calc}%</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon(getLineEffStatus(line2_eff_calc, 100))}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon(getLineEffStatus(line2_eff_calc, 100))}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الكفاءة (%)</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.effPlanned}%</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.eff}%</td>
                   <td className={`text-center text-amber-655 font-black ${getFontSizeClass('table-body')}`}>{data.linePacking2.effPlanned > 0 ? '98%' : '98%'}</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('warning')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('warning')}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Product Waste</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>≤ {data.linePacking2.wastePlanned}%</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePacking2.waste}%</td>
-                  <td className={`text-center text-zinc-500 dark:text-zinc-550 ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('warning')}</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('warning')}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>Downtime (د)</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>42</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className={`text-center text-zinc-500 dark:text-zinc-550 ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('danger')}</td>
+                  <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('danger')}</td>
                 </tr>
               </tbody>
             </table>
@@ -1451,12 +1473,12 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
         </div>
 
         {/* Packaging Line 1 */}
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow">
+        <div className={`border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow ${isTvMode ? 'h-full flex flex-col justify-between' : ''}`}>
           <div className="p-2 px-3 bg-[#134E4A] text-white flex items-center justify-between text-xs font-black">
             <span>خط تغليف 1 (Packaging 1)</span>
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
           </div>
-          <div className={`space-y-2 ${getSpacingClass('card-padding')}`}>
+          <div className={`flex-grow space-y-2 ${getSpacingClass('card-padding')} ${isTvMode ? 'flex flex-col justify-center min-h-0 overflow-hidden' : ''}`}>
             <table className="w-full text-right font-bold">
               <thead>
                 <tr className={`text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 font-black ${getFontSizeClass('table-head')}`}>
@@ -1473,28 +1495,28 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.prodPlanned.toLocaleString()}</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.prod.toLocaleString()}</td>
                   <td className={`text-center text-[#115E59] dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{line3_eff_calc}%</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon(getLineEffStatus(line3_eff_calc, 100))}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon(getLineEffStatus(line3_eff_calc, 100))}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الكفاءة (%)</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.effPlanned}%</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.eff}%</td>
                   <td className={`text-center text-emerald-600 dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>104%</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('success')}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Film Waste</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>≤ {data.linePackaging1.wastePlanned}%</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.waste}%</td>
                   <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('success')}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>Downtime (د)</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>25</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging1.waste > 0 ? '-' : '-'}</td>
                   <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('success')}</td>
                 </tr>
               </tbody>
             </table>
@@ -1502,12 +1524,12 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
         </div>
 
         {/* Packaging Line 2 */}
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow">
+        <div className={`border border-zinc-200 dark:border-zinc-800 rounded-[20px] overflow-hidden bg-white dark:bg-zinc-900 hover:shadow-md transition-shadow ${isTvMode ? 'h-full flex flex-col justify-between' : ''}`}>
           <div className="p-2 px-3 bg-[#134E4A] text-white flex items-center justify-between text-xs font-black">
             <span>خط تغليف 2 (Packaging 2)</span>
             <div className="w-2.5 h-2.5 rounded-full bg-rose-400 animate-bounce" style={{ animationDuration: '4s' }} />
           </div>
-          <div className={`space-y-2 ${getSpacingClass('card-padding')}`}>
+          <div className={`flex-grow space-y-2 ${getSpacingClass('card-padding')} ${isTvMode ? 'flex flex-col justify-center min-h-0 overflow-hidden' : ''}`}>
             <table className="w-full text-right font-bold">
               <thead>
                 <tr className={`text-zinc-950 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 font-black ${getFontSizeClass('table-head')}`}>
@@ -1524,28 +1546,28 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.prodPlanned.toLocaleString()}</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.prod.toLocaleString()}</td>
                   <td className={`text-center text-[#115E59] dark:text-emerald-400 font-black ${getFontSizeClass('table-body')}`}>{line4_eff_calc}%</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon(getLineEffStatus(line4_eff_calc, 100))}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon(getLineEffStatus(line4_eff_calc, 100))}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>الكفاءة (%)</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.effPlanned}%</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.eff}%</td>
                   <td className={`text-center text-amber-600 dark:text-amber-400 font-black ${getFontSizeClass('table-body')}`}>104%</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('warning')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('warning')}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 ${getFontSizeClass('table-body')}`}>Film Waste</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>≤ {data.linePackaging2.wastePlanned}%</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.waste}%</td>
                   <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('success')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('success')}</td>
                 </tr>
                 <tr className="hover:bg-zinc-50 dark:hover:bg-zinc-800/15">
                   <td className={`text-zinc-950 dark:text-zinc-100 font-black ${getFontSizeClass('table-body')}`}>Downtime (د)</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-200 font-extrabold ${getFontSizeClass('table-body')}`}>50</td>
                   <td className={`text-center text-zinc-950 dark:text-zinc-100 font-extrabold ${getFontSizeClass('table-body')}`}>{data.linePackaging2.waste > 0 ? '-' : '-'}</td>
                   <td className={`text-center text-zinc-500 dark:text-zinc-555 ${getFontSizeClass('table-body')}`}>-</td>
-                  <td className="py-1 flex justify-center">{renderStatusIcon('danger')}</td>
+                  <td className={`${getTdPadding('py-1')} flex justify-center`}>{renderStatusIcon('danger')}</td>
                 </tr>
               </tbody>
             </table>
@@ -1558,15 +1580,15 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
   const renderCharts = () => (
     /* CHARTS ROW, LEGEND & NOTES GRID (مؤشرات الاتجاه والرسوم البيانية والمذكرات) */
-    <div key="charts" className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1">
+    <div key="charts" className={`grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1 ${isTvMode ? 'flex-1 min-h-0 h-full' : ''}`}>
       
       {/* Left Column: Trend chart */}
-      <div id="chart-trend-container" className="lg:col-span-4 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 flex flex-col justify-between min-h-[290px]">
-        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 flex items-center justify-center gap-1.5 mb-2 border-b border-zinc-200 dark:border-zinc-800 pb-2 select-none ${getFontSizeClass('legend-title')}`}>
+      <div id="chart-trend-container" className={`lg:col-span-4 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 flex flex-col justify-between ${isTvMode ? 'min-h-[120px] flex-1 min-h-0 py-2' : 'min-h-[290px]'}`}>
+        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 flex items-center justify-center gap-1.5 mb-2 border-b border-zinc-200 dark:border-zinc-800 pb-2 select-none ${isTvMode ? 'text-xs pb-1 mb-1' : getFontSizeClass('legend-title')}`}>
           <TrendingUp size={14} className="text-[#0E5F59]" />
           <span>مؤشرات الاتجاه (Trend)</span>
         </h4>
-        <div className="w-full flex-1 h-44">
+        <div className={`w-full flex-grow ${isTvMode ? 'h-24' : 'h-44'}`}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data.weeklyTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" />
@@ -1579,7 +1601,7 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex justify-center gap-3 text-[10px] font-black text-zinc-950 dark:text-zinc-200 pt-1 select-none">
+        <div className={`flex justify-center gap-3 font-black text-zinc-950 dark:text-zinc-200 select-none ${isTvMode ? 'text-[9px] pt-0.5' : 'text-[10px] pt-1'}`}>
           <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#0E5F59]" />الكفاءة الإنتاجية (%)</span>
           <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#98C21E]" />Product Waste (%)</span>
           <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#D48C00]" />Rework (%)</span>
@@ -1587,11 +1609,11 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
       </div>
 
       {/* Middle Column: Shipped Containers */}
-      <div id="chart-containers-container" className="lg:col-span-4 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 flex flex-col justify-between min-h-[290px]">
-        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-2 select-none ${getFontSizeClass('legend-title')}`}>
+      <div id="chart-containers-container" className={`lg:col-span-4 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 flex flex-col justify-between ${isTvMode ? 'min-h-[120px] flex-1 min-h-0 py-2' : 'min-h-[290px]'}`}>
+        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-2 select-none ${isTvMode ? 'text-xs pb-1 mb-1' : getFontSizeClass('legend-title')}`}>
           أداء الحاويات المشحونة خلال الأسبوع
         </h4>
-        <div className="w-full flex-1 h-44">
+        <div className={`w-full flex-grow ${isTvMode ? 'h-24' : 'h-44'}`}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.weeklyContainers}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f1f1" />
@@ -1602,17 +1624,17 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="text-center text-[11px] font-black text-zinc-950 dark:text-zinc-200 select-none">
+        <div className={`text-center font-black text-zinc-950 dark:text-zinc-200 select-none ${isTvMode ? 'text-[9px]' : 'text-[11px]'}`}>
           عدد الحاويات المشحونة يومياً
         </div>
       </div>
 
       {/* Right Column: Legend Key */}
-      <div className="lg:col-span-2 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 min-h-[290px] flex flex-col select-none">
-        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 ${getFontSizeClass('legend-title')}`}>
+      <div className={`lg:col-span-2 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-white dark:bg-zinc-900 flex flex-col select-none ${isTvMode ? 'min-h-[120px] flex-1 min-h-0 py-2' : 'min-h-[290px]'}`}>
+        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 ${isTvMode ? 'text-xs pb-1 mb-1' : getFontSizeClass('legend-title')}`}>
           مفتاح الحالة
         </h4>
-        <div className="flex-1 flex flex-col justify-center space-y-4 text-xs font-black px-1">
+        <div className={`flex-1 flex flex-col justify-center space-y-4 text-xs font-black px-1 ${isTvMode ? 'space-y-2' : 'space-y-4'}`}>
           <div className="flex items-center gap-2.5">
             <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black shadow-sm">
               <Check size={14} strokeWidth={3} />
@@ -1635,8 +1657,8 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
       </div>
 
       {/* Far Right Column: Notebook comments block */}
-      <div id="notes-notebook-container" className="lg:col-span-2 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-amber-50/20 dark:bg-zinc-900/10 min-h-[290px] flex flex-col">
-        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 select-none ${getFontSizeClass('legend-title')}`}>
+      <div id="notes-notebook-container" className={`lg:col-span-2 border border-zinc-200 dark:border-zinc-800 rounded-[24px] p-4 bg-amber-50/20 dark:bg-zinc-900/10 flex flex-col ${isTvMode ? 'min-h-[120px] flex-1 min-h-0 py-2' : 'min-h-[290px]'}`}>
+        <h4 className={`font-black text-center text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2 mb-3 select-none ${isTvMode ? 'text-xs pb-1 mb-1' : getFontSizeClass('legend-title')}`}>
           ملاحظات
         </h4>
         
