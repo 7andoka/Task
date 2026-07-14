@@ -1659,10 +1659,10 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
 
   return (
     <div 
-      className={`transition-colors duration-300 ${
+      className={`transition-colors duration-300 w-full ${
         isTvMode 
-          ? `fixed inset-0 z-[9999] overflow-hidden p-4 md:p-6 flex flex-col gap-3 ${isTvThemeDark ? 'tv-dark-override bg-zinc-950 text-zinc-100' : 'bg-slate-50 text-zinc-900'}` 
-          : 'space-y-6'
+          ? `fixed inset-0 z-[9999] overflow-hidden p-0 flex flex-col gap-3 ${isTvThemeDark ? 'tv-dark-override bg-zinc-950 text-zinc-100' : 'bg-slate-50 text-zinc-900'}` 
+          : 'space-y-6 w-full'
       }`}
       style={{ direction: 'rtl' }}
     >
@@ -2210,7 +2210,7 @@ export default function KPIDashboard({ lang, user, isDark = true }: KPIDashboard
               transition: 'transform 0.2s ease-out',
               minWidth: '1380px'
             } : undefined}
-            className={`w-full max-w-[1420px] mx-auto p-6 md:p-8 rounded-[32px] border shadow-2xl space-y-6 transition-all duration-300 ${isCurrentDark ? 'tv-dark-override-card text-zinc-100 border-zinc-800' : 'daytime-light-override-card bg-white border-zinc-200/50 text-zinc-850'}`}
+            className={`w-full max-w-full p-4 md:p-8 space-y-6 transition-all duration-300 ${isCurrentDark ? 'tv-dark-override-card text-zinc-100 border-0' : 'daytime-light-override-card bg-white border-0 text-zinc-850'}`}
             dir="rtl"
           >
             

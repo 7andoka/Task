@@ -66,6 +66,7 @@ export default function Layout({
     return localStorage.getItem('hide_pwa_install_banner_richland') === 'true';
   });
   const [isInsideIframe, setIsInsideIframe] = React.useState(false);
+  const [showFloatingMenu, setShowFloatingMenu] = React.useState(false);
 
   React.useEffect(() => {
     const isStandaloneMode = 
@@ -143,7 +144,8 @@ export default function Layout({
     )} dir={isRtl ? 'rtl' : 'ltr'}>
       
       {/* Top Bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-zinc-100/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 backdrop-blur-md">
+      {activeTab !== 'kpis' && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-zinc-100/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 backdrop-blur-md">
         
         {/* Left Side Controls (Connection Status) */}
         <div className="flex items-center gap-3 shrink-0 z-10">
@@ -222,9 +224,10 @@ export default function Layout({
           )}
         </div>
       </div>
+    )}
 
       {/* Bottom Navigation (Mobile) */}
-      {!isDesktopMode && (
+      {!isDesktopMode && activeTab !== 'kpis' && (
         <div className="fixed bottom-0 left-0 right-0 z-50 h-16 bg-zinc-100/80 dark:bg-zinc-900/80 border-t border-zinc-200 dark:border-zinc-800 backdrop-blur-md flex items-center justify-around px-4">
           {filteredMenuItems.map((item) => (
             <button
@@ -250,10 +253,14 @@ export default function Layout({
 
       {/* Main Content */}
       <main className={cn(
-        "flex-1 min-h-screen pt-14 w-full",
-        !isDesktopMode && "pb-16"
+        "flex-1 min-h-screen w-full",
+        activeTab === 'kpis' ? "pt-0" : "pt-14",
+        (!isDesktopMode && activeTab !== 'kpis') && "pb-16"
       )}>
-        <div className="p-4 md:p-6 w-full">
+        <div className={cn(
+          "w-full",
+          activeTab === 'kpis' ? "p-0" : "p-4 md:p-6"
+        )}>
           {/* Subtle PWA Notice banner */}
           {!isStandalone && !hideInstallPrompt && (
             <motion.div 
@@ -306,6 +313,67 @@ export default function Layout({
           {children}
         </div>
       </main>
+
+      {/* Floating Menu Button for TV/KPI Mode */}
+      {activeTab === 'kpis' && (
+        <div className="fixed bottom-6 right-6 z-[10000] flex flex-col items-end gap-2" dir={isRtl ? 'rtl' : 'ltr'}>
+          {showFloatingMenu && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 10 }}
+              className={cn(
+                "p-3 rounded-3xl border shadow-2xl flex flex-col gap-1 max-h-[70vh] overflow-y-auto w-64 backdrop-blur-md mb-2",
+                isDark ? "bg-zinc-900/95 border-zinc-800 text-zinc-100" : "bg-white/95 border-zinc-200 text-zinc-900"
+              )}
+            >
+              <div className="px-3 py-2 border-b border-zinc-200/50 dark:border-zinc-800/50 flex items-center justify-between mb-1">
+                <span className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400">
+                  {isRtl ? 'قائمة الصفحات' : 'App Pages'}
+                </span>
+                <span className="text-[10px] text-zinc-400">Rich Land</span>
+              </div>
+              {filteredMenuItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setShowFloatingMenu(false);
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-right w-full",
+                    activeTab === item.id 
+                      ? "bg-emerald-600 text-white" 
+                      : isDark 
+                        ? "hover:bg-zinc-800 text-zinc-300 hover:text-white" 
+                        : "hover:bg-zinc-100 text-zinc-700 hover:text-black"
+                  )}
+                >
+                  <item.icon size={16} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+              <div className="h-px bg-zinc-200/50 dark:bg-zinc-800/50 my-1" />
+              {user && (
+                <button
+                  onClick={onLogout}
+                  className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-right text-red-500 hover:bg-red-500/10 w-full"
+                >
+                  <LogOut size={16} />
+                  <span>{isRtl ? 'تسجيل الخروج' : 'Log Out'}</span>
+                </button>
+              )}
+            </motion.div>
+          )}
+          <button
+            onClick={() => setShowFloatingMenu(!showFloatingMenu)}
+            title={isRtl ? 'القائمة الرئيسية' : 'Main Menu'}
+            className="p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer"
+          >
+            {showFloatingMenu ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+      )}
 
       {/* Install Modal */}
       {showInstallModal && (
