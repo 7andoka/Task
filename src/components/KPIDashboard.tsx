@@ -2269,73 +2269,112 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
           >
             
             {/* RICH LAND DOCUMENT HEADER */}
-            {!isTvMode && (
-              <div className="flex flex-col md:flex-row items-center justify-between border-b border-zinc-300 pb-5 gap-6">
+            {!isTvMode ? (
+              <div className="flex flex-col md:flex-row items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-4.5 gap-4">
                 
-                {/* Top Right Date/Shift Block Grid (First in JSX renders on the right in RTL) */}
-                <div className={`grid grid-cols-2 gap-y-2.5 gap-x-4 p-4 rounded-2xl border min-w-[270px] text-xs font-bold leading-none transition-all duration-300 ${
-                  isCurrentDark 
-                    ? 'bg-zinc-950 border-zinc-800 text-zinc-405' 
-                    : 'bg-zinc-50 border-zinc-200/80 text-zinc-950 shadow-sm'
-                }`}>
-                  <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                    <Calendar size={13} className="text-emerald-600 animate-pulse" />
-                    <span>التاريخ:</span>
-                  </div>
-                  <div className={`text-left select-text underline decoration-emerald-500/30 underline-offset-2 ${isCurrentDark ? 'text-zinc-200' : 'text-zinc-900'}`}>
-                    {date.split('-').reverse().join(' / ')}
-                  </div>
-
-                  <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                    <Clock size={13} className="text-emerald-600" />
-                    <span>اليوم:</span>
-                  </div>
-                  <div className={`text-left font-extrabold ${isCurrentDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                    {data.dayName}
-                  </div>
-
-                  <div className={`flex items-center gap-1.5 col-span-1 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                    <Users size={13} className="text-emerald-600" />
-                    <span>الوردية:</span>
-                  </div>
-                  <div className="text-left text-emerald-500 font-extrabold">
-                    {data.shift}
-                  </div>
-                </div>
-
-                {/* Centered Dashboard Titles */}
-                <div className="text-center space-y-1.5 flex-1 select-none">
-                  <h2 className={`text-3xl font-black tracking-wider font-sans transition-colors duration-300 ${isCurrentDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
-                    لوحة متابعة مؤشرات الأداء اليومية
-                  </h2>
-                  <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isCurrentDark ? 'text-[#98C21E]' : 'text-[#81A017]'}`}>
-                    ريتش لاند للصناعات الغذائية
-                  </h3>
-                </div>
-
-                {/* Brand and Logo (Last in JSX renders on the left in RTL, achieving "top-left" position) */}
-                <div className="flex items-center gap-4 shrink-0">
-                  {/* Elegant, clean header trigger button for our floating Quick Control Panel */}
-                  <button
-                    onClick={() => setShowControlPanel(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#0E5F59] dark:bg-emerald-650 hover:bg-[#0C4E49] dark:hover:bg-emerald-600 text-white rounded-2xl text-xs font-black shadow-lg transition-all duration-300 select-none hover:scale-[1.03] active:scale-[0.97]"
-                    title={isRtl ? 'لوحة التحكم وإعدادات العرض' : 'Control Panel & Display Settings'}
-                  >
-                    <Settings size={15} className="animate-spin-slow" />
-                    <span>{isRtl ? 'لوحة التحكم' : 'Control Panel'}</span>
-                  </button>
-
-                  <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-zinc-200/60 flex items-center justify-center select-none">
+                {/* Right Side: Logo & brand text (RTL First child) */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="bg-white p-1 rounded-xl shadow-xs border border-zinc-200/60 flex items-center justify-center select-none shrink-0">
                     <img 
                       src="/logo.png" 
                       alt="Rich Land Logo" 
-                      className="h-16 w-auto object-contain transition-transform duration-300 hover:scale-105 mix-blend-multiply"
+                      className="h-10 w-auto object-contain transition-transform duration-300 hover:scale-105 mix-blend-multiply"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg';
                       }}
                     />
                   </div>
+                  <div className="text-right select-none">
+                    <h3 className={`text-xs md:text-sm font-bold tracking-wide transition-colors duration-300 ${isCurrentDark ? 'text-[#98C21E]' : 'text-[#81A017]'}`}>
+                      ريتش لاند للصناعات الغذائية
+                    </h3>
+                  </div>
                 </div>
+
+                {/* Center: Centered Title text */}
+                <div className="text-center flex-1 select-none py-2 md:py-0">
+                  <h2 className={`text-lg md:text-xl lg:text-2xl font-black tracking-wide font-sans transition-colors duration-300 ${isCurrentDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
+                    لوحة متابعة مؤشرات الأداء اليومية
+                  </h2>
+                </div>
+
+                {/* Left Side: Control Panel settings trigger button (RTL Last child) */}
+                <div className="shrink-0">
+                  <button
+                    onClick={() => setShowControlPanel(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#0E5F59] dark:bg-emerald-650 hover:bg-[#0C4E49] dark:hover:bg-emerald-600 text-white rounded-2xl text-xs font-black shadow-md transition-all duration-300 select-none hover:scale-[1.02] active:scale-[0.98] cursor-pointer whitespace-nowrap"
+                    title={isRtl ? 'لوحة التحكم وإعدادات العرض' : 'Control Panel & Display Settings'}
+                  >
+                    <Settings size={15} className="animate-spin-slow" />
+                    <span>{isRtl ? 'لوحة التحكم' : 'Control Panel'}</span>
+                  </button>
+                </div>
+
+              </div>
+            ) : (
+              /* TV BROADCAST MODE HEADER - Constant display of KPI Title, Date, Day, Shift, and Auto-update timer inside the board */
+              <div className="flex items-center justify-between border-b border-zinc-200/20 pb-3 gap-4">
+                
+                {/* Right side in TV Mode: Logo and Title */}
+                <div className="flex items-center gap-3 select-none">
+                  <div className="bg-white p-1 rounded-lg flex items-center justify-center select-none shrink-0 h-8">
+                    <img 
+                      src="/logo.png" 
+                      alt="Rich Land Logo" 
+                      className="h-6 w-auto object-contain mix-blend-multiply"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg';
+                      }}
+                    />
+                  </div>
+                  <div className="text-right">
+                    <h2 className={`text-sm md:text-base font-black tracking-wide font-sans transition-colors duration-300 ${isCurrentDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
+                      لوحة متابعة مؤشرات الأداء اليومية
+                    </h2>
+                    <h3 className={`text-[9px] md:text-[10px] font-bold tracking-wide transition-colors duration-300 ${isCurrentDark ? 'text-[#98C21E]' : 'text-[#81A017]'}`}>
+                      ريتش لاند للصناعات الغذائية
+                    </h3>
+                  </div>
+                </div>
+
+                {/* Left side in TV Mode: Live Date, Day, Shift and Auto-refresh countdown! */}
+                <div className="flex items-center gap-3 text-[10px] font-black">
+                  
+                  {/* Date */}
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
+                    isCurrentDark ? 'bg-zinc-950 border-zinc-800 text-zinc-300' : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                  }`}>
+                    <Calendar size={12} className="text-emerald-500 animate-pulse shrink-0" />
+                    <span>التاريخ: {date.split('-').reverse().join(' / ')}</span>
+                  </div>
+
+                  {/* Day */}
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
+                    isCurrentDark ? 'bg-zinc-950 border-zinc-800 text-zinc-300' : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                  }`}>
+                    <Clock size={12} className="text-emerald-500 shrink-0" />
+                    <span>اليوم: {data.dayName}</span>
+                  </div>
+
+                  {/* Shift */}
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
+                    isCurrentDark ? 'bg-zinc-950 border-zinc-800 text-zinc-300' : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                  }`}>
+                    <Users size={12} className="text-emerald-500 shrink-0" />
+                    <span>الوردية: <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">{data.shift}</span></span>
+                  </div>
+
+                  {/* Auto refresh countdown */}
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/15 animate-pulse">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    <span>التحديث التلقائي القادم بعد: {refreshTimer} ثانية</span>
+                  </div>
+
+                </div>
+
               </div>
             )}
 
