@@ -2169,73 +2169,75 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
           >
             
             {/* RICH LAND DOCUMENT HEADER */}
-            <div className="flex flex-col md:flex-row items-center justify-between border-b border-zinc-300 pb-5 gap-6">
-              
-              {/* Top Right Date/Shift Block Grid (First in JSX renders on the right in RTL) */}
-              <div className={`grid grid-cols-2 gap-y-2.5 gap-x-4 p-4 rounded-2xl border min-w-[270px] text-xs font-bold leading-none transition-all duration-300 ${
-                isCurrentDark 
-                  ? 'bg-zinc-950 border-zinc-800 text-zinc-405' 
-                  : 'bg-zinc-50 border-zinc-200/80 text-zinc-950 shadow-sm'
-              }`}>
-                <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                  <Calendar size={13} className="text-emerald-600 animate-pulse" />
-                  <span>التاريخ:</span>
-                </div>
-                <div className={`text-left select-text underline decoration-emerald-500/30 underline-offset-2 ${isCurrentDark ? 'text-zinc-200' : 'text-zinc-900'}`}>
-                  {date.split('-').reverse().join(' / ')}
+            {!isTvMode && (
+              <div className="flex flex-col md:flex-row items-center justify-between border-b border-zinc-300 pb-5 gap-6">
+                
+                {/* Top Right Date/Shift Block Grid (First in JSX renders on the right in RTL) */}
+                <div className={`grid grid-cols-2 gap-y-2.5 gap-x-4 p-4 rounded-2xl border min-w-[270px] text-xs font-bold leading-none transition-all duration-300 ${
+                  isCurrentDark 
+                    ? 'bg-zinc-950 border-zinc-800 text-zinc-405' 
+                    : 'bg-zinc-50 border-zinc-200/80 text-zinc-950 shadow-sm'
+                }`}>
+                  <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    <Calendar size={13} className="text-emerald-600 animate-pulse" />
+                    <span>التاريخ:</span>
+                  </div>
+                  <div className={`text-left select-text underline decoration-emerald-500/30 underline-offset-2 ${isCurrentDark ? 'text-zinc-200' : 'text-zinc-900'}`}>
+                    {date.split('-').reverse().join(' / ')}
+                  </div>
+
+                  <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    <Clock size={13} className="text-emerald-600" />
+                    <span>اليوم:</span>
+                  </div>
+                  <div className={`text-left font-extrabold ${isCurrentDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                    {data.dayName}
+                  </div>
+
+                  <div className={`flex items-center gap-1.5 col-span-1 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    <Users size={13} className="text-emerald-600" />
+                    <span>الوردية:</span>
+                  </div>
+                  <div className="text-left text-emerald-500 font-extrabold">
+                    {data.shift}
+                  </div>
                 </div>
 
-                <div className={`flex items-center gap-1.5 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                  <Clock size={13} className="text-emerald-600" />
-                  <span>اليوم:</span>
-                </div>
-                <div className={`text-left font-extrabold ${isCurrentDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                  {data.dayName}
+                {/* Centered Dashboard Titles */}
+                <div className="text-center space-y-1.5 flex-1 select-none">
+                  <h2 className={`text-3xl font-black tracking-wider font-sans transition-colors duration-300 ${isCurrentDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
+                    لوحة متابعة مؤشرات الأداء اليومية
+                  </h2>
+                  <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isCurrentDark ? 'text-[#98C21E]' : 'text-[#81A017]'}`}>
+                    ريتش لاند للصناعات الغذائية
+                  </h3>
                 </div>
 
-                <div className={`flex items-center gap-1.5 col-span-1 ${isCurrentDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                  <Users size={13} className="text-emerald-600" />
-                  <span>الوردية:</span>
-                </div>
-                <div className="text-left text-emerald-500 font-extrabold">
-                  {data.shift}
+                {/* Brand and Logo (Last in JSX renders on the left in RTL, achieving "top-left" position) */}
+                <div className="flex items-center gap-4 shrink-0">
+                  {/* Elegant, clean header trigger button for our floating Quick Control Panel */}
+                  <button
+                    onClick={() => setShowControlPanel(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#0E5F59] dark:bg-emerald-650 hover:bg-[#0C4E49] dark:hover:bg-emerald-600 text-white rounded-2xl text-xs font-black shadow-lg transition-all duration-300 select-none hover:scale-[1.03] active:scale-[0.97]"
+                    title={isRtl ? 'لوحة التحكم وإعدادات العرض' : 'Control Panel & Display Settings'}
+                  >
+                    <Settings size={15} className="animate-spin-slow" />
+                    <span>{isRtl ? 'لوحة التحكم' : 'Control Panel'}</span>
+                  </button>
+
+                  <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-zinc-200/60 flex items-center justify-center select-none">
+                    <img 
+                      src="/logo.png" 
+                      alt="Rich Land Logo" 
+                      className="h-16 w-auto object-contain transition-transform duration-300 hover:scale-105 mix-blend-multiply"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg';
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
-
-              {/* Centered Dashboard Titles */}
-              <div className="text-center space-y-1.5 flex-1 select-none">
-                <h2 className={`text-3xl font-black tracking-wider font-sans transition-colors duration-300 ${isCurrentDark ? 'text-zinc-100' : 'text-[#0E5F59]'}`}>
-                  لوحة متابعة مؤشرات الأداء اليومية
-                </h2>
-                <h3 className={`text-xl font-bold tracking-wide transition-colors duration-300 ${isCurrentDark ? 'text-[#98C21E]' : 'text-[#81A017]'}`}>
-                  ريتش لاند للصناعات الغذائية
-                </h3>
-              </div>
-
-              {/* Brand and Logo (Last in JSX renders on the left in RTL, achieving "top-left" position) */}
-              <div className="flex items-center gap-4 shrink-0">
-                {/* Elegant, clean header trigger button for our floating Quick Control Panel */}
-                <button
-                  onClick={() => setShowControlPanel(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#0E5F59] dark:bg-emerald-650 hover:bg-[#0C4E49] dark:hover:bg-emerald-600 text-white rounded-2xl text-xs font-black shadow-lg transition-all duration-300 select-none hover:scale-[1.03] active:scale-[0.97]"
-                  title={isRtl ? 'لوحة التحكم وإعدادات العرض' : 'Control Panel & Display Settings'}
-                >
-                  <Settings size={15} className="animate-spin-slow" />
-                  <span>{isRtl ? 'لوحة التحكم' : 'Control Panel'}</span>
-                </button>
-
-                <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-zinc-200/60 flex items-center justify-center select-none">
-                  <img 
-                    src="/logo.png" 
-                    alt="Rich Land Logo" 
-                    className="h-16 w-auto object-contain transition-transform duration-300 hover:scale-105 mix-blend-multiply"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg';
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* DYNAMIC SECTIONS GRID BASED ON SECTIONS ORDER AND STYLING PREFERENCES */}
             <div className="space-y-6">
@@ -2820,17 +2822,15 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
       </AnimatePresence>
 
       {/* PERSISTENT FLOATING CONTROL BUTTON */}
-      {!isTvMode && (
-        <div className="fixed bottom-6 left-6 z-[999]">
-          <button
-            onClick={() => setShowControlPanel(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-650 hover:from-emerald-700 hover:to-teal-700 text-white rounded-full text-xs font-black shadow-2xl transition-all duration-300 select-none hover:scale-105 active:scale-95 border-2 border-white dark:border-zinc-800"
-          >
-            <Settings size={15} className="animate-spin-slow" />
-            <span>{isRtl ? 'لوحة التحكم والخيارات' : 'Control Panel'}</span>
-          </button>
-        </div>
-      )}
+      <div className={`fixed bottom-6 left-6 z-[999] transition-all duration-300 ${isTvMode ? 'opacity-30 hover:opacity-100 scale-90 hover:scale-100' : 'opacity-100'}`}>
+        <button
+          onClick={() => setShowControlPanel(true)}
+          className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-650 hover:from-emerald-700 hover:to-teal-700 text-white rounded-full text-xs font-black shadow-2xl transition-all duration-300 select-none hover:scale-105 active:scale-95 border-2 border-white dark:border-zinc-800 cursor-pointer"
+        >
+          <Settings size={15} className="animate-spin-slow" />
+          <span>{isRtl ? 'لوحة التحكم والخيارات' : 'Control Panel'}</span>
+        </button>
+      </div>
 
       {/* FLOATING ACTION CONTROL PANEL MODAL (الشاشة العائمة) */}
       <AnimatePresence>
