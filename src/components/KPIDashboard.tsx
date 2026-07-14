@@ -25,6 +25,7 @@ import {
   AlertCircle, 
   Check, 
   X, 
+  XCircle,
   Save, 
   Printer, 
   Database,
@@ -209,6 +210,7 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
   // Layout customization settings
   const [showCustomizer, setShowCustomizer] = useState<boolean>(false);
   const [showControlPanel, setShowControlPanel] = useState<boolean>(false);
+  const [showHoverHeader, setShowHoverHeader] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg' | 'xl'>(() => {
     return (localStorage.getItem('kpi_font_size') as any) || 'base';
   });
@@ -1153,6 +1155,10 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
     setIsTvMode(prev => {
       const nextVal = !prev;
       if (nextVal) {
+        setShowHoverHeader(true);
+        setTimeout(() => {
+          setShowHoverHeader(false);
+        }, 4000);
         try {
           const docEl = document.documentElement;
           if (docEl.requestFullscreen) {
@@ -1162,6 +1168,7 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
           console.warn("Fullscreen request was prevented or not supported inside frame container.", e);
         }
       } else {
+        setShowHoverHeader(false);
         try {
           if (document.fullscreenElement) {
             document.exitFullscreen();
@@ -1699,118 +1706,142 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
       style={{ direction: 'rtl' }}
     >
       
-      {isTvMode ? (
-        /* GORGEOUS AUTOPLAYING INDUSTRIAL WIDESCREEN TV FLOATING CONTROL BAR */
-        <div id="tv-control-bar" className={`flex flex-wrap items-center justify-between gap-4 p-4 rounded-3xl mb-1 border transition-colors duration-300 ${
-          activeDark 
-            ? 'bg-zinc-900/90 border-zinc-800 text-zinc-200' 
-            : 'bg-white/95 border-zinc-200 text-zinc-800'
-        } backdrop-blur-md shadow-lg sticky top-0 z-[10000] select-none`}>
-          <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center">
-              <span className="absolute inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400 opacity-75 animate-ping" />
-              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500" />
-            </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm text-[#0D5F54] dark:text-emerald-400">شاشة عرض مؤشرات الأداء (بث التلفزيون)</span>
-                <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg">تحديث تلقائي مستمر</span>
-              </div>
-              <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">
-                {isRtl 
-                  ? `مزامنة مباشرة عبر السحاب | التحديث التلقائي القادم بعد: ${refreshTimer} ثانية | اضغط Esc أو زر إغلاق للمغادرة`
-                  : `Persistent cloud synchronization active | Next refresh in: ${refreshTimer}s | Press Esc or exit button to leave`}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Auto-Fit Toggle Button */}
-            <button
-              onClick={() => {
-                const nextVal = !isAutoFit;
-                setIsAutoFit(nextVal);
-              }}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[11px] font-bold transition-all cursor-pointer select-none ${
-                isAutoFit 
-                  ? 'bg-emerald-505/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' 
-                  : (activeDark ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
-              }`}
-              title={isRtl ? 'تفعيل ملاءمة الشاشة التلقائية لحجم التلفزيون' : 'Auto fit dashboard to screen size'}
-            >
-              <div className={`w-1.5 h-1.5 rounded-full ${isAutoFit ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
-              <span>{isRtl ? 'ملاءمة تلقائية للشاشة' : 'Auto-Fit Screen'}</span>
-            </button>
-
-            {/* Sizing Scaling Keyboard instructions & buttons */}
-            <div className={`flex items-center gap-2 border px-3 py-1 rounded-2xl ${
-              activeDark ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-50'
-            }`}>
-              <span className="text-[10px] font-bold text-zinc-400">{isRtl ? 'حجم الشاشة (+ / -):' : 'TV Zoom (+/-):'}</span>
-              <button 
-                onClick={() => {
-                  setIsAutoFit(false);
-                  setTvZoom(z => Math.max(0.4, parseFloat((z - 0.05).toFixed(2))));
-                }}
-                className="w-6 h-6 flex items-center justify-center hover:bg-zinc-500/10 rounded-lg text-xs font-bold"
-                title={isRtl ? 'تصغير حجم اللوحة' : 'Zoom Out'}
-              >
-                -
-              </button>
-              <span className={`text-xs font-black min-w-[2.5rem] text-center font-mono ${isAutoFit ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-650 dark:text-zinc-350'}`}>{Math.round(tvZoom * 100)}%</span>
-              <button 
-                onClick={() => {
-                  setIsAutoFit(false);
-                  setTvZoom(z => Math.min(1.5, parseFloat((z + 0.05).toFixed(2))));
-                }}
-                className="w-6 h-6 flex items-center justify-center hover:bg-zinc-500/10 rounded-lg text-xs font-bold"
-                title={isRtl ? 'تكبير حجم اللوحة' : 'Zoom In'}
-              >
-                +
-              </button>
-            </div>
-
-            {/* TV Day Night theme toggler */}
-            <button
-              onClick={toggleDark}
-              className={`p-2 rounded-2xl border transition-colors ${
-                activeDark 
-                  ? 'bg-zinc-800 border-zinc-700 text-amber-400 hover:bg-zinc-750' 
-                  : 'bg-zinc-50 border-zinc-200 text-indigo-900 hover:bg-zinc-100'
-              }`}
-              title={isRtl ? 'تبديل المظهر النهاري/المسائي للتلفزيون' : 'Switch TV Widescreen Dark/Light colors'}
-            >
-              {activeDark ? <Sun size={15} /> : <Moon size={15} />}
-            </button>
-
-            {/* TV Customize Layout Panel toggle */}
-            <button
-              onClick={() => setShowCustomizer(!showCustomizer)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border text-[11px] font-bold transition-all cursor-pointer select-none ${
-                showCustomizer 
-                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30' 
-                  : (activeDark ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
-              }`}
-              title={isRtl ? 'تخصيص ترتيب وحجم الخط والبطاقات على التلفزيون' : 'Customize layouts, order, and font on TV'}
-            >
-              <Sliders size={13} />
-              <span>{isRtl ? 'تعديل الترتيب والمساحات' : 'Layout & Order'}</span>
-            </button>
-
-            {/* Exit Mode button */}
-            <button
-              onClick={handleToggleFullscreen}
-              className="flex items-center gap-1.5 px-4.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/15 rounded-2xl text-xs font-extrabold transition-all cursor-pointer"
-            >
-              <Minimize2 size={13} />
-              <span>{isRtl ? 'خروج من البث' : 'Exit TV Broadcast'}</span>
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* The old action bar has been removed to free up screen space. All controls are now accessible via the floating control panel button next to the logo or the persistent FAB. */
-        null
+      {/* INVISIBLE HOVER SENSOR ZONE AT THE TOP FOR TV MODE */}
+      {isTvMode && (
+        <div 
+          className="fixed top-0 left-0 right-0 h-3 z-[99998] bg-transparent cursor-pointer"
+          onMouseEnter={() => setShowHoverHeader(true)}
+        />
       )}
+
+      {/* FLOATING HOVER ACTION BAR (بث التلفزيون - شاشه كامله عائمه تظهر عند تمرير الماوس للأعلى) */}
+      <AnimatePresence>
+        {isTvMode && showHoverHeader && (
+          <motion.div
+            id="tv-control-bar"
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 26 }}
+            onMouseEnter={() => setShowHoverHeader(true)}
+            onMouseLeave={() => setShowHoverHeader(false)}
+            className={`fixed top-4 left-4 right-4 z-[100000] flex flex-wrap items-center justify-between gap-4 p-4 rounded-3xl border transition-all duration-350 select-none ${
+              activeDark 
+                ? 'bg-zinc-900/95 border-zinc-800 text-zinc-200 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)]' 
+                : 'bg-white/98 border-zinc-200 text-zinc-800 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.15)]'
+            } backdrop-blur-md`}
+            style={{ direction: 'rtl' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center justify-center">
+                <span className="absolute inline-flex h-3.5 w-3.5 rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500" />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-sm text-[#0D5F54] dark:text-emerald-400">شاشة عرض مؤشرات الأداء (بث التلفزيون)</span>
+                  <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg">تحديث تلقائي مستمر</span>
+                </div>
+                <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">
+                  {isRtl 
+                    ? `مزامنة مباشرة عبر السحاب | التحديث التلقائي القادم بعد: ${refreshTimer} ثانية | اضغط Esc أو زر إغلاق للمغادرة`
+                    : `Persistent cloud synchronization active | Next refresh in: ${refreshTimer}s | Press Esc or exit button to leave`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Auto-Fit Toggle Button */}
+              <button
+                onClick={() => {
+                  const nextVal = !isAutoFit;
+                  setIsAutoFit(nextVal);
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl border text-[11px] font-bold transition-all cursor-pointer select-none active:scale-95 ${
+                  isAutoFit 
+                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-black' 
+                    : (activeDark ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
+                }`}
+                title={isRtl ? 'تفعيل ملاءمة الشاشة التلقائية لحجم التلفزيون' : 'Auto fit dashboard to screen size'}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${isAutoFit ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'}`} />
+                <span>{isRtl ? 'ملاءمة تلقائية للشاشة' : 'Auto-Fit Screen'}</span>
+              </button>
+
+              {/* Sizing Scaling Keyboard instructions & buttons */}
+              <div className={`flex items-center gap-2 border px-3 py-1 rounded-2xl ${
+                activeDark ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-50'
+              }`}>
+                <span className="text-[10px] font-bold text-zinc-400">{isRtl ? 'حجم الشاشة (+ / -):' : 'TV Zoom (+/-):'}</span>
+                <button 
+                  onClick={() => {
+                    setIsAutoFit(false);
+                    setTvZoom(z => Math.max(0.4, parseFloat((z - 0.05).toFixed(2))));
+                  }}
+                  className="w-6 h-6 flex items-center justify-center hover:bg-zinc-500/10 rounded-lg text-xs font-bold cursor-pointer select-none active:scale-90"
+                  title={isRtl ? 'تصغير حجم اللوحة' : 'Zoom Out'}
+                >
+                  -
+                </button>
+                <span className={`text-xs font-black min-w-[2.5rem] text-center font-mono ${isAutoFit ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-650 dark:text-zinc-350'}`}>{Math.round(tvZoom * 100)}%</span>
+                <button 
+                  onClick={() => {
+                    setIsAutoFit(false);
+                    setTvZoom(z => Math.min(1.5, parseFloat((z + 0.05).toFixed(2))));
+                  }}
+                  className="w-6 h-6 flex items-center justify-center hover:bg-zinc-500/10 rounded-lg text-xs font-bold cursor-pointer select-none active:scale-90"
+                  title={isRtl ? 'تكبير حجم اللوحة' : 'Zoom In'}
+                >
+                  +
+                </button>
+              </div>
+
+              {/* TV Day Night theme toggler */}
+              <button
+                onClick={toggleDark}
+                className={`p-2 rounded-2xl border transition-colors cursor-pointer select-none active:scale-95 ${
+                  activeDark 
+                    ? 'bg-zinc-800 border-zinc-700 text-amber-400 hover:bg-zinc-750' 
+                    : 'bg-zinc-50 border-zinc-200 text-[#0E5F59] hover:bg-zinc-100'
+                }`}
+                title={isRtl ? 'تبديل المظهر النهاري/المسائي للتلفزيون' : 'Switch TV Widescreen Dark/Light colors'}
+              >
+                {activeDark ? <Sun size={15} /> : <Moon size={15} />}
+              </button>
+
+              {/* TV Customize Layout Panel toggle */}
+              <button
+                onClick={() => {
+                  setShowCustomizer(!showCustomizer);
+                  setShowConfig(false);
+                  setShowHoverHeader(false);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border text-[11px] font-bold transition-all cursor-pointer select-none active:scale-95 ${
+                  showCustomizer 
+                    ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30' 
+                    : (activeDark ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-750' : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50')
+                }`}
+                title={isRtl ? 'تخصيص ترتيب وحجم الخط والبطاقات على التلفزيون' : 'Customize layouts, order, and font on TV'}
+              >
+                <Sliders size={13} />
+                <span>{isRtl ? 'تعديل الترتيب والمساحات' : 'Layout & Order'}</span>
+              </button>
+
+              {/* Exit Mode button */}
+              <button
+                onClick={() => {
+                  handleToggleFullscreen();
+                  setShowHoverHeader(false);
+                }}
+                className="flex items-center gap-1.5 px-4.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/15 rounded-2xl text-xs font-black transition-all cursor-pointer select-none active:scale-95"
+              >
+                <Minimize2 size={13} />
+                <span>{isRtl ? 'خروج من البث' : 'Exit TV Broadcast'}</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Sheets Sync Collapsible Panel - Hidden on TV Mode */}
       <AnimatePresence>
@@ -2820,6 +2851,8 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
           </div>
         )}
       </AnimatePresence>
+
+
 
       {/* PERSISTENT FLOATING CONTROL BUTTON */}
       <div className={`fixed bottom-6 left-6 z-[999] transition-all duration-300 ${isTvMode ? 'opacity-30 hover:opacity-100 scale-90 hover:scale-100' : 'opacity-100'}`}>
