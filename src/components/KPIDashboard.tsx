@@ -214,6 +214,9 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg' | 'xl'>(() => {
     return (localStorage.getItem('kpi_font_size') as any) || 'base';
   });
+  const [fontFamily, setFontFamily] = useState<string>(() => {
+    return localStorage.getItem('kpi_font_family') || 'Cairo';
+  });
   const [cardSpacing, setCardSpacing] = useState<'sm' | 'md' | 'lg'>(() => {
     return (localStorage.getItem('kpi_card_spacing') as any) || 'md';
   });
@@ -232,6 +235,9 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
   useEffect(() => {
     localStorage.setItem('kpi_font_size', fontSize);
   }, [fontSize]);
+  useEffect(() => {
+    localStorage.setItem('kpi_font_family', fontFamily);
+  }, [fontFamily]);
   useEffect(() => {
     localStorage.setItem('kpi_card_spacing', cardSpacing);
   }, [cardSpacing]);
@@ -270,6 +276,7 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
 
   const handleResetLayout = () => {
     setFontSize('base');
+    setFontFamily('Cairo');
     setCardSpacing('md');
     setTopCardsCols(4);
     setTopCardsOrder(['production', 'quality', 'safety', 'warehouse']);
@@ -280,6 +287,40 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
   // Typography Scaling Helper
   const getFontSizeClass = (level: 'title' | 'subtitle' | 'table-head' | 'table-body' | 'text' | 'section-header' | 'sub-text' | 'legend-title' | 'card-title') => {
     if (isTvMode) {
+      if (fontSize === 'sm') {
+        if (level === 'title') return 'text-base font-black';
+        if (level === 'subtitle') return 'text-[9px] font-bold';
+        if (level === 'card-title') return 'text-[9px] font-black';
+        if (level === 'section-header') return 'text-[9px] font-black py-0.5';
+        if (level === 'table-head') return 'text-[8px] py-0.5';
+        if (level === 'table-body') return 'text-[9px] py-0.5';
+        if (level === 'sub-text') return 'text-[7.5px]';
+        if (level === 'legend-title') return 'text-[9px]';
+        return 'text-[9px]';
+      }
+      if (fontSize === 'lg') {
+        if (level === 'title') return 'text-xl md:text-2xl font-black';
+        if (level === 'subtitle') return 'text-[11px] md:text-xs font-bold';
+        if (level === 'card-title') return 'text-[11px] md:text-xs font-black';
+        if (level === 'section-header') return 'text-[11px] md:text-xs font-black py-1';
+        if (level === 'table-head') return 'text-[10px] md:text-[11px] py-1';
+        if (level === 'table-body') return 'text-[11px] md:text-[12.5px] py-1';
+        if (level === 'sub-text') return 'text-[9.5px] md:text-[10.5px]';
+        if (level === 'legend-title') return 'text-[11.5px]';
+        return 'text-[11px]';
+      }
+      if (fontSize === 'xl') {
+        if (level === 'title') return 'text-2xl md:text-3xl font-black';
+        if (level === 'subtitle') return 'text-xs md:text-sm font-bold';
+        if (level === 'card-title') return 'text-xs md:text-sm font-black';
+        if (level === 'section-header') return 'text-xs md:text-sm font-black py-1.5';
+        if (level === 'table-head') return 'text-[11px] md:text-xs py-1';
+        if (level === 'table-body') return 'text-[12px] md:text-[13.5px] py-1';
+        if (level === 'sub-text') return 'text-[10.5px] md:text-[11.5px]';
+        if (level === 'legend-title') return 'text-xs';
+        return 'text-xs';
+      }
+      // 'base' default
       if (level === 'title') return 'text-lg md:text-xl font-black';
       if (level === 'subtitle') return 'text-[10px] md:text-[11px] font-bold';
       if (level === 'card-title') return 'text-[10px] md:text-[11px] font-black';
@@ -1703,7 +1744,10 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
           ? `fixed inset-0 z-[9999] overflow-hidden p-0 flex flex-col gap-3 ${isTvThemeDark ? 'tv-dark-override bg-zinc-950 text-zinc-100' : 'bg-slate-50 text-zinc-900'}` 
           : 'space-y-6 w-full'
       }`}
-      style={{ direction: 'rtl' }}
+      style={{ 
+        direction: 'rtl',
+        fontFamily: fontFamily === 'Cairo' ? '"Cairo", sans-serif' : fontFamily === 'Tajawal' ? '"Tajawal", sans-serif' : fontFamily === 'Almarai' ? '"Almarai", sans-serif' : fontFamily === 'Alexandria' ? '"Alexandria", sans-serif' : 'sans-serif'
+      }}
     >
       
       {/* INVISIBLE HOVER SENSOR ZONE AT THE TOP FOR TV MODE */}
@@ -2028,6 +2072,31 @@ export default function KPIDashboard({ lang, user, isDark = true, setIsDark }: K
                         </button>
                       );
                     })}
+                  </div>
+                </div>
+
+                {/* Font Family controls */}
+                <div className="space-y-1.5">
+                  <span className="text-zinc-500 dark:text-zinc-400 block">{isRtl ? 'نوع خط الكتابة العربي:' : 'Arabic Font Style:'}</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { id: 'Cairo', name: 'Cairo (جذاب وأنيق)' },
+                      { id: 'Tajawal', name: 'Tajawal (رصين هندسي)' },
+                      { id: 'Almarai', name: 'Almarai (سلس ونظيف)' },
+                      { id: 'Alexandria', name: 'Alexandria (حديث عريض)' }
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setFontFamily(f.id)}
+                        className={`py-1.5 px-2 rounded-xl border text-[10px] font-black transition-all cursor-pointer ${
+                          fontFamily === f.id 
+                            ? 'bg-emerald-500 text-white border-emerald-500' 
+                            : 'bg-zinc-100 dark:bg-zinc-850 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        {f.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
