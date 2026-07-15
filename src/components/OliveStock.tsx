@@ -626,7 +626,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       const prefix = batchVal.substring(0, 3).toUpperCase();
       const normalizedBatch = batchVal.toUpperCase();
       let rowAnalysis = 'none';
-      if (prefix === 'PWL' || prefix === 'PNC' || prefix === 'RAN' || normalizedBatch.endsWith('NOT')) {
+      if (prefix === 'NOT' || prefix === 'PWL' || prefix === 'PNC' || prefix === 'RAN' || normalizedBatch.endsWith('NOT')) {
         rowAnalysis = 'Not free';
       } else if (prefix === 'FRE') {
         rowAnalysis = 'free';
