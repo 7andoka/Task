@@ -48,6 +48,20 @@ export interface SupplyMovement {
   poNumber?: string;
   status: SupplyStatus;
   
+  // New additional fields for comprehensive raw material delivery tracking
+  postNumber?: string;      // رقم البوست
+  sapNumber?: string;       // رقم الساب
+  movementNumber?: string;  // رقم الحركة
+  movementType?: string;    // الحركة
+  date?: string;            // التاريخ
+  deliveryNote?: string;    // اذن تسليم المورد
+  materialCode?: string;    // الكود
+  size?: string;            // الحجم
+  batch?: string;           // الباتش
+  quantity?: number;        // الكمية
+  unit?: string;            // الوحدة
+  notes?: string;           // ملاحظات
+  
   // Quality Section
   qualityDecision?: QualityDecision;
   qualityComments?: string;
@@ -249,6 +263,28 @@ export interface ProcessingJob {
   purchasingApproverId?: string;
   completionTime?: string;
   completerId?: string;
+}
+
+export interface AgriRawMaterial {
+  id: string;
+  date: string; // التاريخ
+  movementType: 'إضافة' | 'صرف'; // الحركة
+  movementNumber: string; // رقم الحركة
+  supplier: string; // المورد
+  sapNumber: string; // رقم الساب
+  postNumber: string; // رقم البوست
+  deliveryNote: string; // إذن تسليم المورد
+  materialCode: string; // الكود
+  itemName: string; // الصنف
+  size: string; // الحجم
+  batch: string; // الباتش
+  quantity: number; // الكمية
+  unit: string; // الوحدة
+  driverName: string; // اسم السائق
+  vehicleNumber: string; // رقم السيارة
+  notes?: string; // ملاحظات
+  createdAt: string;
+  lastUpdatedAt: string;
 }
 
 export type Language = 'ar' | 'en';

@@ -55,13 +55,24 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
   const [filterStatus, setFilterStatus] = useState<SupplyStatus | 'All'>('All');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Form state for new movement (Security)
+  // Form state for new movement (Security) with 16 comprehensive fields
   const [newMovement, setNewMovement] = useState({
+    postNumber: '',
+    sapNumber: '',
     clientName: '',
+    movementNumber: '',
+    movementType: 'استلام', // Default to receipt
+    date: new Date().toISOString().split('T')[0], // Default to current date YYYY-MM-DD
+    deliveryNote: '',
+    materialCode: '',
     itemName: '',
+    size: '',
+    batch: '',
+    quantity: '',
+    unit: 'كجم', // Default to Kg
     driverName: '',
     vehicleNumber: '',
-    poNumber: '',
+    notes: '',
   });
 
   useEffect(() => {
@@ -119,11 +130,22 @@ export default function SupplyTracking({ lang, user, allUsers }: SupplyTrackingP
 
     const message = `
 ${header}
-العميل: ${movement.clientName}
+التاريخ: ${movement.date || format(new Date(movement.entryTime), 'yyyy-MM-dd')}
+رقم البوست: ${movement.postNumber || '-'}
+رقم الساب: ${movement.sapNumber || '-'}
+المورد: ${movement.clientName}
+رقم الحركة: ${movement.movementNumber || '-'}
+الحركة: ${movement.movementType || '-'}
+اذن تسليم المورد: ${movement.deliveryNote || '-'}
+الكود: ${movement.materialCode || '-'}
 الصنف: ${movement.itemName}
-رقم الـ PO: ${movement.poNumber || '-'}
-السائق: ${movement.driverName}
+الحجم: ${movement.size || '-'}
+الباتش: ${movement.batch || '-'}
+الكمية: ${movement.quantity || '-'}
+الوحدة: ${movement.unit || '-'}
+اسم السائق: ${movement.driverName}
 رقم السيارة: ${movement.vehicleNumber}
+ملاحظات: ${movement.notes || '-'}
 الحالة: ${statusLabel}
 الإجراء: ${actionLabel}
 التوقيت: ${format(new Date(), 'p - dd/MM/yyyy', { locale: lang === 'ar' ? ar : enUS })}
@@ -155,8 +177,23 @@ ${header}
       itemName: newMovement.itemName,
       driverName: newMovement.driverName,
       vehicleNumber: newMovement.vehicleNumber,
-      poNumber: newMovement.poNumber,
+      poNumber: newMovement.postNumber, // Keep poNumber backward compatible with postNumber
       status: 'Security Entry',
+      
+      // Save all 16 comprehensive fields
+      postNumber: newMovement.postNumber,
+      sapNumber: newMovement.sapNumber,
+      movementNumber: newMovement.movementNumber,
+      movementType: newMovement.movementType,
+      date: newMovement.date,
+      deliveryNote: newMovement.deliveryNote,
+      materialCode: newMovement.materialCode,
+      size: newMovement.size,
+      batch: newMovement.batch,
+      quantity: parseFloat(newMovement.quantity) || 0,
+      unit: newMovement.unit,
+      notes: newMovement.notes,
+      
       createdAt: new Date().toISOString(),
       lastUpdatedAt: new Date().toISOString(),
     };
@@ -165,7 +202,24 @@ ${header}
       await storageService.saveSupplyMovement(movement);
       setMovements([movement, ...movements]);
       setIsAdding(false);
-      setNewMovement({ clientName: '', itemName: '', driverName: '', vehicleNumber: '', poNumber: '' });
+      setNewMovement({
+        postNumber: '',
+        sapNumber: '',
+        clientName: '',
+        movementNumber: '',
+        movementType: 'استلام',
+        date: new Date().toISOString().split('T')[0],
+        deliveryNote: '',
+        materialCode: '',
+        itemName: '',
+        size: '',
+        batch: '',
+        quantity: '',
+        unit: 'كجم',
+        driverName: '',
+        vehicleNumber: '',
+        notes: '',
+      });
       toast.success(lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Entry recorded successfully');
       
       // Open WhatsApp first, then notify
@@ -304,15 +358,13 @@ ${header}
           </p>
         </div>
 
-        {hasRole(['Security', 'Admin']) ? (
-          <button
-            onClick={() => setIsAdding(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-all shadow-lg shadow-emerald-500/20"
-          >
-            <Plus size={20} />
-            {lang === 'ar' ? 'تسجيل دخول سيارة' : 'Register Vehicle Entry'}
-          </button>
-        ) : null}
+        <button
+          onClick={() => setIsAdding(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-all shadow-lg shadow-emerald-500/20"
+        >
+          <Plus size={20} />
+          {lang === 'ar' ? 'تسجيل حركة جديدة' : 'Register New Movement'}
+        </button>
       </div>
 
       {/* Search and Filter */}
@@ -494,7 +546,76 @@ ${header}
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800"
                   >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    {/* ERP Comprehensive Receipt Sheet */}
+                    <div className="mb-4">
+                      <p className="font-black text-xs text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-3">
+                        {lang === 'ar' ? 'مستند حركة توريد الخام بالتفصيل' : 'Detailed Raw Material Delivery Sheet'}
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-zinc-50 dark:bg-zinc-800/20 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800/60">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'التاريخ' : 'Date'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.date || format(new Date(movement.entryTime), 'yyyy-MM-dd')}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'الحركة' : 'Movement'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.movementType || 'استلام'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'رقم الحركة' : 'Movement No.'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.movementNumber || '-'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'رقم البوست' : 'Post No.'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.postNumber || '-'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'رقم الساب' : 'SAP No.'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.sapNumber || '-'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'المورد' : 'Supplier'}</span>
+                          <span className="font-bold text-sm text-emerald-600 dark:text-emerald-400">{movement.clientName}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'اذن تسليم المورد' : 'Supplier Permit'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.deliveryNote || '-'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'الكود' : 'Code'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.materialCode || '-'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'الصنف' : 'Item'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.itemName}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'الحجم' : 'Size'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.size || '-'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'الباتش' : 'Batch'}</span>
+                          <span className="font-bold text-sm font-mono text-blue-600 dark:text-blue-400">{movement.batch || '-'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'الكمية والوحدة' : 'Qty & Unit'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.quantity?.toLocaleString() || '0'} {movement.unit || 'كجم'}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'اسم السائق' : 'Driver Name'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.driverName}</span>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'رقم السيارة' : 'Vehicle No.'}</span>
+                          <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{movement.vehicleNumber}</span>
+                        </div>
+                        <div className="space-y-0.5 col-span-2">
+                          <span className="text-[10px] font-medium text-zinc-400 block">{lang === 'ar' ? 'ملاحظات' : 'Notes'}</span>
+                          <span className="text-xs text-zinc-600 dark:text-zinc-400 block">{movement.notes || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mt-2">
                       <div className="space-y-2">
                         <p className="font-bold text-zinc-900 dark:text-white">{lang === 'ar' ? 'تفاصيل العمليات' : 'Operation Details'}</p>
                         <div className="text-zinc-500 dark:text-zinc-400 space-y-1">
@@ -582,81 +703,234 @@ ${header}
       {/* Add Movement Modal */}
       <AnimatePresence>
         {isAdding && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsAdding(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden my-8"
             >
               <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{lang === 'ar' ? 'تسجيل دخول سيارة' : 'Register Vehicle Entry'}</h2>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+                  {lang === 'ar' ? 'تسجيل حركة توريد جديدة' : 'Register New Supply Movement'}
+                </h2>
                 <button onClick={() => setIsAdding(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
                   <XCircle size={24} />
                 </button>
               </div>
 
-              <form onSubmit={handleAddMovement} className="p-6 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.clientName}</label>
-                  <input
-                    required
-                    type="text"
-                    value={newMovement.clientName}
-                    onChange={(e) => setNewMovement({ ...newMovement, clientName: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.itemName}</label>
-                  <input
-                    required
-                    type="text"
-                    value={newMovement.itemName}
-                    onChange={(e) => setNewMovement({ ...newMovement, itemName: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.driverName}</label>
+              <form onSubmit={handleAddMovement} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-thin">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* التاريخ */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'التاريخ' : 'Date'}</label>
+                    <input
+                      required
+                      type="date"
+                      value={newMovement.date}
+                      onChange={(e) => setNewMovement({ ...newMovement, date: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الحركة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الحركة' : 'Movement'}</label>
+                    <select
+                      value={newMovement.movementType}
+                      onChange={(e) => setNewMovement({ ...newMovement, movementType: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm text-zinc-900 dark:text-white"
+                    >
+                      <option value="استلام">{lang === 'ar' ? 'استلام (توريد)' : 'Receipt'}</option>
+                      <option value="صرف">{lang === 'ar' ? 'صرف' : 'Issue'}</option>
+                    </select>
+                  </div>
+
+                  {/* رقم الحركة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'رقم الحركة' : 'Movement Number'}</label>
+                    <input
+                      type="text"
+                      value={newMovement.movementNumber}
+                      onChange={(e) => setNewMovement({ ...newMovement, movementNumber: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'أدخل رقم الحركة' : 'Enter movement number'}
+                    />
+                  </div>
+
+                  {/* رقم البوست */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'رقم البوست' : 'Post Number'}</label>
+                    <input
+                      type="text"
+                      value={newMovement.postNumber}
+                      onChange={(e) => setNewMovement({ ...newMovement, postNumber: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'أدخل رقم البوست' : 'Enter post number'}
+                    />
+                  </div>
+
+                  {/* رقم الساب */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'رقم الساب' : 'SAP Number'}</label>
+                    <input
+                      type="text"
+                      value={newMovement.sapNumber}
+                      onChange={(e) => setNewMovement({ ...newMovement, sapNumber: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'أدخل رقم الساب' : 'Enter SAP number'}
+                    />
+                  </div>
+
+                  {/* المورد */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'المورد *' : 'Supplier *'}</label>
+                    <input
+                      required
+                      type="text"
+                      value={newMovement.clientName}
+                      onChange={(e) => setNewMovement({ ...newMovement, clientName: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'اسم المورد / العميل' : 'Supplier/Client name'}
+                    />
+                  </div>
+
+                  {/* اذن تسليم المورد */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'اذن تسليم المورد' : 'Supplier Delivery Permit'}</label>
+                    <input
+                      type="text"
+                      value={newMovement.deliveryNote}
+                      onChange={(e) => setNewMovement({ ...newMovement, deliveryNote: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'رقم إذن التسليم' : 'Permit number'}
+                    />
+                  </div>
+
+                  {/* الكود */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الكود' : 'Code'}</label>
+                    <input
+                      type="text"
+                      value={newMovement.materialCode}
+                      onChange={(e) => setNewMovement({ ...newMovement, materialCode: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'كود الصنف' : 'Material code'}
+                    />
+                  </div>
+
+                  {/* الصنف */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الصنف *' : 'Item *'}</label>
+                    <input
+                      required
+                      type="text"
+                      value={newMovement.itemName}
+                      onChange={(e) => setNewMovement({ ...newMovement, itemName: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'اسم الصنف أو المادة' : 'Item/Material name'}
+                    />
+                  </div>
+
+                  {/* الحجم */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الحجم' : 'Size'}</label>
+                    <input
+                      type="text"
+                      value={newMovement.size}
+                      onChange={(e) => setNewMovement({ ...newMovement, size: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'مثال: 100-110 أو كبير' : 'e.g. 100-110'}
+                    />
+                  </div>
+
+                  {/* الباتش */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الباتش' : 'Batch'}</label>
+                    <input
+                      type="text"
+                      value={newMovement.batch}
+                      onChange={(e) => setNewMovement({ ...newMovement, batch: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'رقم الـ Batch' : 'Batch number'}
+                    />
+                  </div>
+
+                  {/* الكمية */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الكمية' : 'Quantity'}</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={newMovement.quantity}
+                      onChange={(e) => setNewMovement({ ...newMovement, quantity: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'مثال: 5000' : 'e.g. 5000'}
+                    />
+                  </div>
+
+                  {/* الوحدة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الوحدة' : 'Unit'}</label>
+                    <select
+                      value={newMovement.unit}
+                      onChange={(e) => setNewMovement({ ...newMovement, unit: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm text-zinc-900 dark:text-white"
+                    >
+                      <option value="كجم">{lang === 'ar' ? 'كيلوجرام (كجم)' : 'Kilogram'}</option>
+                      <option value="طن">{lang === 'ar' ? 'طن' : 'Ton'}</option>
+                      <option value="لتر">{lang === 'ar' ? 'لتر' : 'Liter'}</option>
+                      <option value="برميل">{lang === 'ar' ? 'برميل' : 'Barrel'}</option>
+                      <option value="كرتونة">{lang === 'ar' ? 'كرتونة' : 'Carton'}</option>
+                    </select>
+                  </div>
+
+                  {/* اسم السائق */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'اسم السائق *' : 'Driver Name *'}</label>
                     <input
                       required
                       type="text"
                       value={newMovement.driverName}
                       onChange={(e) => setNewMovement({ ...newMovement, driverName: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'اسم السائق الثلاثي' : 'Driver full name'}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.vehicleNumber}</label>
+
+                  {/* رقم السيارة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'رقم السيارة *' : 'Vehicle Number *'}</label>
                     <input
                       required
                       type="text"
                       value={newMovement.vehicleNumber}
                       onChange={(e) => setNewMovement({ ...newMovement, vehicleNumber: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'رقم اللوحة / السيارة' : 'License plate number'}
+                    />
+                  </div>
+
+                  {/* ملاحظات */}
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'ملاحظات' : 'Notes'}</label>
+                    <textarea
+                      value={newMovement.notes}
+                      onChange={(e) => setNewMovement({ ...newMovement, notes: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm min-h-[60px]"
+                      placeholder={lang === 'ar' ? 'أي ملاحظات إضافية على التوريد...' : 'Additional notes...'}
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang === 'ar' ? 'رقم الـ PO (اختياري)' : 'PO Number (Optional)'}</label>
-                  <input
-                    type="text"
-                    value={newMovement.poNumber}
-                    onChange={(e) => setNewMovement({ ...newMovement, poNumber: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
-                </div>
 
-                <div className="pt-4 flex gap-3">
+                <div className="pt-4 flex gap-3 border-t border-zinc-100 dark:border-zinc-800">
                   <button
                     type="button"
                     onClick={() => setIsAdding(false)}
@@ -680,96 +954,240 @@ ${header}
       {/* Edit Movement Modal */}
       <AnimatePresence>
         {isEditing && editingMovement && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => { setIsEditing(false); setEditingMovement(null); }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden my-8"
             >
               <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{lang === 'ar' ? 'تعديل حركة التوريد' : 'Edit Supply Movement'}</h2>
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+                  {lang === 'ar' ? 'تعديل حركة التوريد' : 'Edit Supply Movement'}
+                </h2>
                 <button onClick={() => { setIsEditing(false); setEditingMovement(null); }} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
                   <XCircle size={24} />
                 </button>
               </div>
 
-              <form onSubmit={handleEditMovement} className="p-6 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.clientName}</label>
-                  <input
-                    required
-                    type="text"
-                    value={editingMovement.clientName}
-                    onChange={(e) => setEditingMovement({ ...editingMovement, clientName: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.itemName}</label>
-                  <input
-                    required
-                    type="text"
-                    value={editingMovement.itemName}
-                    onChange={(e) => setEditingMovement({ ...editingMovement, itemName: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.driverName}</label>
+              <form onSubmit={handleEditMovement} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto scrollbar-thin">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* التاريخ */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'التاريخ' : 'Date'}</label>
+                    <input
+                      required
+                      type="date"
+                      value={editingMovement.date || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, date: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الحركة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الحركة' : 'Movement'}</label>
+                    <select
+                      value={editingMovement.movementType || 'استلام'}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, movementType: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm text-zinc-900 dark:text-white"
+                    >
+                      <option value="استلام">{lang === 'ar' ? 'استلام (توريد)' : 'Receipt'}</option>
+                      <option value="صرف">{lang === 'ar' ? 'صرف' : 'Issue'}</option>
+                    </select>
+                  </div>
+
+                  {/* رقم الحركة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'رقم الحركة' : 'Movement Number'}</label>
+                    <input
+                      type="text"
+                      value={editingMovement.movementNumber || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, movementNumber: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'رقم الحركة' : 'Movement number'}
+                    />
+                  </div>
+
+                  {/* رقم البوست */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'رقم البوست' : 'Post Number'}</label>
+                    <input
+                      type="text"
+                      value={editingMovement.postNumber || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, postNumber: e.target.value, poNumber: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'رقم البوست' : 'Post number'}
+                    />
+                  </div>
+
+                  {/* رقم الساب */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'رقم الساب' : 'SAP Number'}</label>
+                    <input
+                      type="text"
+                      value={editingMovement.sapNumber || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, sapNumber: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                      placeholder={lang === 'ar' ? 'رقم الساب' : 'SAP number'}
+                    />
+                  </div>
+
+                  {/* المورد */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'المورد *' : 'Supplier *'}</label>
+                    <input
+                      required
+                      type="text"
+                      value={editingMovement.clientName}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, clientName: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* اذن تسليم المورد */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'اذن تسليم المورد' : 'Supplier Delivery Permit'}</label>
+                    <input
+                      type="text"
+                      value={editingMovement.deliveryNote || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, deliveryNote: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الكود */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الكود' : 'Code'}</label>
+                    <input
+                      type="text"
+                      value={editingMovement.materialCode || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, materialCode: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الصنف */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الصنف *' : 'Item *'}</label>
+                    <input
+                      required
+                      type="text"
+                      value={editingMovement.itemName}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, itemName: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الحجم */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الحجم' : 'Size'}</label>
+                    <input
+                      type="text"
+                      value={editingMovement.size || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, size: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الباتش */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الباتش' : 'Batch'}</label>
+                    <input
+                      type="text"
+                      value={editingMovement.batch || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, batch: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الكمية */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الكمية' : 'Quantity'}</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={editingMovement.quantity || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, quantity: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الوحدة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الوحدة' : 'Unit'}</label>
+                    <select
+                      value={editingMovement.unit || 'كجم'}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, unit: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm text-zinc-900 dark:text-white"
+                    >
+                      <option value="كجم">{lang === 'ar' ? 'كيلوجرام (كجم)' : 'Kilogram'}</option>
+                      <option value="طن">{lang === 'ar' ? 'طن' : 'Ton'}</option>
+                      <option value="لتر">{lang === 'ar' ? 'لتر' : 'Liter'}</option>
+                      <option value="برميل">{lang === 'ar' ? 'برميل' : 'Barrel'}</option>
+                      <option value="كرتونة">{lang === 'ar' ? 'كرتونة' : 'Carton'}</option>
+                    </select>
+                  </div>
+
+                  {/* اسم السائق */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'اسم السائق *' : 'Driver Name *'}</label>
                     <input
                       required
                       type="text"
                       value={editingMovement.driverName}
                       onChange={(e) => setEditingMovement({ ...editingMovement, driverName: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.vehicleNumber}</label>
+
+                  {/* رقم السيارة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'رقم السيارة *' : 'Vehicle Number *'}</label>
                     <input
                       required
                       type="text"
                       value={editingMovement.vehicleNumber}
                       onChange={(e) => setEditingMovement({ ...editingMovement, vehicleNumber: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm"
+                    />
+                  </div>
+
+                  {/* الحالة */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'الحالة' : 'Status'}</label>
+                    <select
+                      value={editingMovement.status}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, status: e.target.value as SupplyStatus })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm text-zinc-900 dark:text-white"
+                    >
+                      <option value="Security Entry">{lang === 'ar' ? 'دخول الأمن' : 'Security Entry'}</option>
+                      <option value="Quality Inspection">{lang === 'ar' ? 'فحص الجودة' : 'Quality Inspection'}</option>
+                      <option value="Warehouse Unloading">{lang === 'ar' ? 'تفريغ المخزن' : 'Warehouse Unloading'}</option>
+                      <option value="Security Exit">{lang === 'ar' ? 'خروج الأمن' : 'Security Exit'}</option>
+                      <option value="Completed">{lang === 'ar' ? 'مكتمل' : 'Completed'}</option>
+                    </select>
+                  </div>
+
+                  {/* ملاحظات */}
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 block">{lang === 'ar' ? 'ملاحظات' : 'Notes'}</label>
+                    <textarea
+                      value={editingMovement.notes || ''}
+                      onChange={(e) => setEditingMovement({ ...editingMovement, notes: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-sm min-h-[60px]"
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang === 'ar' ? 'رقم الـ PO (اختياري)' : 'PO Number (Optional)'}</label>
-                  <input
-                    type="text"
-                    value={editingMovement.poNumber || ''}
-                    onChange={(e) => setEditingMovement({ ...editingMovement, poNumber: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
-                </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang === 'ar' ? 'الحالة' : 'Status'}</label>
-                  <select
-                    value={editingMovement.status}
-                    onChange={(e) => setEditingMovement({ ...editingMovement, status: e.target.value as SupplyStatus })}
-                    className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-zinc-900 dark:text-white [&>option]:text-zinc-900 [&>option]:bg-white dark:[&>option]:text-white dark:[&>option]:bg-zinc-800"
-                  >
-                    <option value="Security Entry">{lang === 'ar' ? 'دخول الأمن' : 'Security Entry'}</option>
-                    <option value="Quality Inspection">{lang === 'ar' ? 'فحص الجودة' : 'Quality Inspection'}</option>
-                    <option value="Warehouse Unloading">{lang === 'ar' ? 'تفريغ المخزن' : 'Warehouse Unloading'}</option>
-                    <option value="Security Exit">{lang === 'ar' ? 'خروج الأمن' : 'Security Exit'}</option>
-                    <option value="Completed">{lang === 'ar' ? 'مكتمل' : 'Completed'}</option>
-                  </select>
-                </div>
-                
-                <div className="pt-4 flex gap-3">
+                <div className="pt-4 flex gap-3 border-t border-zinc-100 dark:border-zinc-800">
                   <button
                     type="button"
                     onClick={() => { setIsEditing(false); setEditingMovement(null); }}

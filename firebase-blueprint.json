@@ -137,6 +137,33 @@
         "createdBy": { "type": "string" }
       },
       "required": ["id", "date", "thirdPartyName", "inputs", "outputs", "status", "createdAt", "createdBy"]
+    },
+    "AgriRawMaterial": {
+      "title": "AgriRawMaterial",
+      "description": "Agricultural raw material movement log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "movementType": { "type": "string", "enum": ["إضافة", "صرف"] },
+        "movementNumber": { "type": "string" },
+        "supplier": { "type": "string" },
+        "sapNumber": { "type": "string" },
+        "postNumber": { "type": "string" },
+        "deliveryNote": { "type": "string" },
+        "materialCode": { "type": "string" },
+        "itemName": { "type": "string" },
+        "size": { "type": "string" },
+        "batch": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "driverName": { "type": "string" },
+        "vehicleNumber": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastUpdatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "date", "movementType", "movementNumber", "supplier", "materialCode", "itemName", "quantity", "unit", "createdAt", "lastUpdatedAt"]
     }
   },
   "firestore": {
@@ -147,6 +174,7 @@
     "notifications": { "schema": "Notification", "description": "Notifications collection" },
     "audit_logs": { "schema": "AuditLog", "description": "Audit logs collection" },
     "barrel_movements": { "schema": "BarrelMovement", "description": "Barrel movements collection" },
-    "third_party_processing": { "schema": "ProcessingJob", "description": "Third-party processing jobs collection" }
+    "third_party_processing": { "schema": "ProcessingJob", "description": "Third-party processing jobs collection" },
+    "agri_raw_material": { "schema": "AgriRawMaterial", "description": "Agricultural raw materials movements collection" }
   }
 }

@@ -1,0 +1,1265 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Sprout,
+  Search,
+  Filter,
+  Plus,
+  Edit,
+  Trash2,
+  Calendar,
+  FileDown,
+  FileUp,
+  Download,
+  Check,
+  AlertTriangle,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
+  TrendingDown,
+  FileText,
+  Trash
+} from 'lucide-react';
+import { Language, UserProfile, AgriRawMaterial } from '../types';
+import { translations } from '../i18n';
+import { collection, query, orderBy, onSnapshot, doc, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
+import { COLLECTIONS } from '../constants';
+import { storageService } from '../services/storageService';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+
+interface AgriRawMaterialProps {
+  lang: Language;
+  user: UserProfile;
+}
+
+export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps) {
+  const isRtl = lang === 'ar';
+  const t = translations[lang];
+
+  // Role checking
+  const hasRole = (rolesToCheck: string | string[]) => {
+    const userRoles = user?.roles || (user?.role ? [user.role] : []);
+    if (Array.isArray(rolesToCheck)) {
+      return rolesToCheck.some(r => userRoles.includes(r as any));
+    }
+    return userRoles.includes(rolesToCheck as any);
+  };
+
+  const canEditOrDelete = hasRole(['Admin', 'Warehouse Manager', 'Department Head', 'Supervisor']);
+
+  // Real-time State
+  const [materials, setMaterials] = useState<AgriRawMaterial[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Search & Filter State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterSupplier, setFilterSupplier] = useState('All');
+  const [filterType, setFilterType] = useState('All'); // 'All' | 'إضافة' | 'صرف'
+  const [filterDate, setFilterDate] = useState('');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [formData, setFormData] = useState<Partial<AgriRawMaterial>>({
+    date: new Date().toISOString().slice(0, 10),
+    movementType: 'إضافة',
+    movementNumber: '',
+    supplier: '',
+    sapNumber: '',
+    postNumber: '',
+    deliveryNote: '',
+    materialCode: '',
+    itemName: '',
+    size: '',
+    batch: '',
+    quantity: 0,
+    unit: 'كجم',
+    driverName: '',
+    vehicleNumber: '',
+    notes: '',
+  });
+
+  // Validation & Error States
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Confirmation Modals
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
+  // Hidden File Input Ref for Import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch Materials on Mount
+  useEffect(() => {
+    const q = query(
+      collection(db, COLLECTIONS.AGRI_RAW_MATERIAL),
+      orderBy('date', 'desc')
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as AgriRawMaterial));
+      setMaterials(list);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error subscribing to agri raw materials:", error);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Filter unique suppliers for the filter dropdown
+  const uniqueSuppliers = Array.from(new Set(materials.map(m => m.supplier).filter(Boolean)));
+
+  // Filter and Search Logic
+  const filteredMaterials = materials.filter(item => {
+    // Search Term Filter
+    const matchesSearch = searchTerm ? (
+      (item.materialCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.itemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.supplier || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.batch || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.movementNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.vehicleNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
+    ) : true;
+
+    // Supplier Filter
+    const matchesSupplier = filterSupplier === 'All' ? true : item.supplier === filterSupplier;
+
+    // Movement Type Filter
+    const matchesType = filterType === 'All' ? true : item.movementType === filterType;
+
+    // Date Filter
+    const matchesDate = filterDate ? item.date === filterDate : true;
+
+    return matchesSearch && matchesSupplier && matchesType && matchesDate;
+  });
+
+  // Pagination Logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredMaterials.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredMaterials.length / itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterSupplier, filterType, filterDate]);
+
+  // Aggregate stats
+  const totalQuantity = filteredMaterials.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  const addedCount = filteredMaterials.filter(m => m.movementType === 'إضافة').length;
+  const dispatchCount = filteredMaterials.filter(m => m.movementType === 'صرف').length;
+
+  // Input Field validation
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    
+    if (!formData.date) errors.date = isRtl ? 'حقل التاريخ مطلوب' : 'Date is required';
+    if (!formData.movementType) errors.movementType = isRtl ? 'حقل الحركة مطلوب' : 'Movement type is required';
+    if (!formData.movementNumber?.trim()) errors.movementNumber = isRtl ? 'حقل رقم الحركة مطلوب' : 'Movement number is required';
+    if (!formData.supplier?.trim()) errors.supplier = isRtl ? 'حقل المورد مطلوب' : 'Supplier is required';
+    if (!formData.materialCode?.trim()) errors.materialCode = isRtl ? 'حقل الكود مطلوب' : 'Code is required';
+    if (!formData.itemName?.trim()) errors.itemName = isRtl ? 'حقل الصنف مطلوب' : 'Item name is required';
+    if (!formData.batch?.trim()) errors.batch = isRtl ? 'حقل الباتش مطلوب' : 'Batch is required';
+    if (!formData.unit?.trim()) errors.unit = isRtl ? 'حقل الوحدة مطلوب' : 'Unit is required';
+
+    const qty = Number(formData.quantity);
+    if (isNaN(qty) || qty <= 0) {
+      errors.quantity = isRtl ? 'يجب أن تكون الكمية أكبر من الصفر' : 'Quantity must be greater than zero';
+    }
+
+    // Duplication Check (Rule 12): movementNumber + materialCode + batch
+    if (formData.movementNumber && formData.materialCode && formData.batch) {
+      const isDuplicate = materials.some(item => 
+        item.id !== formData.id && 
+        item.movementNumber.trim() === formData.movementNumber?.trim() &&
+        item.materialCode.trim() === formData.materialCode?.trim() &&
+        item.batch.trim() === formData.batch?.trim()
+      );
+
+      if (isDuplicate) {
+        const dupMessage = isRtl 
+          ? 'السجل مكرر بالفعل (يتطابق رقم الحركة + الكود + الباتش مع سجل موجود)' 
+          : 'Duplicate record (Movement Number + Code + Batch matches an existing record)';
+        errors.duplicate = dupMessage;
+        toast.error(dupMessage);
+      }
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Open Create Modal
+  const handleOpenCreate = () => {
+    setModalMode('create');
+    setFormData({
+      date: new Date().toISOString().slice(0, 10),
+      movementType: 'إضافة',
+      movementNumber: '',
+      supplier: '',
+      sapNumber: '',
+      postNumber: '',
+      deliveryNote: '',
+      materialCode: '',
+      itemName: '',
+      size: '',
+      batch: '',
+      quantity: 0,
+      unit: 'كجم',
+      driverName: '',
+      vehicleNumber: '',
+      notes: '',
+    });
+    setValidationErrors({});
+    setIsModalOpen(true);
+  };
+
+  // Open Edit Modal
+  const handleOpenEdit = (item: AgriRawMaterial) => {
+    setModalMode('edit');
+    setFormData({ ...item });
+    setValidationErrors({});
+    setIsModalOpen(true);
+  };
+
+  // Save Record
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    try {
+      const finalId = modalMode === 'create' ? crypto.randomUUID() : formData.id!;
+      const recordToSave: AgriRawMaterial = {
+        id: finalId,
+        date: formData.date!,
+        movementType: formData.movementType as 'إضافة' | 'صرف',
+        movementNumber: formData.movementNumber!.trim(),
+        supplier: formData.supplier!.trim(),
+        sapNumber: (formData.sapNumber || '').trim(),
+        postNumber: (formData.postNumber || '').trim(),
+        deliveryNote: (formData.deliveryNote || '').trim(),
+        materialCode: formData.materialCode!.trim(),
+        itemName: formData.itemName!.trim(),
+        size: (formData.size || '').trim(),
+        batch: formData.batch!.trim(),
+        quantity: Number(formData.quantity),
+        unit: formData.unit!.trim(),
+        driverName: (formData.driverName || '').trim(),
+        vehicleNumber: (formData.vehicleNumber || '').trim(),
+        notes: (formData.notes || '').trim(),
+        createdAt: formData.createdAt || new Date().toISOString(),
+        lastUpdatedAt: new Date().toISOString(),
+      };
+
+      await storageService.saveAgriRawMaterial(recordToSave);
+      
+      toast.success(
+        isRtl 
+          ? (modalMode === 'create' ? 'تمت إضافة السجل بنجاح' : 'تم تحديث السجل بنجاح') 
+          : (modalMode === 'create' ? 'Record added successfully' : 'Record updated successfully')
+      );
+      
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'حدث خطأ أثناء حفظ السجل' : 'Error saving record');
+    }
+  };
+
+  // Delete Request
+  const handleDeleteRequest = (id: string) => {
+    setDeleteId(id);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  // Confirm Delete
+  const handleConfirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await storageService.deleteAgriRawMaterial(deleteId);
+      toast.success(isRtl ? 'تم حذف السجل بنجاح' : 'Record deleted successfully');
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'حدث خطأ أثناء الحذف' : 'Error deleting record');
+    } finally {
+      setIsDeleteConfirmOpen(false);
+      setDeleteId(null);
+    }
+  };
+
+  // Export to Excel
+  const exportToExcel = () => {
+    try {
+      const headers = isRtl ? [
+        'التاريخ', 'الحركة', 'رقم الحركة', 'المورد', 'رقم الساب', 'رقم البوست', 
+        'إذن تسليم المورد', 'الكود', 'الصنف', 'الحجم', 'الباتش', 'الكمية', 
+        'الوحدة', 'اسم السائق', 'رقم السيارة', 'ملاحظات'
+      ] : [
+        'Date', 'Movement Type', 'Movement Number', 'Supplier', 'SAP Number', 'Post Number',
+        'Supplier Delivery Note', 'Code', 'Item Name', 'Size', 'Batch', 'Quantity',
+        'Unit', 'Driver Name', 'Vehicle Number', 'Notes'
+      ];
+
+      const rows = filteredMaterials.map(item => [
+        item.date,
+        item.movementType,
+        item.movementNumber,
+        item.supplier,
+        item.sapNumber || '',
+        item.postNumber || '',
+        item.deliveryNote || '',
+        item.materialCode,
+        item.itemName,
+        item.size || '',
+        item.batch,
+        item.quantity,
+        item.unit,
+        item.driverName || '',
+        item.vehicleNumber || '',
+        item.notes || ''
+      ]);
+
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, isRtl ? 'الخام الزراعي' : 'Agri Raw Materials');
+      
+      XLSX.writeFile(workbook, `Agricultural_Raw_Materials_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(isRtl ? 'تم تصدير ملف Excel بنجاح' : 'Excel file exported successfully');
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'خطأ في التصدير' : 'Export failed');
+    }
+  };
+
+  // Export to PDF
+  const exportToPdf = () => {
+    try {
+      const doc = new jsPDF({ orientation: 'landscape' });
+      doc.setFont(isRtl ? 'Amiri' : 'helvetica');
+
+      // Add main header
+      doc.setFontSize(18);
+      doc.text(isRtl ? 'الخام الزراعي - كشف حركات التوريد والصرف' : 'Agricultural Raw Materials Movements Report', 14, 15);
+      
+      // Filter details
+      doc.setFontSize(10);
+      doc.text(
+        isRtl 
+          ? `التاريخ: ${new Date().toLocaleDateString('ar-EG')} | إجمالي الحركات: ${filteredMaterials.length} | إجمالي الكمية: ${totalQuantity.toLocaleString()}`
+          : `Date: ${new Date().toLocaleDateString()} | Total Movements: ${filteredMaterials.length} | Total Quantity: ${totalQuantity.toLocaleString()}`, 
+        14, 22
+      );
+
+      const tableHeaders = isRtl ? [
+        'التاريخ', 'الحركة', 'رقم الحركة', 'المورد', 'إذن التسليم', 'الكود', 'الصنف', 'الباتش', 'الكمية', 'الوحدة'
+      ] : [
+        'Date', 'Type', 'Mov.No', 'Supplier', 'Del.Note', 'Code', 'Item Name', 'Batch', 'Qty', 'Unit'
+      ];
+
+      const tableData = filteredMaterials.map(item => [
+        item.date,
+        item.movementType,
+        item.movementNumber,
+        item.supplier,
+        item.deliveryNote || '',
+        item.materialCode,
+        item.itemName,
+        item.batch,
+        item.quantity.toString(),
+        item.unit
+      ]);
+
+      (doc as any).autoTable({
+        head: [tableHeaders],
+        body: tableData,
+        startY: 28,
+        theme: 'striped',
+        styles: {
+          font: isRtl ? 'Amiri' : 'helvetica',
+          halign: isRtl ? 'right' : 'left',
+          fontSize: 9
+        },
+        headStyles: {
+          fillColor: [16, 185, 129], // Emerald green matching brand theme
+          textColor: [255, 255, 255]
+        }
+      });
+
+      doc.save(`Agricultural_Raw_Materials_${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success(isRtl ? 'تم تصدير ملف PDF بنجاح' : 'PDF exported successfully');
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'خطأ في تصدير PDF' : 'PDF export failed');
+    }
+  };
+
+  // Import from Excel
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+        if (jsonData.length === 0) {
+          toast.error(isRtl ? 'الملف المستورد فارغ' : 'Imported file is empty');
+          return;
+        }
+
+        let importedCount = 0;
+        let skippedDuplicateCount = 0;
+        let validationFailedCount = 0;
+
+        // Collect all existing record keys to prevent file-internal duplicates and database duplicates
+        const activeKeys = new Set(materials.map(m => `${m.movementNumber.trim()}_${m.materialCode.trim()}_${m.batch.trim()}`));
+
+        for (const row of jsonData) {
+          // Normalize row keys (support both Arabic and English headers)
+          const date = String(row['التاريخ'] || row['Date'] || row['date'] || new Date().toISOString().slice(0, 10));
+          const movementType = String(row['الحركة'] || row['Movement Type'] || row['movementType'] || 'إضافة').trim();
+          const movementNumber = String(row['رقم الحركة'] || row['Movement Number'] || row['movementNumber'] || '').trim();
+          const supplier = String(row['المورد'] || row['Supplier'] || row['supplier'] || '').trim();
+          const sapNumber = String(row['رقم الساب'] || row['SAP Number'] || row['sapNumber'] || '').trim();
+          const postNumber = String(row['رقم البوست'] || row['Post Number'] || row['postNumber'] || '').trim();
+          const deliveryNote = String(row['إذن تسليم المورد'] || row['Supplier Delivery Note'] || row['deliveryNote'] || '').trim();
+          const materialCode = String(row['الكود'] || row['Code'] || row['materialCode'] || '').trim();
+          const itemName = String(row['الصنف'] || row['Item Name'] || row['itemName'] || '').trim();
+          const size = String(row['الحجم'] || row['Size'] || row['size'] || '').trim();
+          const batch = String(row['الباتش'] || row['Batch'] || row['batch'] || '').trim();
+          const quantity = Number(row['الكمية'] || row['Quantity'] || row['quantity'] || 0);
+          const unit = String(row['الوحدة'] || row['Unit'] || row['unit'] || 'كجم').trim();
+          const driverName = String(row['اسم السائق'] || row['Driver Name'] || row['driverName'] || '').trim();
+          const vehicleNumber = String(row['رقم السيارة'] || row['Vehicle Number'] || row['vehicleNumber'] || '').trim();
+          const notes = String(row['ملاحظات'] || row['Notes'] || row['notes'] || '').trim();
+
+          // Validation
+          if (!date || !movementType || !movementNumber || !supplier || !materialCode || !itemName || !batch || !unit || isNaN(quantity) || quantity <= 0) {
+            validationFailedCount++;
+            continue;
+          }
+
+          // Normalize movementType to either Adding or Dispense in Arabic
+          const normalizedType = (movementType.includes('صرف') || movementType.toLowerCase().includes('disp') || movementType.toLowerCase().includes('out')) ? 'صرف' : 'إضافة';
+
+          const uniqueKey = `${movementNumber}_${materialCode}_${batch}`;
+
+          // Duplication Rule Guard
+          if (activeKeys.has(uniqueKey)) {
+            skippedDuplicateCount++;
+            continue;
+          }
+
+          // Register new unique key
+          activeKeys.add(uniqueKey);
+
+          // Build clean object
+          const record: AgriRawMaterial = {
+            id: crypto.randomUUID(),
+            date,
+            movementType: normalizedType,
+            movementNumber,
+            supplier,
+            sapNumber,
+            postNumber,
+            deliveryNote,
+            materialCode,
+            itemName,
+            size,
+            batch,
+            quantity,
+            unit,
+            driverName,
+            vehicleNumber,
+            notes,
+            createdAt: new Date().toISOString(),
+            lastUpdatedAt: new Date().toISOString()
+          };
+
+          // Save to DB
+          await storageService.saveAgriRawMaterial(record);
+          importedCount++;
+        }
+
+        toast.success(
+          isRtl 
+            ? `تم استيراد ${importedCount} حركات بنجاح. (تخطي مكرر: ${skippedDuplicateCount}, تخطي غير صالح: ${validationFailedCount})`
+            : `Imported ${importedCount} records successfully. (Skipped duplicates: ${skippedDuplicateCount}, invalid: ${validationFailedCount})`
+        );
+
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (err) {
+        console.error(err);
+        toast.error(isRtl ? 'حدث خطأ أثناء قراءة وتحليل ملف Excel' : 'Error parsing Excel file');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Drag and drop events for file import
+  const [dragActive, setDragActive] = useState(false);
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        // Trigger file input upload logic
+        const event = { target: { files: e.dataTransfer.files } } as unknown as React.ChangeEvent<HTMLInputElement>;
+        handleImportExcel(event);
+      } else {
+        toast.error(isRtl ? 'يرجى إسقاط ملفات Excel فقط (.xlsx, .xls)' : 'Please drop Excel files only (.xlsx, .xls)');
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header section */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/5 flex items-center justify-center shrink-0">
+            <Sprout className="text-emerald-500" size={24} />
+          </div>
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+              {isRtl ? '🌿 الخام الزراعي' : '🌿 Agricultural Raw Material'}
+            </h1>
+            <p className="text-sm text-zinc-500 mt-1">
+              {isRtl ? 'إدارة وتتبع حركات توريد وصرف الخامات الزراعية والتحقق من التكرار' : 'Manage, track and validate agricultural raw material receipts & issues'}
+            </p>
+          </div>
+        </div>
+
+        {/* Buttons Action Group */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {/* File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportExcel}
+            accept=".xlsx, .xls"
+            className="hidden"
+          />
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl font-medium transition-all text-sm shadow-sm"
+            title={isRtl ? 'استيراد من Excel' : 'Import from Excel'}
+          >
+            <FileUp size={18} />
+            <span>{isRtl ? 'استيراد Excel' : 'Import Excel'}</span>
+          </button>
+
+          <button
+            onClick={exportToExcel}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl font-medium transition-all text-sm shadow-sm"
+            title={isRtl ? 'تصدير إلى Excel' : 'Export to Excel'}
+          >
+            <FileDown size={18} />
+            <span>{isRtl ? 'تصدير Excel' : 'Export Excel'}</span>
+          </button>
+
+          <button
+            onClick={exportToPdf}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl font-medium transition-all text-sm shadow-sm"
+            title={isRtl ? 'تصدير كتقرير PDF' : 'Export to PDF'}
+          >
+            <FileText size={18} />
+            <span>{isRtl ? 'تقرير PDF' : 'PDF Report'}</span>
+          </button>
+
+          <button
+            onClick={handleOpenCreate}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-all text-sm shadow-lg shadow-emerald-500/20 w-full sm:w-auto"
+          >
+            <Plus size={18} />
+            <span>{isRtl ? 'إضافة حركة جديدة' : 'Add New Movement'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Aggregate Stats Section */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Quantity */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-500 font-medium">{isRtl ? 'إجمالي الكمية (المفلترة)' : 'Total Quantity (Filtered)'}</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <TrendingUp className="text-emerald-500" size={16} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-zinc-900 dark:text-white">{totalQuantity.toLocaleString()}</span>
+            <span className="text-xs text-zinc-500">{isRtl ? 'وحدة خامة' : 'units'}</span>
+          </div>
+        </div>
+
+        {/* Total Records */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-500 font-medium">{isRtl ? 'عدد الحركات الإجمالي' : 'Total Movements Count'}</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <FileText className="text-blue-500" size={16} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-zinc-900 dark:text-white">{filteredMaterials.length}</span>
+            <span className="text-xs text-zinc-500">{isRtl ? 'سجل' : 'records'}</span>
+          </div>
+        </div>
+
+        {/* Added Movements Count */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-500 font-medium">{isRtl ? 'عدد عمليات الإضافة' : 'Receipt (Add) Movements'}</span>
+            <div className="w-8 h-8 rounded-lg bg-teal-500/10 flex items-center justify-center">
+              <TrendingUp className="text-teal-500" size={16} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-zinc-900 dark:text-white">{addedCount}</span>
+            <span className="text-xs text-zinc-500">{isRtl ? 'حركة وارد' : 'receipts'}</span>
+          </div>
+        </div>
+
+        {/* Dispatch Movements Count */}
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-500 font-medium">{isRtl ? 'عدد عمليات الصرف' : 'Issue (Dispense) Movements'}</span>
+            <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center">
+              <TrendingDown className="text-rose-500" size={16} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-zinc-900 dark:text-white">{dispatchCount}</span>
+            <span className="text-xs text-zinc-500">{isRtl ? 'حركة صادر' : 'issues'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Excel Drag and Drop Overlay */}
+      <div
+        onDragEnter={handleDrag}
+        onDragOver={handleDrag}
+        onDragLeave={handleDrag}
+        onDrop={handleDrop}
+        className={`relative border-2 border-dashed rounded-2xl p-4 transition-all duration-200 text-center ${
+          dragActive
+            ? 'border-emerald-500 bg-emerald-500/5'
+            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
+        }`}
+      >
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          💡 {isRtl 
+            ? 'يمكنك سحب وإفلات ملف Excel (.xlsx) هنا للاستيراد السريع أو البحث والتصفية بالأسفل' 
+            : 'You can drag & drop an Excel file (.xlsx) here for rapid importing or search & filter below'}
+        </p>
+      </div>
+
+      {/* Filters Card */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-4">
+        <h3 className="font-bold text-sm text-zinc-900 dark:text-white flex items-center gap-2">
+          <Filter size={16} />
+          {isRtl ? 'البحث والتصفية المتقدمة' : 'Advanced Search & Filtering'}
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Quick Search */}
+          <div className="relative">
+            <Search className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-zinc-400`} size={18} />
+            <input
+              type="text"
+              placeholder={isRtl ? 'بحث كود، صنف، مورد، باتش، حركة...' : 'Search code, item, supplier, batch, movement...'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-zinc-50 dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-white`}
+            />
+          </div>
+
+          {/* Supplier Dropdown */}
+          <div>
+            <select
+              value={filterSupplier}
+              onChange={(e) => setFilterSupplier(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-white appearance-none"
+            >
+              <option value="All">{isRtl ? 'كل الموردين' : 'All Suppliers'}</option>
+              {uniqueSuppliers.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Movement Type Filter */}
+          <div>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-white appearance-none"
+            >
+              <option value="All">{isRtl ? 'كل الحركات (إضافة / صرف)' : 'All Movements'}</option>
+              <option value="إضافة">{isRtl ? 'إضافة فقط' : 'Add Only'}</option>
+              <option value="صرف">{isRtl ? 'صرف فقط' : 'Dispense Only'}</option>
+            </select>
+          </div>
+
+          {/* Date Filter */}
+          <div className="relative">
+            <Calendar className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-zinc-400`} size={18} />
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-zinc-50 dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-white`}
+            />
+          </div>
+        </div>
+
+        {/* Clear Filters indicator */}
+        {(searchTerm || filterSupplier !== 'All' || filterType !== 'All' || filterDate) && (
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setFilterSupplier('All');
+                setFilterType('All');
+                setFilterDate('');
+              }}
+              className="text-xs text-red-500 hover:underline flex items-center gap-1 font-medium"
+            >
+              <X size={14} />
+              {isRtl ? 'إلغاء جميع الفلاتر' : 'Reset All Filters'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Main Table Container */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center text-zinc-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+            {isRtl ? 'جاري تحميل البيانات...' : 'Loading raw agricultural materials...'}
+          </div>
+        ) : filteredMaterials.length === 0 ? (
+          <div className="p-12 text-center text-zinc-500">
+            <AlertTriangle className="mx-auto mb-4 text-zinc-400" size={32} />
+            <p className="font-medium text-zinc-700 dark:text-zinc-300">
+              {isRtl ? 'لا توجد سجلات مطابقة للبحث' : 'No matching records found'}
+            </p>
+            <p className="text-xs text-zinc-400 mt-1">
+              {isRtl ? 'أضف حركة جديدة أو اضبط معايير الفرز' : 'Create a new entry or reset the filters'}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Scrollable Responsive Table Wrapper */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-right border-separate border-spacing-0" dir={isRtl ? 'rtl' : 'ltr'}>
+                <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+                  <tr>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'التاريخ' : 'Date'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الحركة' : 'Movement'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'رقم الحركة' : 'Mov. No'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'المورد' : 'Supplier'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'رقم الساب' : 'SAP No'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'رقم البوست' : 'Post No'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'إذن التسليم' : 'Delivery Note'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الكود' : 'Code'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الصنف' : 'Item Name'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الحجم' : 'Size'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الباتش' : 'Batch'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الكمية' : 'Quantity'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الوحدة' : 'Unit'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'السائق' : 'Driver'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'السيارة' : 'Vehicle'}</th>
+                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'ملاحظات' : 'Notes'}</th>
+                    {canEditOrDelete && (
+                      <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800 text-center">{isRtl ? 'إجراءات' : 'Actions'}</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  {currentItems.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors"
+                    >
+                      <td className="p-3 whitespace-nowrap text-zinc-900 dark:text-white font-medium">{item.date}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                          item.movementType === 'إضافة'
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
+                            : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
+                        }`}>
+                          {item.movementType === 'إضافة' ? (
+                            <>
+                              <TrendingUp size={12} />
+                              <span>{isRtl ? 'إضافة' : 'Add'}</span>
+                            </>
+                          ) : (
+                            <>
+                              <TrendingDown size={12} />
+                              <span>{isRtl ? 'صرف' : 'Dispense'}</span>
+                            </>
+                          )}
+                        </span>
+                      </td>
+                      <td className="p-3 whitespace-nowrap font-mono font-bold text-zinc-800 dark:text-zinc-200">{item.movementNumber}</td>
+                      <td className="p-3 whitespace-nowrap text-zinc-800 dark:text-zinc-200">{item.supplier}</td>
+                      <td className="p-3 whitespace-nowrap font-mono text-zinc-500 dark:text-zinc-400">{item.sapNumber || '-'}</td>
+                      <td className="p-3 whitespace-nowrap font-mono text-zinc-500 dark:text-zinc-400">{item.postNumber || '-'}</td>
+                      <td className="p-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400">{item.deliveryNote || '-'}</td>
+                      <td className="p-3 whitespace-nowrap font-mono font-bold text-emerald-600 dark:text-emerald-400">{item.materialCode}</td>
+                      <td className="p-3 whitespace-nowrap text-zinc-800 dark:text-zinc-200 font-medium">{item.itemName}</td>
+                      <td className="p-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400">{item.size || '-'}</td>
+                      <td className="p-3 whitespace-nowrap font-mono text-zinc-800 dark:text-zinc-200">{item.batch}</td>
+                      <td className="p-3 whitespace-nowrap font-bold text-zinc-900 dark:text-white">
+                        {Number(item.quantity).toLocaleString()}
+                      </td>
+                      <td className="p-3 whitespace-nowrap text-zinc-500">{item.unit}</td>
+                      <td className="p-3 whitespace-nowrap text-zinc-800 dark:text-zinc-200">{item.driverName || '-'}</td>
+                      <td className="p-3 whitespace-nowrap font-mono text-zinc-800 dark:text-zinc-200">{item.vehicleNumber || '-'}</td>
+                      <td className="p-3 max-w-xs truncate text-zinc-500 dark:text-zinc-400" title={item.notes}>{item.notes || '-'}</td>
+                      
+                      {canEditOrDelete && (
+                        <td className="p-3 whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => handleOpenEdit(item)}
+                              className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+                              title={isRtl ? 'تعديل السجل' : 'Edit record'}
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRequest(item.id)}
+                              className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
+                              title={isRtl ? 'حذف السجل' : 'Delete record'}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Aggregated Total & Pagination Footer */}
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/30 border-t dark:border-zinc-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+              {/* Grand Total quantities of visible filtered list */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                  {isRtl ? 'إجمالي كمية السجلات الحالية:' : 'Total quantity of current records:'}
+                </span>
+                <span className="px-3 py-1 bg-emerald-500 text-white rounded-lg text-sm font-bold shadow-sm shadow-emerald-500/10">
+                  {totalQuantity.toLocaleString()}
+                </span>
+              </div>
+
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 disabled:opacity-40 hover:bg-white dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    {isRtl ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+                  </button>
+                  <span className="text-xs text-zinc-500 px-3">
+                    {isRtl 
+                      ? `الصفحة ${currentPage} من ${totalPages}` 
+                      : `Page ${currentPage} of ${totalPages}`}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 disabled:opacity-40 hover:bg-white dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    {isRtl ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* CREATE & EDIT FORM MODAL */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col my-8"
+            >
+              {/* Modal Title */}
+              <div className="px-6 py-4 border-b dark:border-zinc-800 flex items-center justify-between bg-emerald-500/5">
+                <div className="flex items-center gap-2">
+                  <Sprout className="text-emerald-500" size={20} />
+                  <h3 className="font-bold text-zinc-950 dark:text-white">
+                    {modalMode === 'create'
+                      ? (isRtl ? 'تسجيل حركة خام جديدة' : 'Add New Agricultural Movement')
+                      : (isRtl ? 'تعديل بيانات حركة الخام' : 'Edit Agricultural Movement')}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Form */}
+              <form onSubmit={handleSave} className="p-6 overflow-y-auto max-h-[75vh] space-y-6">
+                
+                {/* Visual Alert if duplicate key is found */}
+                {validationErrors.duplicate && (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20 rounded-xl flex items-start gap-2.5 text-xs">
+                    <AlertTriangle className="shrink-0 mt-0.5" size={16} />
+                    <span>{validationErrors.duplicate}</span>
+                  </div>
+                )}
+
+                {/* Grid 1: Basic Movement Properties */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-emerald-500 uppercase tracking-wider">{isRtl ? '1. تفاصيل الحركة اللوجستية' : '1. Movement & Logistic Details'}</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Date */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'التاريخ *' : 'Date *'}</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.date || ''}
+                        onChange={e => setFormData({ ...formData, date: e.target.value })}
+                        className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
+                          validationErrors.date ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Movement Type Addition or Issues */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'نوع الحركة *' : 'Movement Type *'}</label>
+                      <select
+                        value={formData.movementType || 'إضافة'}
+                        onChange={e => setFormData({ ...formData, movementType: e.target.value as 'إضافة' | 'صرف' })}
+                        className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white appearance-none"
+                      >
+                        <option value="إضافة">{isRtl ? 'إضافة (وارد من مورد)' : 'Receipt (Add)'}</option>
+                        <option value="صرف">{isRtl ? 'صرف (صادر)' : 'Dispense (Issue)'}</option>
+                      </select>
+                    </div>
+
+                    {/* Movement Number */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'رقم الحركة *' : 'Movement Number *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.movementNumber || ''}
+                        onChange={e => setFormData({ ...formData, movementNumber: e.target.value })}
+                        placeholder={isRtl ? 'مثال: MV-901' : 'e.g. MV-901'}
+                        className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
+                          validationErrors.movementNumber ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Supplier */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'المورد *' : 'Supplier *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.supplier || ''}
+                        onChange={e => setFormData({ ...formData, supplier: e.target.value })}
+                        placeholder={isRtl ? 'اسم المورد الرئيسي' : 'Supplier full name'}
+                        className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
+                          validationErrors.supplier ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      />
+                    </div>
+
+                    {/* SAP Number */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'رقم الساب (SAP)' : 'SAP Number'}</label>
+                      <input
+                        type="text"
+                        value={formData.sapNumber || ''}
+                        onChange={e => setFormData({ ...formData, sapNumber: e.target.value })}
+                        placeholder={isRtl ? 'رقم الساب الاختياري' : 'Optional SAP No'}
+                        className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
+                      />
+                    </div>
+
+                    {/* Post Number */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'رقم البوست (Post)' : 'Post Number'}</label>
+                      <input
+                        type="text"
+                        value={formData.postNumber || ''}
+                        onChange={e => setFormData({ ...formData, postNumber: e.target.value })}
+                        placeholder={isRtl ? 'رقم البوست الاختياري' : 'Optional Post No'}
+                        className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
+                      />
+                    </div>
+
+                    {/* Supplier Delivery Note */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'إذن تسليم المورد' : 'Supplier Delivery Note'}</label>
+                      <input
+                        type="text"
+                        value={formData.deliveryNote || ''}
+                        onChange={e => setFormData({ ...formData, deliveryNote: e.target.value })}
+                        placeholder={isRtl ? 'رقم إذن تسليم المورد' : 'Delivery note No'}
+                        className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Grid 2: Material Item Specific Properties */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-emerald-500 uppercase tracking-wider">{isRtl ? '2. تفاصيل الصنف والمادة الخام' : '2. Material Item Specifications'}</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Material Code */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'الكود *' : 'Material Code *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.materialCode || ''}
+                        onChange={e => setFormData({ ...formData, materialCode: e.target.value })}
+                        placeholder={isRtl ? 'مثال: CODE-102' : 'e.g. CODE-102'}
+                        className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
+                          validationErrors.materialCode ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Item Name */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'الصنف *' : 'Item Name *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.itemName || ''}
+                        onChange={e => setFormData({ ...formData, itemName: e.target.value })}
+                        placeholder={isRtl ? 'اسم الصنف أو الخامة' : 'Material Name'}
+                        className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
+                          validationErrors.itemName ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Size */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'الحجم' : 'Size'}</label>
+                      <input
+                        type="text"
+                        value={formData.size || ''}
+                        onChange={e => setFormData({ ...formData, size: e.target.value })}
+                        placeholder={isRtl ? 'مثال: كبير / 10 لتر' : 'e.g. Large / 10L'}
+                        className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
+                      />
+                    </div>
+
+                    {/* Batch */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'الباتش *' : 'Batch *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.batch || ''}
+                        onChange={e => setFormData({ ...formData, batch: e.target.value })}
+                        placeholder={isRtl ? 'رقم الباتش الرئيسي' : 'Batch identifier'}
+                        className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
+                          validationErrors.batch ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Quantity */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'الكمية *' : 'Quantity *'}</label>
+                      <input
+                        type="number"
+                        required
+                        step="any"
+                        value={formData.quantity || ''}
+                        onChange={e => setFormData({ ...formData, quantity: parseFloat(e.target.value) || 0 })}
+                        placeholder="0.00"
+                        className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
+                          validationErrors.quantity ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      />
+                    </div>
+
+                    {/* Unit */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'الوحدة *' : 'Unit *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.unit || 'كجم'}
+                        onChange={e => setFormData({ ...formData, unit: e.target.value })}
+                        placeholder={isRtl ? 'كجم، طن، برميل...' : 'kg, ton, barrel...'}
+                        className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
+                          validationErrors.unit ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Grid 3: Transport Info & Notes */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-emerald-500 uppercase tracking-wider">{isRtl ? '3. بيانات السائق والسيارة والملاحظات' : '3. Driver, Vehicle & Additional Notes'}</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Driver Name */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'اسم السائق' : 'Driver Name'}</label>
+                      <input
+                        type="text"
+                        value={formData.driverName || ''}
+                        onChange={e => setFormData({ ...formData, driverName: e.target.value })}
+                        placeholder={isRtl ? 'اسم السائق بالكامل' : 'Full driver name'}
+                        className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
+                      />
+                    </div>
+
+                    {/* Vehicle Number */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-zinc-500">{isRtl ? 'رقم السيارة' : 'Vehicle Number'}</label>
+                      <input
+                        type="text"
+                        value={formData.vehicleNumber || ''}
+                        onChange={e => setFormData({ ...formData, vehicleNumber: e.target.value })}
+                        placeholder={isRtl ? 'أرقام وحروف اللوحة' : 'Plate number'}
+                        className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="space-y-1 mt-4">
+                    <label className="text-xs font-medium text-zinc-500">{isRtl ? 'ملاحظات' : 'Notes'}</label>
+                    <textarea
+                      rows={3}
+                      value={formData.notes || ''}
+                      onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder={isRtl ? 'ملاحظات إضافية عن الحركة...' : 'Any extra comments...'}
+                      className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Form Action Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-4 border-t dark:border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl font-medium transition-all text-sm"
+                  >
+                    {isRtl ? 'إلغاء' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-medium transition-all text-sm shadow-md shadow-emerald-500/10 flex items-center gap-1.5"
+                  >
+                    <Check size={16} />
+                    <span>{isRtl ? 'حفظ البيانات' : 'Save Details'}</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {isDeleteConfirmOpen && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl"
+            >
+              <div className="w-12 h-12 bg-rose-500/10 rounded-full flex items-center justify-center text-rose-500 mx-auto">
+                <AlertTriangle size={24} />
+              </div>
+              <div className="text-center">
+                <h3 className="font-bold text-zinc-900 dark:text-white text-lg">
+                  {isRtl ? 'تأكيد حذف السجل' : 'Confirm Record Deletion'}
+                </h3>
+                <p className="text-sm text-zinc-500 mt-2">
+                  {isRtl 
+                    ? 'هل أنت متأكد من رغبتك في حذف هذا السجل نهائياً من قاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء.' 
+                    : 'Are you sure you want to delete this record permanently? This action cannot be undone.'}
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteConfirmOpen(false)}
+                  className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl font-medium text-sm transition-colors"
+                >
+                  {isRtl ? 'إلغاء التراجع' : 'No, Keep It'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-medium text-sm transition-colors shadow-md shadow-rose-500/10"
+                >
+                  {isRtl ? 'حذف السجل' : 'Yes, Delete'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

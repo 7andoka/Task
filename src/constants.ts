@@ -14,4 +14,5 @@ export const COLLECTIONS = {
   PROCESS_ITEMS: 'process_items',
   WAREHOUSES: 'warehouses',
   SETTINGS: 'settings',
+  AGRI_RAW_MATERIAL: 'agri_raw_material',
 };

@@ -1,4 +1,4 @@
-import { UserProfile, Task, Subtask, Comment, Notification, AuditLog, SupplyMovement } from '../types';
+import { UserProfile, Task, Subtask, Comment, Notification, AuditLog, SupplyMovement, AgriRawMaterial } from '../types';
 import { auth, db } from '../firebase';
 import { collection, doc, getDocs, getDoc, setDoc, getDocFromServer, query, where, deleteDoc, orderBy } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
@@ -332,6 +332,30 @@ export const storageService = {
       await deleteDoc(doc(db, COLLECTIONS.SUPPLY_MOVEMENTS, id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.SUPPLY_MOVEMENTS}/${id}`);
+    }
+  },
+
+  // Agricultural Raw Material Methods
+  getAgriRawMaterials: async (): Promise<AgriRawMaterial[]> => {
+    try {
+      const snapshot = await getDocs(query(collection(db, COLLECTIONS.AGRI_RAW_MATERIAL), orderBy('date', 'desc')));
+      return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as AgriRawMaterial));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.AGRI_RAW_MATERIAL);
+    }
+  },
+  saveAgriRawMaterial: async (material: AgriRawMaterial) => {
+    try {
+      await setDoc(doc(db, COLLECTIONS.AGRI_RAW_MATERIAL, material.id), material);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.AGRI_RAW_MATERIAL}/${material.id}`);
+    }
+  },
+  deleteAgriRawMaterial: async (id: string) => {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.AGRI_RAW_MATERIAL, id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.AGRI_RAW_MATERIAL}/${id}`);
     }
   },
 };
