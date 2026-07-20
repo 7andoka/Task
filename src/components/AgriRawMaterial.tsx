@@ -148,15 +148,9 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
     return matchesSearch && matchesSupplier && matchesType && matchesDate;
   });
 
-  // Pagination Logic
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredMaterials.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredMaterials.length / itemsPerPage);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filterSupplier, filterType, filterDate]);
+  // Single-page list with scrollbar - currentItems contains all filtered materials
+  const currentItems = filteredMaterials;
+  const totalPages = 1;
 
   // Aggregate stats
   const totalQuantity = filteredMaterials.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
@@ -775,34 +769,34 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
               placeholder={isRtl ? 'بحث كود، صنف، مورد، باتش، حركة...' : 'Search code, item, supplier, batch, movement...'}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-zinc-50 dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-white`}
+              className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-zinc-100`}
             />
           </div>
 
           {/* Supplier Dropdown */}
-          <div>
+          <div className="relative">
             <select
               value={filterSupplier}
               onChange={(e) => setFilterSupplier(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-white appearance-none"
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-zinc-100 cursor-pointer"
             >
-              <option value="All">{isRtl ? 'كل الموردين' : 'All Suppliers'}</option>
+              <option value="All" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{isRtl ? 'كل الموردين' : 'All Suppliers'}</option>
               {uniqueSuppliers.map(s => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{s}</option>
               ))}
             </select>
           </div>
 
           {/* Movement Type Filter */}
-          <div>
+          <div className="relative">
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-white appearance-none"
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-zinc-100 cursor-pointer"
             >
-              <option value="All">{isRtl ? 'كل الحركات (إضافة / صرف)' : 'All Movements'}</option>
-              <option value="إضافة">{isRtl ? 'إضافة فقط' : 'Add Only'}</option>
-              <option value="صرف">{isRtl ? 'صرف فقط' : 'Dispense Only'}</option>
+              <option value="All" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{isRtl ? 'كل الحركات (إضافة / صرف)' : 'All Movements'}</option>
+              <option value="إضافة" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{isRtl ? 'إضافة فقط' : 'Add Only'}</option>
+              <option value="صرف" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{isRtl ? 'صرف فقط' : 'Dispense Only'}</option>
             </select>
           </div>
 
@@ -813,7 +807,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
               type="date"
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
-              className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-zinc-50 dark:bg-zinc-850 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-white`}
+              className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-zinc-100`}
             />
           </div>
         </div>
@@ -856,29 +850,29 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
           </div>
         ) : (
           <>
-            {/* Scrollable Responsive Table Wrapper */}
-            <div className="overflow-x-auto">
+            {/* Scrollable Responsive Table Wrapper with custom scrollbar, max-height and sticky headers */}
+            <div className="overflow-x-auto overflow-y-auto max-h-[580px] scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 scrollbar-track-transparent">
               <table id="agri-raw-materials-table" className="w-full text-sm text-right border-separate border-spacing-0" dir={isRtl ? 'rtl' : 'ltr'}>
-                <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+                <thead className="sticky top-0 z-30 shadow-[0_2px_8px_-1px_rgba(0,0,0,0.05)]">
                   <tr>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'التاريخ' : 'Date'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الحركة' : 'Movement'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'رقم الحركة' : 'Mov. No'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'المورد' : 'Supplier'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'رقم الساب' : 'SAP No'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'رقم البوست' : 'Post No'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'إذن التسليم' : 'Delivery Note'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الكود' : 'Code'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الصنف' : 'Item Name'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الحجم' : 'Size'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الباتش' : 'Batch'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الكمية' : 'Quantity'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'الوحدة' : 'Unit'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'السائق' : 'Driver'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'السيارة' : 'Vehicle'}</th>
-                    <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'ملاحظات' : 'Notes'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'التاريخ' : 'Date'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'الحركة' : 'Movement'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'رقم الحركة' : 'Mov. No'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'المورد' : 'Supplier'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'رقم الساب' : 'SAP No'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'رقم البوست' : 'Post No'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'إذن التسليم' : 'Delivery Note'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'الكود' : 'Code'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'الصنف' : 'Item Name'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'الحجم' : 'Size'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'الباتش' : 'Batch'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'الكمية' : 'Quantity'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'الوحدة' : 'Unit'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'السائق' : 'Driver'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'السيارة' : 'Vehicle'}</th>
+                    <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'ملاحظات' : 'Notes'}</th>
                     {canEditOrDelete && (
-                      <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800 text-center">{isRtl ? 'إجراءات' : 'Actions'}</th>
+                      <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-center whitespace-nowrap z-20">{isRtl ? 'إجراءات' : 'Actions'}</th>
                     )}
                   </tr>
                 </thead>
@@ -1221,110 +1215,182 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                       )}
                     </tr>
                   )}
-                  {currentItems.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20 transition-colors"
-                    >
-                      <td className="p-3 whitespace-nowrap text-zinc-900 dark:text-white font-medium">{item.date}</td>
-                      <td className="p-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-                          item.movementType === 'إضافة'
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
-                            : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
-                        }`}>
-                          {item.movementType === 'إضافة' ? (
-                            <>
-                              <TrendingUp size={12} />
-                              <span>{isRtl ? 'إضافة' : 'Add'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <TrendingDown size={12} />
-                              <span>{isRtl ? 'صرف' : 'Dispense'}</span>
-                            </>
-                          )}
-                        </span>
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-mono font-bold text-zinc-800 dark:text-zinc-200">{item.movementNumber}</td>
-                      <td className="p-3 whitespace-nowrap text-zinc-800 dark:text-zinc-200">{item.supplier}</td>
-                      <td className="p-3 whitespace-nowrap font-mono text-zinc-500 dark:text-zinc-400">{item.sapNumber || '-'}</td>
-                      <td className="p-3 whitespace-nowrap font-mono text-zinc-500 dark:text-zinc-400">{item.postNumber || '-'}</td>
-                      <td className="p-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400">{item.deliveryNote || '-'}</td>
-                      <td className="p-3 whitespace-nowrap font-mono font-bold text-emerald-600 dark:text-emerald-400">{item.materialCode}</td>
-                      <td className="p-3 whitespace-nowrap text-zinc-800 dark:text-zinc-200 font-medium">{item.itemName}</td>
-                      <td className="p-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400">{item.size || '-'}</td>
-                      <td className="p-3 whitespace-nowrap font-mono text-zinc-800 dark:text-zinc-200">{item.batch}</td>
-                      <td className="p-3 whitespace-nowrap font-bold text-zinc-900 dark:text-white">
-                        {Number(item.quantity).toLocaleString()}
-                      </td>
-                      <td className="p-3 whitespace-nowrap text-zinc-500">{item.unit}</td>
-                      <td className="p-3 whitespace-nowrap text-zinc-800 dark:text-zinc-200">{item.driverName || '-'}</td>
-                      <td className="p-3 whitespace-nowrap font-mono text-zinc-800 dark:text-zinc-200">{item.vehicleNumber || '-'}</td>
-                      <td className="p-3 max-w-xs truncate text-zinc-500 dark:text-zinc-400" title={item.notes}>{item.notes || '-'}</td>
-                      
-                      {canEditOrDelete && (
-                        <td className="p-3 whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => handleOpenEdit(item)}
-                              className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
-                              title={isRtl ? 'تعديل السجل' : 'Edit record'}
-                            >
-                              <Edit size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteRequest(item.id)}
-                              className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
-                              title={isRtl ? 'حذف السجل' : 'Delete record'}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
+                  {currentItems.map((item) => {
+                    const isAdd = item.movementType === 'إضافة';
+                    return (
+                      <tr
+                        key={item.id}
+                        className="group hover:bg-emerald-500/5 dark:hover:bg-emerald-400/5 even:bg-zinc-50/30 dark:even:bg-zinc-800/10 border-b border-zinc-100 dark:border-zinc-800/50 transition-all duration-200"
+                      >
+                        {/* 1. التاريخ */}
+                        <td className="p-3 whitespace-nowrap text-zinc-900 dark:text-zinc-100 font-semibold text-xs">
+                          <span className="bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-300 shadow-2xs font-medium">
+                            {item.date}
+                          </span>
                         </td>
-                      )}
-                    </tr>
-                  ))}
+
+                        {/* 2. الحركة */}
+                        <td className="p-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+                            isAdd
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 group-hover:scale-105 shadow-2xs'
+                              : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20 group-hover:scale-105 shadow-2xs'
+                          }`}>
+                            {isAdd ? (
+                              <>
+                                <TrendingUp size={12} className="animate-pulse" />
+                                <span>{isRtl ? 'إضافة' : 'Add'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <TrendingDown size={12} className="animate-pulse" />
+                                <span>{isRtl ? 'صرف' : 'Dispense'}</span>
+                              </>
+                            )}
+                          </span>
+                        </td>
+
+                        {/* 3. رقم الحركة */}
+                        <td className="p-3 whitespace-nowrap font-mono font-bold text-xs">
+                          <span className="bg-zinc-100 dark:bg-zinc-800/80 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 shadow-2xs">
+                            {item.movementNumber}
+                          </span>
+                        </td>
+
+                        {/* 4. المورد */}
+                        <td className="p-3 whitespace-nowrap text-zinc-800 dark:text-zinc-200 font-semibold text-xs">
+                          {item.supplier}
+                        </td>
+
+                        {/* 5. رقم الساب */}
+                        <td className="p-3 whitespace-nowrap font-mono text-xs">
+                          {item.sapNumber ? (
+                            <span className="bg-blue-50/50 dark:bg-blue-950/20 px-2 py-0.5 rounded text-blue-600 dark:text-blue-400 font-bold border border-blue-100/50 dark:border-blue-900/20">
+                              {item.sapNumber}
+                            </span>
+                          ) : <span className="text-zinc-300 dark:text-zinc-700">-</span>}
+                        </td>
+
+                        {/* 6. رقم البوست */}
+                        <td className="p-3 whitespace-nowrap font-mono text-zinc-500 dark:text-zinc-400 text-xs">
+                          {item.postNumber || <span className="text-zinc-300 dark:text-zinc-700">-</span>}
+                        </td>
+
+                        {/* 7. إذن التسليم */}
+                        <td className="p-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400 text-xs">
+                          {item.deliveryNote || <span className="text-zinc-300 dark:text-zinc-700">-</span>}
+                        </td>
+
+                        {/* 8. الكود */}
+                        <td className="p-3 whitespace-nowrap">
+                          <span className="px-2.5 py-1 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 rounded-lg font-mono font-bold text-xs shadow-2xs">
+                            {item.materialCode}
+                          </span>
+                        </td>
+
+                        {/* 9. الصنف */}
+                        <td className="p-3 whitespace-nowrap text-zinc-900 dark:text-zinc-100 font-bold text-xs">
+                          {item.itemName}
+                        </td>
+
+                        {/* 10. الحجم */}
+                        <td className="p-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400 text-xs">
+                          {item.size || <span className="text-zinc-300 dark:text-zinc-700">-</span>}
+                        </td>
+
+                        {/* 11. الباتش */}
+                        <td className="p-3 whitespace-nowrap">
+                          <span className="px-2.5 py-1 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-500/20 rounded-lg font-mono font-bold text-xs shadow-2xs">
+                            {item.batch}
+                          </span>
+                        </td>
+
+                        {/* 12. الكمية */}
+                        <td className="p-3 whitespace-nowrap text-left font-mono">
+                          <span className={`text-sm font-black transition-all ${
+                            isAdd
+                              ? 'text-emerald-600 dark:text-emerald-400 group-hover:scale-105 inline-block'
+                              : 'text-rose-600 dark:text-rose-400 group-hover:scale-105 inline-block'
+                          }`}>
+                            {isAdd ? '+' : '-'}{Number(item.quantity).toLocaleString()}
+                          </span>
+                        </td>
+
+                        {/* 13. الوحدة */}
+                        <td className="p-3 whitespace-nowrap">
+                          <span className="text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-semibold">
+                            {item.unit}
+                          </span>
+                        </td>
+
+                        {/* 14. السائق */}
+                        <td className="p-3 whitespace-nowrap text-zinc-700 dark:text-zinc-300 text-xs">
+                          {item.driverName || <span className="text-zinc-300 dark:text-zinc-700">-</span>}
+                        </td>
+
+                        {/* 15. السيارة */}
+                        <td className="p-3 whitespace-nowrap font-mono text-zinc-700 dark:text-zinc-300 text-xs">
+                          {item.vehicleNumber || <span className="text-zinc-300 dark:text-zinc-700">-</span>}
+                        </td>
+
+                        {/* 16. ملاحظات */}
+                        <td className="p-3 max-w-xs truncate text-zinc-500 dark:text-zinc-400 text-xs" title={item.notes}>
+                          {item.notes || <span className="text-zinc-300 dark:text-zinc-700">-</span>}
+                        </td>
+                        
+                        {/* 17. الإجراءات */}
+                        {canEditOrDelete && (
+                          <td className="p-3 whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => handleOpenEdit(item)}
+                                className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/20 rounded-lg transition-all transform hover:scale-110 active:scale-95"
+                                title={isRtl ? 'تعديل السجل' : 'Edit record'}
+                              >
+                                <Edit size={15} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRequest(item.id)}
+                                className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/20 rounded-lg transition-all transform hover:scale-110 active:scale-95"
+                                title={isRtl ? 'حذف السجل' : 'Delete record'}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
-            {/* Aggregated Total & Pagination Footer */}
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/30 border-t dark:border-zinc-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+            {/* Aggregated Total & Single-page scrollbar layout Footer */}
+            <div className="p-4 bg-zinc-100/90 dark:bg-zinc-950/90 backdrop-blur-md border-t border-zinc-200 dark:border-zinc-800/80 flex flex-col sm:flex-row justify-between items-center gap-4">
               {/* Grand Total quantities of visible filtered list */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                  {isRtl ? 'إجمالي كمية السجلات الحالية:' : 'Total quantity of current records:'}
-                </span>
-                <span className="px-3 py-1 bg-emerald-500 text-white rounded-lg text-sm font-bold shadow-sm shadow-emerald-500/10">
-                  {totalQuantity.toLocaleString()}
-                </span>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                    {isRtl ? 'إجمالي السجلات المفلترة:' : 'Filtered Movements:'}
+                  </span>
+                  <span className="px-2 py-0.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-lg text-xs font-bold">
+                    {filteredMaterials.length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 border-r border-zinc-200 dark:border-zinc-800 pl-3 pr-3">
+                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                    {isRtl ? 'إجمالي الكمية الحركة:' : 'Total Movement Quantity:'}
+                  </span>
+                  <span className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-md shadow-emerald-500/10 transition-all">
+                    {totalQuantity.toLocaleString()}
+                  </span>
+                </div>
               </div>
 
-              {/* Pagination controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="p-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 disabled:opacity-40 hover:bg-white dark:hover:bg-zinc-800 transition-colors"
-                  >
-                    {isRtl ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-                  </button>
-                  <span className="text-xs text-zinc-500 px-3">
-                    {isRtl 
-                      ? `الصفحة ${currentPage} من ${totalPages}` 
-                      : `Page ${currentPage} of ${totalPages}`}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="p-1.5 border border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-500 dark:text-zinc-400 disabled:opacity-40 hover:bg-white dark:hover:bg-zinc-800 transition-colors"
-                  >
-                    {isRtl ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-                  </button>
-                </div>
-              )}
+              <div className="text-zinc-400 dark:text-zinc-500 text-[11px] font-medium">
+                {isRtl ? '🔄 جدول حركات موحد بصفحة واحدة (استخدم شريط التمرير لرؤية المزيد)' : '🔄 Single Unified Page (Scroll to view more records)'}
+              </div>
             </div>
           </>
         )}
