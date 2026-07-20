@@ -132,6 +132,7 @@ export default function Layout({
     const isAdminOrWHManager = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
     if (user?.permissions && user.permissions.length > 0) {
       if (item.id === 'kpis' && isAdminOrWHManager) return true;
+      if (item.id === 'agriRawMaterial' && isAdminOrWHManager) return true;
       return user.permissions.includes(item.id);
     }
     return !item.roles || (user && item.roles.some(r => userRoles.includes(r as any)));

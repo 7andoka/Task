@@ -68,6 +68,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isInlineAdding, setIsInlineAdding] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [formData, setFormData] = useState<Partial<AgriRawMaterial>>({
     date: new Date().toISOString().slice(0, 10),
@@ -202,8 +203,9 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
     return Object.keys(errors).length === 0;
   };
 
-  // Open Create Modal
+  // Open Create Modal (toggles inline horizontal bar and opens the modal dialog)
   const handleOpenCreate = () => {
+    setIsInlineAdding(true);
     setModalMode('create');
     setFormData({
       date: new Date().toISOString().slice(0, 10),
@@ -225,6 +227,76 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
     });
     setValidationErrors({});
     setIsModalOpen(true);
+    
+    // Smooth scroll to the table/grid container to show the inline adding form row immediately
+    setTimeout(() => {
+      const container = document.getElementById('agri-raw-materials-table');
+      if (container) {
+        container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
+
+  // Inline Horizontal Save
+  const handleInlineSave = async () => {
+    if (!validateForm()) {
+      // Find the first error to toast
+      const firstErr = Object.values(validationErrors)[0] || (isRtl ? 'يرجى مراجعة وتعبئة الحقول المطلوبة' : 'Please check required fields');
+      toast.error(firstErr);
+      return;
+    }
+
+    try {
+      const finalId = crypto.randomUUID();
+      const recordToSave: AgriRawMaterial = {
+        id: finalId,
+        date: formData.date!,
+        movementType: formData.movementType as 'إضافة' | 'صرف',
+        movementNumber: formData.movementNumber!.trim(),
+        supplier: formData.supplier!.trim(),
+        sapNumber: (formData.sapNumber || '').trim(),
+        postNumber: (formData.postNumber || '').trim(),
+        deliveryNote: (formData.deliveryNote || '').trim(),
+        materialCode: formData.materialCode!.trim(),
+        itemName: formData.itemName!.trim(),
+        size: (formData.size || '').trim(),
+        batch: formData.batch!.trim(),
+        quantity: Number(formData.quantity),
+        unit: formData.unit!.trim(),
+        driverName: (formData.driverName || '').trim(),
+        vehicleNumber: (formData.vehicleNumber || '').trim(),
+        notes: (formData.notes || '').trim(),
+        createdAt: new Date().toISOString(),
+        lastUpdatedAt: new Date().toISOString(),
+      };
+
+      await storageService.saveAgriRawMaterial(recordToSave);
+      
+      toast.success(isRtl ? 'تمت إضافة الحركة الزراعية بنجاح' : 'Agricultural material movement added successfully');
+      setIsInlineAdding(false);
+      setFormData({
+        date: new Date().toISOString().slice(0, 10),
+        movementType: 'إضافة',
+        movementNumber: '',
+        supplier: '',
+        sapNumber: '',
+        postNumber: '',
+        deliveryNote: '',
+        materialCode: '',
+        itemName: '',
+        size: '',
+        batch: '',
+        quantity: 0,
+        unit: 'كجم',
+        driverName: '',
+        vehicleNumber: '',
+        notes: '',
+      });
+      setValidationErrors({});
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'حدث خطأ أثناء حفظ السجل' : 'Error saving record');
+    }
   };
 
   // Open Edit Modal
@@ -772,7 +844,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto mb-4"></div>
             {isRtl ? 'جاري تحميل البيانات...' : 'Loading raw agricultural materials...'}
           </div>
-        ) : filteredMaterials.length === 0 ? (
+        ) : (filteredMaterials.length === 0 && !isInlineAdding) ? (
           <div className="p-12 text-center text-zinc-500">
             <AlertTriangle className="mx-auto mb-4 text-zinc-400" size={32} />
             <p className="font-medium text-zinc-700 dark:text-zinc-300">
@@ -786,7 +858,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
           <>
             {/* Scrollable Responsive Table Wrapper */}
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-right border-separate border-spacing-0" dir={isRtl ? 'rtl' : 'ltr'}>
+              <table id="agri-raw-materials-table" className="w-full text-sm text-right border-separate border-spacing-0" dir={isRtl ? 'rtl' : 'ltr'}>
                 <thead className="bg-zinc-50 dark:bg-zinc-800/50">
                   <tr>
                     <th className="p-3 font-semibold text-zinc-700 dark:text-zinc-300 border-b dark:border-zinc-800">{isRtl ? 'التاريخ' : 'Date'}</th>
@@ -811,6 +883,344 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  {/* Inline Horizontal Adding Row styled like the user's green image */}
+                  {isInlineAdding && (
+                    <tr className="bg-[#72b143] text-white">
+                      {/* 1. التاريخ */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[130px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'التاريخ' : 'Date'}</span>
+                          <input
+                            type="date"
+                            required
+                            value={formData.date || ''}
+                            onChange={e => setFormData({ ...formData, date: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                        </div>
+                      </td>
+
+                      {/* 2. الحركة */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[90px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'الحركة' : 'Movement'}</span>
+                          <select
+                            value={formData.movementType || 'إضافة'}
+                            onChange={e => setFormData({ ...formData, movementType: e.target.value as 'إضافة' | 'صرف' })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          >
+                            <option value="إضافة">{isRtl ? 'إضافة' : 'Add'}</option>
+                            <option value="صرف">{isRtl ? 'صرف' : 'Dispense'}</option>
+                          </select>
+                        </div>
+                      </td>
+
+                      {/* 3. رقم الحركة */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[110px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'رقم الحركة' : 'Mov. No'}</span>
+                          <input
+                            type="text"
+                            required
+                            placeholder={isRtl ? 'مثال: MV-901' : 'e.g. MV-901'}
+                            list="movementNumbers_list"
+                            value={formData.movementNumber || ''}
+                            onChange={e => setFormData({ ...formData, movementNumber: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="movementNumbers_list">
+                            {Array.from(new Set(materials.map(m => m.movementNumber).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 4. المورد */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[140px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'المورد' : 'Supplier'}</span>
+                          <input
+                            type="text"
+                            required
+                            placeholder={isRtl ? 'اسم المورد الرئيسي' : 'Supplier name'}
+                            list="suppliers_list"
+                            value={formData.supplier || ''}
+                            onChange={e => setFormData({ ...formData, supplier: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="suppliers_list">
+                            {Array.from(new Set(materials.map(m => m.supplier).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 5. رقم الساب */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[110px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'رقم الساب' : 'SAP No'}</span>
+                          <input
+                            type="text"
+                            placeholder={isRtl ? 'رقم الساب الاختياري' : 'Optional SAP No'}
+                            list="saps_list"
+                            value={formData.sapNumber || ''}
+                            onChange={e => setFormData({ ...formData, sapNumber: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="saps_list">
+                            {Array.from(new Set(materials.map(m => m.sapNumber).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 6. رقم البوست */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[110px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'رقم البوست' : 'Post No'}</span>
+                          <input
+                            type="text"
+                            placeholder={isRtl ? 'رقم البوست الاختياري' : 'Optional Post No'}
+                            list="posts_list"
+                            value={formData.postNumber || ''}
+                            onChange={e => setFormData({ ...formData, postNumber: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="posts_list">
+                            {Array.from(new Set(materials.map(m => m.postNumber).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 7. اذن تسليم المورد */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[140px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'إذن تسليم المورد' : 'Delivery Note'}</span>
+                          <input
+                            type="text"
+                            placeholder={isRtl ? 'رقم إذن تسليم المورد' : 'Delivery note No'}
+                            list="deliveryNotes_list"
+                            value={formData.deliveryNote || ''}
+                            onChange={e => setFormData({ ...formData, deliveryNote: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="deliveryNotes_list">
+                            {Array.from(new Set(materials.map(m => m.deliveryNote).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 8. الكود */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[100px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'الكود' : 'Code'}</span>
+                          <input
+                            type="text"
+                            required
+                            placeholder="CODE-102"
+                            list="materialCodes_list"
+                            value={formData.materialCode || ''}
+                            onChange={e => setFormData({ ...formData, materialCode: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="materialCodes_list">
+                            {Array.from(new Set(materials.map(m => m.materialCode).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 9. الصنف */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[140px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'الصنف' : 'Item Name'}</span>
+                          <input
+                            type="text"
+                            required
+                            placeholder={isRtl ? 'اسم الصنف أو الخامة' : 'Material Name'}
+                            list="itemNames_list"
+                            value={formData.itemName || ''}
+                            onChange={e => setFormData({ ...formData, itemName: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="itemNames_list">
+                            {Array.from(new Set(materials.map(m => m.itemName).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 10. الحجم */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[100px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'الحجم' : 'Size'}</span>
+                          <input
+                            type="text"
+                            placeholder={isRtl ? 'كبير / 10 لتر' : 'Optional size'}
+                            list="sizes_list"
+                            value={formData.size || ''}
+                            onChange={e => setFormData({ ...formData, size: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="sizes_list">
+                            {Array.from(new Set(materials.map(m => m.size).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 11. الباتش */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[100px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'الباتش' : 'Batch'}</span>
+                          <input
+                            type="text"
+                            required
+                            placeholder={isRtl ? 'رقم الباتش' : 'Batch ID'}
+                            list="batches_list"
+                            value={formData.batch || ''}
+                            onChange={e => setFormData({ ...formData, batch: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="batches_list">
+                            {Array.from(new Set(materials.map(m => m.batch).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 12. الكمية */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[100px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'الكمية' : 'Quantity'}</span>
+                          <input
+                            type="number"
+                            required
+                            step="any"
+                            placeholder="0.00"
+                            value={formData.quantity || ''}
+                            onChange={e => setFormData({ ...formData, quantity: parseFloat(e.target.value) || 0 })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 text-center font-bold"
+                          />
+                        </div>
+                      </td>
+
+                      {/* 13. الوحدة */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[80px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'الوحدة' : 'Unit'}</span>
+                          <input
+                            type="text"
+                            required
+                            placeholder={isRtl ? 'كجم، طن...' : 'Unit'}
+                            list="units_list"
+                            value={formData.unit || 'كجم'}
+                            onChange={e => setFormData({ ...formData, unit: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="units_list">
+                            {Array.from(new Set(materials.map(m => m.unit).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 14. اسم السائق */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[130px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'اسم السائق' : 'Driver Name'}</span>
+                          <input
+                            type="text"
+                            placeholder={isRtl ? 'اسم السائق بالكامل' : 'Driver Name'}
+                            list="drivers_list"
+                            value={formData.driverName || ''}
+                            onChange={e => setFormData({ ...formData, driverName: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="drivers_list">
+                            {Array.from(new Set(materials.map(m => m.driverName).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 15. رقم السيارة */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[110px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'رقم السيارة' : 'Vehicle No'}</span>
+                          <input
+                            type="text"
+                            placeholder={isRtl ? 'أرقام وحروف اللوحة' : 'Plate No'}
+                            list="vehicles_list"
+                            value={formData.vehicleNumber || ''}
+                            onChange={e => setFormData({ ...formData, vehicleNumber: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                          <datalist id="vehicles_list">
+                            {Array.from(new Set(materials.map(m => m.vehicleNumber).filter(Boolean))).map(val => (
+                              <option key={val} value={val} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </td>
+
+                      {/* 16. ملاحظات */}
+                      <td className="p-2 border-b border-emerald-700 align-middle">
+                        <div className="flex flex-col gap-1 min-w-[160px]">
+                          <span className="text-[10px] font-bold text-center text-white/90">{isRtl ? 'ملاحظات' : 'Notes'}</span>
+                          <input
+                            type="text"
+                            placeholder={isRtl ? 'ملاحظات إضافية...' : 'Extra notes'}
+                            value={formData.notes || ''}
+                            onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                            className="w-full text-xs px-2 py-1 bg-white text-zinc-800 rounded border border-zinc-300 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                          />
+                        </div>
+                      </td>
+
+                      {/* 17. الإجراءات (حفظ وإلغاء) */}
+                      {canEditOrDelete && (
+                        <td className="p-2 border-b border-emerald-700 align-middle sticky left-0 z-25 bg-[#72b143]">
+                          <div className="flex flex-col items-center justify-center gap-1.5 min-w-[110px]">
+                            <span className="text-[10px] font-bold text-white/90">{isRtl ? 'الإجراءات' : 'Actions'}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={handleInlineSave}
+                                className="px-2.5 py-1 bg-white text-[#72b143] hover:bg-emerald-50 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1"
+                                title={isRtl ? 'حفظ البيانات' : 'Save Details'}
+                              >
+                                <Check size={12} />
+                                <span>{isRtl ? 'حفظ' : 'Save'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setIsInlineAdding(false)}
+                                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1"
+                                title={isRtl ? 'إلغاء' : 'Cancel'}
+                              >
+                                <X size={12} />
+                                <span>{isRtl ? 'إلغاء' : 'Cancel'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  )}
                   {currentItems.map((item) => (
                     <tr
                       key={item.id}
@@ -999,6 +1409,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.movementNumber || ''}
                         onChange={e => setFormData({ ...formData, movementNumber: e.target.value })}
                         placeholder={isRtl ? 'مثال: MV-901' : 'e.g. MV-901'}
+                        list="movementNumbers_list"
                         className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
                           validationErrors.movementNumber ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
                         }`}
@@ -1014,6 +1425,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.supplier || ''}
                         onChange={e => setFormData({ ...formData, supplier: e.target.value })}
                         placeholder={isRtl ? 'اسم المورد الرئيسي' : 'Supplier full name'}
+                        list="suppliers_list"
                         className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
                           validationErrors.supplier ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
                         }`}
@@ -1028,6 +1440,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.sapNumber || ''}
                         onChange={e => setFormData({ ...formData, sapNumber: e.target.value })}
                         placeholder={isRtl ? 'رقم الساب الاختياري' : 'Optional SAP No'}
+                        list="saps_list"
                         className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
                       />
                     </div>
@@ -1040,6 +1453,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.postNumber || ''}
                         onChange={e => setFormData({ ...formData, postNumber: e.target.value })}
                         placeholder={isRtl ? 'رقم البوست الاختياري' : 'Optional Post No'}
+                        list="posts_list"
                         className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
                       />
                     </div>
@@ -1052,6 +1466,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.deliveryNote || ''}
                         onChange={e => setFormData({ ...formData, deliveryNote: e.target.value })}
                         placeholder={isRtl ? 'رقم إذن تسليم المورد' : 'Delivery note No'}
+                        list="deliveryNotes_list"
                         className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
                       />
                     </div>
@@ -1071,6 +1486,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.materialCode || ''}
                         onChange={e => setFormData({ ...formData, materialCode: e.target.value })}
                         placeholder={isRtl ? 'مثال: CODE-102' : 'e.g. CODE-102'}
+                        list="materialCodes_list"
                         className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
                           validationErrors.materialCode ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
                         }`}
@@ -1086,6 +1502,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.itemName || ''}
                         onChange={e => setFormData({ ...formData, itemName: e.target.value })}
                         placeholder={isRtl ? 'اسم الصنف أو الخامة' : 'Material Name'}
+                        list="itemNames_list"
                         className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
                           validationErrors.itemName ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
                         }`}
@@ -1100,6 +1517,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.size || ''}
                         onChange={e => setFormData({ ...formData, size: e.target.value })}
                         placeholder={isRtl ? 'مثال: كبير / 10 لتر' : 'e.g. Large / 10L'}
+                        list="sizes_list"
                         className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
                       />
                     </div>
@@ -1113,6 +1531,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.batch || ''}
                         onChange={e => setFormData({ ...formData, batch: e.target.value })}
                         placeholder={isRtl ? 'رقم الباتش الرئيسي' : 'Batch identifier'}
+                        list="batches_list"
                         className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
                           validationErrors.batch ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
                         }`}
@@ -1144,6 +1563,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.unit || 'كجم'}
                         onChange={e => setFormData({ ...formData, unit: e.target.value })}
                         placeholder={isRtl ? 'كجم، طن، برميل...' : 'kg, ton, barrel...'}
+                        list="units_list"
                         className={`w-full p-2.5 border rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white ${
                           validationErrors.unit ? 'border-rose-500' : 'border-zinc-200 dark:border-zinc-800'
                         }`}
@@ -1164,6 +1584,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.driverName || ''}
                         onChange={e => setFormData({ ...formData, driverName: e.target.value })}
                         placeholder={isRtl ? 'اسم السائق بالكامل' : 'Full driver name'}
+                        list="drivers_list"
                         className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
                       />
                     </div>
@@ -1176,6 +1597,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                         value={formData.vehicleNumber || ''}
                         onChange={e => setFormData({ ...formData, vehicleNumber: e.target.value })}
                         placeholder={isRtl ? 'أرقام وحروف اللوحة' : 'Plate number'}
+                        list="vehicles_list"
                         className="w-full p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-zinc-900 dark:text-white"
                       />
                     </div>
@@ -1260,6 +1682,68 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
           </div>
         )}
       </AnimatePresence>
+
+      {/* Global Datalist Autocomplete Suggestions */}
+      <datalist id="movementNumbers_list">
+        {Array.from(new Set(materials.map(m => m.movementNumber).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="suppliers_list">
+        {Array.from(new Set(materials.map(m => m.supplier).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="saps_list">
+        {Array.from(new Set(materials.map(m => m.sapNumber).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="posts_list">
+        {Array.from(new Set(materials.map(m => m.postNumber).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="deliveryNotes_list">
+        {Array.from(new Set(materials.map(m => m.deliveryNote).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="materialCodes_list">
+        {Array.from(new Set(materials.map(m => m.materialCode).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="itemNames_list">
+        {Array.from(new Set(materials.map(m => m.itemName).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="sizes_list">
+        {Array.from(new Set(materials.map(m => m.size).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="batches_list">
+        {Array.from(new Set(materials.map(m => m.batch).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="units_list">
+        {Array.from(new Set(materials.map(m => m.unit).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="drivers_list">
+        {Array.from(new Set(materials.map(m => m.driverName).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
+      <datalist id="vehicles_list">
+        {Array.from(new Set(materials.map(m => m.vehicleNumber).filter(Boolean))).map(val => (
+          <option key={val} value={val} />
+        ))}
+      </datalist>
     </div>
   );
 }

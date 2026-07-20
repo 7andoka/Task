@@ -60,6 +60,7 @@ export default function App() {
       return menuItems
         .filter(item => {
           if (item.id === 'kpis' && isAdminOrWHManager) return true;
+          if (item.id === 'agriRawMaterial' && isAdminOrWHManager) return true;
           if (item.id === 'finishedProduct') {
             return u.permissions!.includes('finishedProduct') || u.permissions!.includes('oliveStock') || isAdminOrWHManager;
           }
