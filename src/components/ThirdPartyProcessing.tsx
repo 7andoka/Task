@@ -1451,7 +1451,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           createdBy: jobs.find(j => j.id === editingJobId)?.createdBy || user.uid,
           createdAt: jobs.find(j => j.id === editingJobId)?.createdAt || new Date().toISOString()
         };
-        handleShareWordOutlook(updatedJob);
+        handleShareWhatsApp(updatedJob);
       } else {
         const docRef = await addDoc(collection(db, COLLECTIONS.THIRD_PARTY_PROCESSING), {
           ...jobData,
@@ -1470,7 +1470,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           createdBy: user.uid,
           createdAt: new Date().toISOString()
         };
-        handleShareWordOutlook(createdJob);
+        handleShareWhatsApp(createdJob);
       }
       
       setIsAdding(false);
@@ -1553,7 +1553,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       toast.success(lang === 'ar' ? 'تم اعتماد المخزن بنجاح' : 'Warehouse approval successful');
       
       // Auto share after warehouse approval
-      handleShareWordOutlook({ ...job, ...updateData } as ProcessingJob);
+      handleShareWhatsApp({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
     }
@@ -1606,7 +1606,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       );
 
       // Auto share after quality approval
-      handleShareWordOutlook({ ...job, ...updateData } as ProcessingJob);
+      handleShareWhatsApp({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل العملية' : 'Operation failed');
     }
@@ -1626,7 +1626,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       toast.success(lang === 'ar' ? 'تم اعتماد المشتريات بنجاح' : 'Purchasing approval successful');
 
       // Auto share after purchasing approval
-      handleShareWordOutlook({ ...job, ...updateData } as ProcessingJob);
+      handleShareWhatsApp({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
       toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
     }
@@ -1645,7 +1645,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       toast.success(lang === 'ar' ? 'تم إكمال التشغيلة بنجاح' : 'Job completed successfully');
       
       // Auto share Word via Outlook after completion
-      handleShareWordOutlook({ 
+      handleShareWhatsApp({ 
         ...job, 
         status: 'Completed', 
         poNumber: po 
@@ -1752,7 +1752,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       toast.success(isRtl ? 'تم نسخ تفاصيل التشغيلة وجاري فتح الواتساب' : 'Job details copied and opening WhatsApp');
       
       const wh = warehouses.find(w => w.id === job.warehouseId);
-      const whatsappGroupUrl = wh?.whatsappGroup || 'https://web.whatsapp.com/';
+      const whatsappGroupUrl = wh?.whatsappGroup || 'https://chat.whatsapp.com/HVfTQMYqmSKJXdub6B2Qxv?s=sw&p=a&ilr=0';
       
       try {
         window.open(whatsappGroupUrl, '_blank');

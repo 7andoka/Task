@@ -204,25 +204,25 @@ export default function Layout({
 
       {/* Bottom Navigation (Always at bottom, Scrollable if it exceeds screen) */}
       {activeTab !== 'kpis' && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 h-16 bg-zinc-100/90 dark:bg-zinc-900/90 border-t border-zinc-200 dark:border-zinc-800 backdrop-blur-md flex items-center overflow-x-auto scrollbar-none px-4 select-none">
-          <div className="flex items-center gap-2 md:gap-4 min-w-max mx-auto">
+        <div className="fixed bottom-0 left-0 right-0 z-50 h-16 bg-zinc-100/90 dark:bg-zinc-900/90 border-t border-zinc-200 dark:border-zinc-800 backdrop-blur-md flex items-center overflow-x-auto scrollbar-none px-2 select-none">
+          <div className="flex items-center gap-1 md:gap-2 min-w-max mx-auto">
             {filteredMenuItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 className={cn(
-                  "relative flex flex-col items-center justify-center gap-1 px-3.5 py-1.5 rounded-xl transition-all duration-200 shrink-0",
+                  "relative flex flex-col items-center justify-center gap-0.5 px-2 py-1 rounded-lg transition-all duration-200 shrink-0",
                   activeTab === item.id 
                     ? "text-emerald-500 bg-emerald-500/5" 
                     : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50"
                 )}
               >
-                <item.icon size={18} className="md:w-5 md:h-5" />
-                <span className="text-[10px] md:text-xs font-bold whitespace-nowrap">{item.label}</span>
+                <item.icon size={16} className="md:w-4.5 md:h-4.5" />
+                <span className="text-[9px] md:text-xs font-bold whitespace-nowrap">{item.label}</span>
                 {activeTab === item.id && (
                   <motion.div 
                     layoutId="bottom-nav-indicator"
-                    className="absolute -top-1 left-4 right-4 h-0.5 bg-emerald-500 rounded-full"
+                    className="absolute -top-1 left-2 right-2 h-0.5 bg-emerald-500 rounded-full"
                   />
                 )}
               </button>

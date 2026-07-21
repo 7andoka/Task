@@ -61,6 +61,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
   const [filterSupplier, setFilterSupplier] = useState('All');
   const [filterType, setFilterType] = useState('All'); // 'All' | 'إضافة' | 'صرف'
   const [filterDate, setFilterDate] = useState('');
+  const [filterItemName, setFilterItemName] = useState('All');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -126,6 +127,9 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
   // Filter unique suppliers for the filter dropdown
   const uniqueSuppliers = Array.from(new Set(materials.map(m => m.supplier).filter(Boolean)));
 
+  // Filter unique item names for the filter dropdown
+  const uniqueItemNames = Array.from(new Set(materials.map(m => m.itemName).filter(Boolean)));
+
   // Filter and Search Logic
   const filteredMaterials = materials.filter(item => {
     // Search Term Filter
@@ -141,13 +145,16 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
     // Supplier Filter
     const matchesSupplier = filterSupplier === 'All' ? true : item.supplier === filterSupplier;
 
+    // Item Name Filter
+    const matchesItemName = filterItemName === 'All' ? true : item.itemName === filterItemName;
+
     // Movement Type Filter
     const matchesType = filterType === 'All' ? true : item.movementType === filterType;
 
     // Date Filter
     const matchesDate = filterDate ? item.date === filterDate : true;
 
-    return matchesSearch && matchesSupplier && matchesType && matchesDate;
+    return matchesSearch && matchesSupplier && matchesItemName && matchesType && matchesDate;
   });
 
   // Single-page list with scrollbar - currentItems contains all filtered materials
@@ -934,7 +941,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
           {isRtl ? 'البحث والتصفية المتقدمة' : 'Advanced Search & Filtering'}
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Quick Search */}
           <div className="relative">
             <Search className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-zinc-400`} size={18} />
@@ -957,6 +964,20 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
               <option value="All" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{isRtl ? 'كل الموردين' : 'All Suppliers'}</option>
               {uniqueSuppliers.map(s => (
                 <option key={s} value={s} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Item Name Dropdown */}
+          <div className="relative">
+            <select
+              value={filterItemName}
+              onChange={(e) => setFilterItemName(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-zinc-100 cursor-pointer"
+            >
+              <option value="All" className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{isRtl ? 'كل الأصناف' : 'All Items'}</option>
+              {uniqueItemNames.map(name => (
+                <option key={name} value={name} className="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">{name}</option>
               ))}
             </select>
           </div>
@@ -987,12 +1008,13 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
         </div>
 
         {/* Clear Filters indicator */}
-        {(searchTerm || filterSupplier !== 'All' || filterType !== 'All' || filterDate) && (
+        {(searchTerm || filterSupplier !== 'All' || filterItemName !== 'All' || filterType !== 'All' || filterDate) && (
           <div className="flex justify-end">
             <button
               onClick={() => {
                 setSearchTerm('');
                 setFilterSupplier('All');
+                setFilterItemName('All');
                 setFilterType('All');
                 setFilterDate('');
               }}
