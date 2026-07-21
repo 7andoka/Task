@@ -1752,7 +1752,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       toast.success(isRtl ? 'تم نسخ تفاصيل التشغيلة وجاري فتح الواتساب' : 'Job details copied and opening WhatsApp');
       
       const wh = warehouses.find(w => w.id === job.warehouseId);
-      const whatsappGroupUrl = wh?.whatsappGroup || 'https://chat.whatsapp.com/HVfTQMYqmSKJXdub6B2Qxv?s=sw&p=a&ilr=0';
+      const whatsappGroupUrl = wh?.whatsappGroup || 'https://chat.whatsapp.com/Hg1v0O51VxW8vEAs8JusPA';
       
       try {
         window.open(whatsappGroupUrl, '_blank');
