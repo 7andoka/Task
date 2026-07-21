@@ -170,35 +170,8 @@ export default function Layout({
           </div>
         </div>
 
-        {/* Right Side Controls (Navigation + Logout/Mode Toggle) */}
+        {/* Right Side Controls (Logout/Mode Toggle) */}
         <div className="flex items-center gap-3 shrink-0 z-10">
-          <div className={cn(
-            "flex items-center gap-1 shrink-0",
-            !isDesktopMode && "hidden"
-          )}>
-            {filteredMenuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                title={item.label}
-                className={cn(
-                  "relative p-2.5 rounded-xl transition-all duration-200 flex flex-col items-center justify-center gap-0.5",
-                  activeTab === item.id
-                    ? "text-emerald-500 bg-emerald-500/5"
-                    : "hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
-                )}
-              >
-                <item.icon size={20} />
-                {activeTab === item.id && (
-                  <motion.div 
-                    layoutId="nav-indicator"
-                    className="absolute bottom-1 w-1 h-1 bg-emerald-500 rounded-full"
-                  />
-                )}
-              </button>
-            ))}
-          </div>
-          <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
           <button 
             onClick={() => setIsDesktopMode(!isDesktopMode)}
             title={isDesktopMode ? (lang === 'ar' ? 'وضع الهاتف' : 'Mobile Mode') : (lang === 'ar' ? 'وضع الكمبيوتر' : 'Desktop Mode')}
@@ -229,28 +202,32 @@ export default function Layout({
       </div>
     )}
 
-      {/* Bottom Navigation (Mobile) */}
-      {!isDesktopMode && activeTab !== 'kpis' && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 h-16 bg-zinc-100/80 dark:bg-zinc-900/80 border-t border-zinc-200 dark:border-zinc-800 backdrop-blur-md flex items-center justify-around px-4">
-          {filteredMenuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={cn(
-                "relative flex flex-col items-center justify-center gap-1 p-2 transition-all duration-200",
-                activeTab === item.id ? "text-emerald-500" : "text-zinc-500 dark:text-zinc-400"
-              )}
-            >
-              <item.icon size={20} />
-              <span className="text-[10px] font-bold">{item.label}</span>
-              {activeTab === item.id && (
-                <motion.div 
-                  layoutId="bottom-nav-indicator"
-                  className="absolute -top-2 w-8 h-1 bg-emerald-500 rounded-full"
-                />
-              )}
-            </button>
-          ))}
+      {/* Bottom Navigation (Always at bottom, Scrollable if it exceeds screen) */}
+      {activeTab !== 'kpis' && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 h-16 bg-zinc-100/90 dark:bg-zinc-900/90 border-t border-zinc-200 dark:border-zinc-800 backdrop-blur-md flex items-center overflow-x-auto scrollbar-none px-4 select-none">
+          <div className="flex items-center gap-2 md:gap-4 min-w-max mx-auto">
+            {filteredMenuItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={cn(
+                  "relative flex flex-col items-center justify-center gap-1 px-3.5 py-1.5 rounded-xl transition-all duration-200 shrink-0",
+                  activeTab === item.id 
+                    ? "text-emerald-500 bg-emerald-500/5" 
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50"
+                )}
+              >
+                <item.icon size={18} className="md:w-5 md:h-5" />
+                <span className="text-[10px] md:text-xs font-bold whitespace-nowrap">{item.label}</span>
+                {activeTab === item.id && (
+                  <motion.div 
+                    layoutId="bottom-nav-indicator"
+                    className="absolute -top-1 left-4 right-4 h-0.5 bg-emerald-500 rounded-full"
+                  />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -258,7 +235,7 @@ export default function Layout({
       <main className={cn(
         "flex-1 min-h-screen w-full",
         activeTab === 'kpis' ? "pt-0" : "pt-14",
-        (!isDesktopMode && activeTab !== 'kpis') && "pb-16"
+        activeTab !== 'kpis' && "pb-16"
       )}>
         <div className={cn(
           "w-full",

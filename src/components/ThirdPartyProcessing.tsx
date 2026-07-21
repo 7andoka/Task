@@ -423,11 +423,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     if (hasRole('Admin')) return true;
     if (job.status === 'Completed' || job.status === 'Rejected') return false;
 
+    // Warehouse Operations can edit in all active stages
+    if (hasRole('Warehouse Operations')) return true;
+
     // Creator can only edit if status is Pending Warehouse
     if (job.createdBy === user?.uid && job.status === 'Pending Warehouse') return true;
-
-    // Warehouse Operations can edit in Pending Warehouse or Pending Completion
-    if (hasRole('Warehouse Operations') && (job.status === 'Pending Warehouse' || job.status === 'Pending Completion')) return true;
 
     // Purchasing Operations can edit in Pending Purchasing
     if (hasRole('Purchasing Operations') && job.status === 'Pending Purchasing') return true;

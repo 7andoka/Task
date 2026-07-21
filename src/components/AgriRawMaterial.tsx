@@ -95,6 +95,8 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
   // Confirmation Modals
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
 
   // Hidden File Input Ref for Import
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -366,6 +368,89 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
     }
   };
 
+  // Bulk Delete Selected
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    try {
+      setLoading(true);
+      await Promise.all(
+        selectedIds.map(id => storageService.deleteAgriRawMaterial(id))
+      );
+      toast.success(
+        isRtl 
+          ? `تم حذف ${selectedIds.length} من السجلات بنجاح` 
+          : `Successfully deleted ${selectedIds.length} records`
+      );
+      setSelectedIds([]);
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'حدث خطأ أثناء الحذف الجماعي' : 'Error during bulk deletion');
+    } finally {
+      setLoading(false);
+      setIsBulkDeleteConfirmOpen(false);
+    }
+  };
+
+  // Download Blank Excel Template
+  const downloadExcelTemplate = () => {
+    try {
+      const headers = [
+        'التاريخ', 'الحركة', 'رقم الحركة', 'المورد', 'رقم الساب', 'رقم البوست', 
+        'إذن تسليم المورد', 'الكود', 'الصنف', 'الحجم', 'الباتش', 'الكمية', 
+        'الوحدة', 'اسم السائق', 'رقم السيارة', 'ملاحظات'
+      ];
+
+      const demoRows = [
+        [
+          new Date().toISOString().slice(0, 10),
+          'إضافة',
+          'MOV-1001',
+          'مورد خامات ممتاز',
+          'SAP-100921',
+          'PST-2003',
+          'DEL-992',
+          'MAT-AGRI-01',
+          'زيتون تفاحي',
+          'كبير جداً',
+          'B-JUL26-01',
+          1500,
+          'كجم',
+          'أحمد محمود الجمال',
+          'أ ب ج 1234',
+          'توريد عينة أولى ممتازة'
+        ],
+        [
+          new Date().toISOString().slice(0, 10),
+          'صرف',
+          'MOV-1002',
+          'مورد خامات ممتاز',
+          '',
+          '',
+          '',
+          'MAT-AGRI-01',
+          'زيتون تفاحي',
+          'كبير جداً',
+          'B-JUL26-01',
+          500,
+          'كجم',
+          'صابر عبد المولى',
+          'س ص ع 5678',
+          'صرف لخط الإنتاج الأول'
+        ]
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...demoRows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'نموذج إدخال الحركات');
+      
+      XLSX.writeFile(workbook, `Agri_Raw_Material_Template.xlsx`);
+      toast.success(isRtl ? 'تم تحميل نموذج Excel بنجاح' : 'Excel template downloaded successfully');
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'فشل تحميل النموذج' : 'Failed to download template');
+    }
+  };
+
   // Export to Excel
   const exportToExcel = () => {
     try {
@@ -495,47 +580,111 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
         let skippedDuplicateCount = 0;
         let validationFailedCount = 0;
 
-        // Collect all existing record keys to prevent file-internal duplicates and database duplicates
-        const activeKeys = new Set(materials.map(m => `${m.movementNumber.trim()}_${m.materialCode.trim()}_${m.batch.trim()}`));
+        // Helper to normalize and trim fields for robust duplicate checking
+        const norm = (val: any) => String(val !== undefined && val !== null ? val : '').trim();
+
+        // Collect all existing record keys using ALL data fields to prevent duplicates based on identical rows
+        const activeKeys = new Set(
+          materials.map(m => 
+            `${norm(m.date)}_${norm(m.movementType)}_${norm(m.movementNumber)}_${norm(m.supplier)}_${norm(m.sapNumber)}_${norm(m.postNumber)}_${norm(m.deliveryNote)}_${norm(m.materialCode)}_${norm(m.itemName)}_${norm(m.size)}_${norm(m.batch)}_${Number(m.quantity)}_${norm(m.unit)}_${norm(m.driverName)}_${norm(m.vehicleNumber)}_${norm(m.notes)}`
+          )
+        );
 
         for (const row of jsonData) {
-          // Normalize row keys (support both Arabic and English headers)
-          const date = String(row['التاريخ'] || row['Date'] || row['date'] || new Date().toISOString().slice(0, 10));
-          const movementType = String(row['الحركة'] || row['Movement Type'] || row['movementType'] || 'إضافة').trim();
-          const movementNumber = String(row['رقم الحركة'] || row['Movement Number'] || row['movementNumber'] || '').trim();
-          const supplier = String(row['المورد'] || row['Supplier'] || row['supplier'] || '').trim();
-          const sapNumber = String(row['رقم الساب'] || row['SAP Number'] || row['sapNumber'] || '').trim();
-          const postNumber = String(row['رقم البوست'] || row['Post Number'] || row['postNumber'] || '').trim();
-          const deliveryNote = String(row['إذن تسليم المورد'] || row['Supplier Delivery Note'] || row['deliveryNote'] || '').trim();
-          const materialCode = String(row['الكود'] || row['Code'] || row['materialCode'] || '').trim();
-          const itemName = String(row['الصنف'] || row['Item Name'] || row['itemName'] || '').trim();
-          const size = String(row['الحجم'] || row['Size'] || row['size'] || '').trim();
-          const batch = String(row['الباتش'] || row['Batch'] || row['batch'] || '').trim();
-          const quantity = Number(row['الكمية'] || row['Quantity'] || row['quantity'] || 0);
-          const unit = String(row['الوحدة'] || row['Unit'] || row['unit'] || 'كجم').trim();
-          const driverName = String(row['اسم السائق'] || row['Driver Name'] || row['driverName'] || '').trim();
-          const vehicleNumber = String(row['رقم السيارة'] || row['Vehicle Number'] || row['vehicleNumber'] || '').trim();
-          const notes = String(row['ملاحظات'] || row['Notes'] || row['notes'] || '').trim();
+          // Robust Excel date parsing
+          let rawDate = row['التاريخ'] || row['Date'] || row['date'];
+          let date = '';
+          if (rawDate !== undefined && rawDate !== null) {
+            if (typeof rawDate === 'number') {
+              // Convert Excel serial number to date
+              const dateObj = new Date((rawDate - 25569) * 86400 * 1000);
+              date = dateObj.toISOString().slice(0, 10);
+            } else {
+              const strDate = String(rawDate).trim();
+              const parts = strDate.split(/[-/]/);
+              if (parts.length === 3) {
+                // Check if YYYY-MM-DD or DD/MM/YYYY
+                if (parts[0].length === 4) {
+                  date = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                } else if (parts[2].length === 4) {
+                  date = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                } else {
+                  date = strDate;
+                }
+              } else {
+                date = strDate;
+              }
+            }
+          }
+          if (!date) {
+            date = new Date().toISOString().slice(0, 10);
+          }
 
-          // Validation
-          if (!date || !movementType || !movementNumber || !supplier || !materialCode || !itemName || !batch || !unit || isNaN(quantity) || quantity <= 0) {
+          let movementType = String(row['الحركة'] || row['Movement Type'] || row['movementType'] || 'إضافة').trim();
+          let movementNumber = String(row['رقم الحركة'] || row['Movement Number'] || row['movementNumber'] || '').trim();
+          let supplier = String(row['المورد'] || row['Supplier'] || row['supplier'] || '').trim();
+          let sapNumber = String(row['رقم الساب'] || row['SAP Number'] || row['sapNumber'] || '').trim();
+          let postNumber = String(row['رقم البوست'] || row['Post Number'] || row['postNumber'] || '').trim();
+          let deliveryNote = String(row['إذن تسليم المورد'] || row['Supplier Delivery Note'] || row['deliveryNote'] || '').trim();
+          let materialCode = String(row['الكود'] || row['Code'] || row['materialCode'] || '').trim();
+          let itemName = String(row['الصنف'] || row['Item Name'] || row['itemName'] || '').trim();
+          let size = String(row['الحجم'] || row['Size'] || row['size'] || '').trim();
+          let batch = String(row['الباتش'] || row['Batch'] || row['batch'] || '').trim();
+          const rawQuantity = row['الكمية'] || row['Quantity'] || row['quantity'];
+          const quantity = Number(rawQuantity !== undefined && rawQuantity !== null ? rawQuantity : 0);
+          let unit = String(row['الوحدة'] || row['Unit'] || row['unit'] || 'كجم').trim();
+          let driverName = String(row['اسم السائق'] || row['Driver Name'] || row['driverName'] || '').trim();
+          let vehicleNumber = String(row['رقم السيارة'] || row['Vehicle Number'] || row['vehicleNumber'] || '').trim();
+          let notes = String(row['ملاحظات'] || row['Notes'] || row['notes'] || '').trim();
+
+          // Quietly skip empty trailing rows that sheet_to_json can read from formatting
+          const hasAnyContent = (itemName !== '' || materialCode !== '' || movementNumber !== '' || supplier !== '' || batch !== '');
+          if (!hasAnyContent && (isNaN(quantity) || quantity <= 0)) {
+            continue;
+          }
+
+          // Validation: must have valid positive quantity, and at least code or item name
+          if (isNaN(quantity) || quantity <= 0 || (itemName === '' && materialCode === '')) {
             validationFailedCount++;
             continue;
           }
 
+          // Smart Auto-Filling from database history if one of the item details is empty
+          if (itemName === '' && materialCode !== '') {
+            const found = materials.find(m => m.materialCode === materialCode);
+            itemName = found ? found.itemName : materialCode;
+          }
+          if (materialCode === '' && itemName !== '') {
+            const found = materials.find(m => m.itemName === itemName);
+            materialCode = found ? found.materialCode : '-';
+          }
+
+          // Safe fallbacks for optional fields to avoid blank missing items
+          if (!movementNumber) movementNumber = '-';
+          if (!supplier) supplier = '-';
+          if (!batch) batch = '-';
+          if (!unit) unit = 'كجم';
+
           // Normalize movementType to either Adding or Dispense in Arabic
           const normalizedType = (movementType.includes('صرف') || movementType.toLowerCase().includes('disp') || movementType.toLowerCase().includes('out')) ? 'صرف' : 'إضافة';
 
-          const uniqueKey = `${movementNumber}_${materialCode}_${batch}`;
+          // Unique key includes all core fields to ensure we only skip completely identical rows
+          const uniqueKey = `${norm(date)}_${norm(normalizedType)}_${norm(movementNumber)}_${norm(supplier)}_${norm(sapNumber)}_${norm(postNumber)}_${norm(deliveryNote)}_${norm(materialCode)}_${norm(itemName)}_${norm(size)}_${norm(batch)}_${Number(quantity)}_${norm(unit)}_${norm(driverName)}_${norm(vehicleNumber)}_${norm(notes)}`;
 
-          // Duplication Rule Guard
+          // Duplication Rule Guard (We now flag instead of skip!)
+          let isDuplicate = false;
           if (activeKeys.has(uniqueKey)) {
+            isDuplicate = true;
             skippedDuplicateCount++;
-            continue;
+          } else {
+            // Register new unique key
+            activeKeys.add(uniqueKey);
           }
 
-          // Register new unique key
-          activeKeys.add(uniqueKey);
+          let finalNotes = notes;
+          if (isDuplicate) {
+            finalNotes = notes ? `[مكرر] ${notes}` : 'مكرر';
+          }
 
           // Build clean object
           const record: AgriRawMaterial = {
@@ -555,7 +704,8 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
             unit,
             driverName,
             vehicleNumber,
-            notes,
+            notes: finalNotes,
+            isDuplicate,
             createdAt: new Date().toISOString(),
             lastUpdatedAt: new Date().toISOString()
           };
@@ -567,8 +717,8 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
 
         toast.success(
           isRtl 
-            ? `تم استيراد ${importedCount} حركات بنجاح. (تخطي مكرر: ${skippedDuplicateCount}, تخطي غير صالح: ${validationFailedCount})`
-            : `Imported ${importedCount} records successfully. (Skipped duplicates: ${skippedDuplicateCount}, invalid: ${validationFailedCount})`
+            ? `تم استيراد ${importedCount} حركات بنجاح. (منها مكرر وتم وسمه: ${skippedDuplicateCount}, تخطي غير صالح: ${validationFailedCount})`
+            : `Imported ${importedCount} records successfully. (Flagged duplicates: ${skippedDuplicateCount}, invalid skipped: ${validationFailedCount})`
         );
 
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -639,6 +789,15 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
           />
 
           <button
+            onClick={downloadExcelTemplate}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl font-medium transition-all text-sm shadow-sm"
+            title={isRtl ? 'تحميل نموذج Excel المفرغ' : 'Download blank Excel template'}
+          >
+            <Download size={18} />
+            <span>{isRtl ? 'تحميل نموذج Excel' : 'Download Template'}</span>
+          </button>
+
+          <button
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center justify-center gap-2 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl font-medium transition-all text-sm shadow-sm"
             title={isRtl ? 'استيراد من Excel' : 'Import from Excel'}
@@ -664,6 +823,21 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
             <FileText size={18} />
             <span>{isRtl ? 'تقرير PDF' : 'PDF Report'}</span>
           </button>
+
+          {canEditOrDelete && selectedIds.length > 0 && (
+            <button
+              onClick={() => setIsBulkDeleteConfirmOpen(true)}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-medium transition-all text-sm shadow-lg shadow-rose-600/20 w-full sm:w-auto animate-pulse"
+              title={isRtl ? 'حذف المحدد' : 'Delete Selected'}
+            >
+              <Trash2 size={18} />
+              <span>
+                {isRtl 
+                  ? `مسح المحدد (${selectedIds.length})` 
+                  : `Delete Selected (${selectedIds.length})`}
+              </span>
+            </button>
+          )}
 
           <button
             onClick={handleOpenCreate}
@@ -855,6 +1029,22 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
               <table id="agri-raw-materials-table" className="w-full text-sm text-right border-separate border-spacing-0" dir={isRtl ? 'rtl' : 'ltr'}>
                 <thead className="sticky top-0 z-30 shadow-[0_2px_8px_-1px_rgba(0,0,0,0.05)]">
                   <tr>
+                    {canEditOrDelete && (
+                      <th className="p-3.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-center z-30 w-10">
+                        <input
+                          type="checkbox"
+                          checked={filteredMaterials.length > 0 && selectedIds.length === filteredMaterials.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedIds(filteredMaterials.map(m => m.id));
+                            } else {
+                              setSelectedIds([]);
+                            }
+                          }}
+                          className="rounded border-zinc-300 dark:border-zinc-700 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer animate-pulse"
+                        />
+                      </th>
+                    )}
                     <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'التاريخ' : 'Date'}</th>
                     <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'الحركة' : 'Movement'}</th>
                     <th className="p-3.5 font-bold text-zinc-700 dark:text-zinc-200 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/95 dark:bg-zinc-950/95 backdrop-blur-md text-right whitespace-nowrap">{isRtl ? 'رقم الحركة' : 'Mov. No'}</th>
@@ -880,6 +1070,9 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                   {/* Inline Horizontal Adding Row styled like the user's green image */}
                   {isInlineAdding && (
                     <tr className="bg-[#72b143] text-white">
+                      {canEditOrDelete && (
+                        <td className="p-2 border-b border-emerald-700 align-middle"></td>
+                      )}
                       {/* 1. التاريخ */}
                       <td className="p-2 border-b border-emerald-700 align-middle">
                         <div className="flex flex-col gap-1 min-w-[130px]">
@@ -1220,13 +1413,38 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                     return (
                       <tr
                         key={item.id}
-                        className="group hover:bg-emerald-500/5 dark:hover:bg-emerald-400/5 even:bg-zinc-50/30 dark:even:bg-zinc-800/10 border-b border-zinc-100 dark:border-zinc-800/50 transition-all duration-200"
+                        className={`group hover:bg-emerald-500/5 dark:hover:bg-emerald-400/5 even:bg-zinc-50/30 dark:even:bg-zinc-800/10 border-b border-zinc-100 dark:border-zinc-800/50 transition-all duration-200 ${
+                          item.isDuplicate ? 'bg-amber-500/5 dark:bg-amber-500/10 hover:bg-amber-500/10 dark:hover:bg-amber-500/15 border-r-4 border-r-amber-500' : ''
+                        }`}
                       >
+                        {canEditOrDelete && (
+                          <td className="p-3 text-center whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(item.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedIds(prev => [...prev, item.id]);
+                                } else {
+                                  setSelectedIds(prev => prev.filter(id => id !== item.id));
+                                }
+                              }}
+                              className="rounded border-zinc-300 dark:border-zinc-700 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                            />
+                          </td>
+                        )}
                         {/* 1. التاريخ */}
                         <td className="p-3 whitespace-nowrap text-zinc-900 dark:text-zinc-100 font-semibold text-xs">
-                          <span className="bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-300 shadow-2xs font-medium">
-                            {item.date}
-                          </span>
+                          <div className="flex items-center gap-1.5 justify-start">
+                            <span className="bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-lg text-zinc-700 dark:text-zinc-300 shadow-2xs font-medium">
+                              {item.date}
+                            </span>
+                            {item.isDuplicate && (
+                              <span className="bg-amber-500/20 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-md text-[10px] font-bold border border-amber-500/30 whitespace-nowrap animate-pulse">
+                                {isRtl ? 'مكرر' : 'Duplicate'}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* 2. الحركة */}
@@ -1742,6 +1960,50 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                   className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-medium text-sm transition-colors shadow-md shadow-rose-500/10"
                 >
                   {isRtl ? 'حذف السجل' : 'Yes, Delete'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* BULK DELETE CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {isBulkDeleteConfirmOpen && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl"
+            >
+              <div className="w-12 h-12 bg-rose-500/10 rounded-full flex items-center justify-center text-rose-500 mx-auto">
+                <AlertTriangle size={24} />
+              </div>
+              <div className="text-center">
+                <h3 className="font-bold text-zinc-900 dark:text-white text-lg">
+                  {isRtl ? 'تأكيد الحذف الجماعي' : 'Confirm Bulk Deletion'}
+                </h3>
+                <p className="text-sm text-zinc-500 mt-2">
+                  {isRtl 
+                    ? `هل أنت متأكد من رغبتك في حذف ${selectedIds.length} من السجلات المحددة نهائياً؟ لا يمكن التراجع عن هذا الإجراء.` 
+                    : `Are you sure you want to permanently delete the ${selectedIds.length} selected records? This action cannot be undone.`}
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDeleteConfirmOpen(false)}
+                  className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl font-medium text-sm transition-colors"
+                >
+                  {isRtl ? 'إلغاء التراجع' : 'No, Keep Them'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-medium text-sm transition-colors shadow-md shadow-rose-500/10"
+                >
+                  {isRtl ? 'تأكيد حذف الجميع' : 'Yes, Delete All'}
                 </button>
               </div>
             </motion.div>

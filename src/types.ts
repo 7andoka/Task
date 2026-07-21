@@ -283,6 +283,7 @@ export interface AgriRawMaterial {
   driverName: string; // اسم السائق
   vehicleNumber: string; // رقم السيارة
   notes?: string; // ملاحظات
+  isDuplicate?: boolean; // هل الصف مكرر؟
   createdAt: string;
   lastUpdatedAt: string;
 }
