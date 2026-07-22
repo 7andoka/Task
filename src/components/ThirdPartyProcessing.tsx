@@ -26,12 +26,14 @@ import {
   X,
   Tag,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Shield
 } from 'lucide-react';
 import { 
   Language, 
   UserProfile, 
   ProcessingJob, 
+  JobStatus,
   ProcessItem,
   Warehouse
 } from '../types';
@@ -433,6 +435,39 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     if (hasRole('Purchasing Operations') && job.status === 'Pending Purchasing') return true;
 
     return false;
+  };
+
+  const getJobStatusLabel = (status: JobStatus, isRtl: boolean) => {
+    switch (status) {
+      case 'Completed': return isRtl ? 'مكتمل' : 'Completed';
+      case 'Pending Warehouse': return isRtl ? 'قيد اعتماد المخزن' : 'Pending Warehouse';
+      case 'Pending Quality': return isRtl ? 'قيد الجودة' : 'Pending Quality';
+      case 'Pending Purchasing': return isRtl ? 'قيد المشتريات' : 'Pending Purchasing';
+      case 'Pending Completion': return isRtl ? 'قيد الإكمال' : 'Pending Completion';
+      case 'Rejected': return isRtl ? 'مرفوض' : 'Rejected';
+      case 'Draft': return isRtl ? 'مسودة' : 'Draft';
+      default: return status;
+    }
+  };
+
+  const handleAdminChangeStatus = async (job: ProcessingJob, newStatus: JobStatus) => {
+    if (!hasRole('Admin')) return;
+    try {
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+        serverTimestamp: serverTimestamp()
+      });
+      const label = getJobStatusLabel(newStatus, lang === 'ar');
+      toast.success(
+        lang === 'ar' 
+          ? `تم تغيير حالة التشغيلة بنجاح إلى: ${label}` 
+          : `Job status updated to: ${label}`
+      );
+    } catch (error) {
+      console.error('Error changing job status:', error);
+      toast.error(lang === 'ar' ? 'فشل تغيير حالة التشغيلة' : 'Failed to change job status');
+    }
   };
 
   const t = translations[lang];
@@ -1429,7 +1464,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const jobData = {
         ...newJob,
         jobCode: editingJobId ? jobs.find(j => j.id === editingJobId)?.jobCode : jobCode,
-        status: editingJobId ? newJob.status : 'Pending Warehouse',
+        status: newJob.status || 'Pending Warehouse',
         warehouseName: selectedWh?.name || '',
         warehouseCode: selectedWh?.systemCode || '',
         updatedAt: new Date().toISOString(),
@@ -4130,7 +4165,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             )}
 
             {/* Basic Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className={`grid grid-cols-1 md:grid-cols-3 ${hasRole('Admin') ? 'lg:grid-cols-4' : ''} gap-6`}>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">
@@ -4185,6 +4220,28 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   <option value="Other">{lang === 'ar' ? 'أخرى' : 'Other'}</option>
                 </select>
               </div>
+
+              {hasRole('Admin') && (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <Shield size={16} />
+                    {lang === 'ar' ? 'حالة التشغيلة (أدمن)' : 'Job Status (Admin)'}
+                  </label>
+                  <select
+                    value={newJob.status || 'Pending Warehouse'}
+                    onChange={(e) => setNewJob({ ...newJob, status: e.target.value as JobStatus })}
+                    className="w-full px-4 py-3 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border-2 border-amber-200 dark:border-amber-900/50 focus:border-amber-500 outline-none transition-all font-bold text-amber-900 dark:text-amber-200 cursor-pointer"
+                  >
+                    <option value="Pending Warehouse">{lang === 'ar' ? 'قيد اعتماد المخزن' : 'Pending Warehouse'}</option>
+                    <option value="Pending Quality">{lang === 'ar' ? 'قيد الجودة' : 'Pending Quality'}</option>
+                    <option value="Pending Purchasing">{lang === 'ar' ? 'قيد المشتريات' : 'Pending Purchasing'}</option>
+                    <option value="Pending Completion">{lang === 'ar' ? 'قيد الإكمال' : 'Pending Completion'}</option>
+                    <option value="Completed">{lang === 'ar' ? 'مكتمل' : 'Completed'}</option>
+                    <option value="Rejected">{lang === 'ar' ? 'مرفوض' : 'Rejected'}</option>
+                    <option value="Draft">{lang === 'ar' ? 'مسودة' : 'Draft'}</option>
+                  </select>
+                </div>
+              )}
             </div>
 
 
@@ -4434,29 +4491,44 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                             <h4 className="font-black text-base text-zinc-900 dark:text-white leading-tight">
                               {job.warehouseName}
                             </h4>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-lg font-bold uppercase tracking-wider shrink-0 select-text ${
-                              job.status === 'Completed' 
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
-                                : job.status === 'Rejected'
-                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
-                                : job.status.startsWith('Pending')
-                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                                : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
-                            }`}>
-                              {job.status === 'Completed' 
-                                ? (lang === 'ar' ? 'مكتمل' : 'Completed') 
-                                : job.status === 'Pending Warehouse'
-                                ? (lang === 'ar' ? 'قيد اعتماد المخزن' : 'Pending Warehouse')
-                                : job.status === 'Pending Quality'
-                                ? (lang === 'ar' ? 'قيد الجودة' : 'Pending Quality')
-                                : job.status === 'Pending Purchasing'
-                                ? (lang === 'ar' ? 'قيد المشتريات' : 'Pending Purchasing')
-                                : job.status === 'Pending Completion'
-                                ? (lang === 'ar' ? 'قيد الإكمال' : 'Pending Completion')
-                                : job.status === 'Rejected'
-                                ? (lang === 'ar' ? 'مرفوض' : 'Rejected')
-                                : (lang === 'ar' ? 'مسودة' : 'Draft')}
-                            </span>
+                            {hasRole('Admin') ? (
+                              <div className="relative flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <select
+                                  value={job.status}
+                                  onChange={(e) => handleAdminChangeStatus(job, e.target.value as JobStatus)}
+                                  className={`text-[10px] px-2 py-0.5 rounded-lg font-bold uppercase tracking-wider shrink-0 cursor-pointer border outline-none transition-all shadow-2xs ${
+                                    job.status === 'Completed' 
+                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-700' 
+                                      : job.status === 'Rejected'
+                                      ? 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-700'
+                                      : job.status.startsWith('Pending')
+                                      ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-700'
+                                      : 'bg-zinc-100 text-zinc-800 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700'
+                                  }`}
+                                  title={lang === 'ar' ? 'تغيير حالة التشغيلة (صلاحية أدمن)' : 'Change job status (Admin)'}
+                                >
+                                  <option value="Pending Warehouse">{lang === 'ar' ? 'قيد اعتماد المخزن' : 'Pending Warehouse'}</option>
+                                  <option value="Pending Quality">{lang === 'ar' ? 'قيد الجودة' : 'Pending Quality'}</option>
+                                  <option value="Pending Purchasing">{lang === 'ar' ? 'قيد المشتريات' : 'Pending Purchasing'}</option>
+                                  <option value="Pending Completion">{lang === 'ar' ? 'قيد الإكمال' : 'Pending Completion'}</option>
+                                  <option value="Completed">{lang === 'ar' ? 'مكتمل' : 'Completed'}</option>
+                                  <option value="Rejected">{lang === 'ar' ? 'مرفوض' : 'Rejected'}</option>
+                                  <option value="Draft">{lang === 'ar' ? 'مسودة' : 'Draft'}</option>
+                                </select>
+                              </div>
+                            ) : (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-lg font-bold uppercase tracking-wider shrink-0 select-text ${
+                                job.status === 'Completed' 
+                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' 
+                                  : job.status === 'Rejected'
+                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+                                  : job.status.startsWith('Pending')
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                  : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+                              }`}>
+                                {getJobStatusLabel(job.status, lang === 'ar')}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-3 text-xs font-bold text-zinc-500">
                             <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-mono">
