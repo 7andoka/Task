@@ -50,6 +50,40 @@ export const triggerVibration = (pattern = [300, 100, 300, 100, 300]) => {
   }
 };
 
+export const requestPersistentStorage = async () => {
+  if (navigator.storage && navigator.storage.persist) {
+    try {
+      const isPersisted = await navigator.storage.persist();
+      console.log('Persistent storage enabled:', isPersisted);
+      return isPersisted;
+    } catch (e) {
+      console.error('Persistent storage error', e);
+    }
+  }
+  return false;
+};
+
+export const enableBackgroundSync = async () => {
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      if ('periodicSync' in registration) {
+        const status = await navigator.permissions.query({
+          name: 'periodic-background-sync' as any,
+        });
+        if (status.state === 'granted') {
+          await (registration as any).periodicSync.register('check-jobs-update', {
+            minInterval: 15 * 60 * 1000, // 15 mins
+          });
+          console.log('Periodic Background Sync registered');
+        }
+      }
+    } catch (e) {
+      console.warn('Periodic sync not permitted or supported:', e);
+    }
+  }
+};
+
 export const requestNotificationPermission = async () => {
   if ('Notification' in window && Notification.permission === 'default') {
     try {

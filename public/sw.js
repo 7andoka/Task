@@ -92,6 +92,20 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// Handle Periodic Background Sync
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'check-jobs-update') {
+    event.waitUntil(
+      self.registration.showNotification('Rich Land - فحص الخلفية', {
+        body: 'التطبيق يعمل في الخلفية لمتابعة حركة التشغيلات والتنبيهات',
+        icon: 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg',
+        badge: 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg',
+        tag: 'periodic-sync-check'
+      }).catch(() => {})
+    );
+  }
+});
+
 // Handle incoming client message to show notification or set badge from SW context
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SHOW_NOTIFICATION') {

@@ -28,7 +28,10 @@ import {
   ChevronDown,
   ChevronUp,
   Shield,
-  Bell
+  Bell,
+  Smartphone,
+  BatteryCharging,
+  Zap
 } from 'lucide-react';
 import { 
   Language, 
@@ -43,7 +46,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, delete
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
-import { playNotificationSound, triggerVibration, requestNotificationPermission, sendSystemNotification, clearAppBadge } from '../services/notificationService';
+import { playNotificationSound, triggerVibration, requestNotificationPermission, sendSystemNotification, clearAppBadge, requestPersistentStorage, enableBackgroundSync } from '../services/notificationService';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
@@ -503,6 +506,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   const [isAdding, setIsAdding] = useState(false);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [toEmails, setToEmails] = useState<string[]>(['Khaled.Shaaban@RichLandfi.com']);
   const [ccEmails, setCcEmails] = useState<string[]>([]);
@@ -3664,6 +3668,20 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             <button 
               onClick={async () => {
                 await requestNotificationPermission();
+                await requestPersistentStorage();
+                await enableBackgroundSync();
+                setIsBackgroundModalOpen(true);
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-2xl font-bold transition-all border border-emerald-200 dark:border-emerald-800 shadow-xs"
+              title={lang === 'ar' ? 'ضبط التشغيل في الخلفية وإلغاء قيود البطارية' : 'Enable background execution & battery exemption'}
+            >
+              <BatteryCharging size={18} className="text-emerald-500 animate-pulse" />
+              <span className="text-xs font-bold">{lang === 'ar' ? 'التشغيل في الخلفية' : 'Background Mode'}</span>
+            </button>
+
+            <button 
+              onClick={async () => {
+                await requestNotificationPermission();
                 await sendSystemNotification(
                   lang === 'ar' ? 'اختبار تنبيه التشغيل (PWA)' : 'PWA Job Notification Test',
                   lang === 'ar' ? 'التنبيهات والشارة على أيقونة التطبيق تعمل بنجاح!' : 'Notifications and app badge icon are working!',
@@ -3679,7 +3697,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
               title={lang === 'ar' ? 'تفعيل وتجربة التنبيه والشارة على الأيقونة' : 'Enable and test sound, vibration & badge'}
             >
               <Bell size={18} className="text-amber-500 animate-bounce" />
-              <span className="text-xs font-bold">{lang === 'ar' ? 'اختبار التنبيه وشارة الأيقونة' : 'Test Alert & Icon Badge'}</span>
+              <span className="text-xs font-bold">{lang === 'ar' ? 'اختبار التنبيه' : 'Test Alert'}</span>
             </button>
 
             {hasRole('Admin') && (
@@ -5490,6 +5508,131 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                 className="px-6 py-2.5 bg-white dark:bg-zinc-900 hover:bg-zinc-100 text-zinc-750 dark:text-zinc-350 rounded-xl text-xs font-bold transition-all border border-zinc-200 dark:border-zinc-800 cursor-pointer"
               >
                 {lang === 'ar' ? 'إلغاء الأمر' : 'Cancel Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Background Working Settings Modal */}
+      {isBackgroundModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-xl w-full border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/20 rounded-2xl backdrop-blur-md">
+                  <BatteryCharging size={24} className="text-emerald-100 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">
+                    {lang === 'ar' ? 'دليل إجبار التطبيق على العمل في الخلفية' : 'Background App Working & Battery Guide'}
+                  </h3>
+                  <p className="text-xs text-emerald-100 mt-0.5">
+                    {lang === 'ar' ? 'لاستلام التنبيهات ورنة الإشعار حتى عند غلق التطبيق أو قفل الشاشة' : 'Receive instant notifications even when app is closed'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsBackgroundModalOpen(false)}
+                className="p-2 hover:bg-white/20 rounded-xl transition-all cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6 text-xs leading-relaxed text-zinc-700 dark:text-zinc-300">
+              {/* Step 1: Request permissions */}
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-extrabold text-emerald-800 dark:text-emerald-300 text-sm">
+                    <Zap size={18} className="text-emerald-600 dark:text-emerald-400" />
+                    <span>{lang === 'ar' ? 'الخطوة الأولى: تفعيل الصلاحيات البرمجية' : 'Step 1: Grant Permissions'}</span>
+                  </div>
+                </div>
+                <p>
+                  {lang === 'ar' 
+                    ? 'اضغط على الزر أدناه لمنح التطبيق الإذن بإرسال التنبيهات وتثبيت الذاكرة في الخلفية (Background Sync & Persistent Storage).' 
+                    : 'Click below to grant notification permissions, persistent storage, and background sync.'
+                  }
+                </p>
+                <button
+                  onClick={async () => {
+                    await requestNotificationPermission();
+                    await requestPersistentStorage();
+                    await enableBackgroundSync();
+                    await sendSystemNotification(
+                      lang === 'ar' ? 'تم تفعيل وضع الخلفية!' : 'Background Mode Activated!',
+                      lang === 'ar' ? 'التطبيق جاهز للعمل في الخلفية واستلام التنبيهات.' : 'App is ready for background notifications.',
+                      false
+                    );
+                    toast.success(lang === 'ar' ? 'تم تفعيل الصلاحيات البرمجية بنجاح!' : 'Permissions granted successfully!');
+                  }}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <CheckCircle2 size={16} />
+                  <span>{lang === 'ar' ? 'تفعيل الصلاحيات واختبار الخدمة الآن' : 'Enable Permissions & Test Now'}</span>
+                </button>
+              </div>
+
+              {/* Step 2: Android Battery Optimization */}
+              <div className="space-y-3 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                <div className="flex items-center gap-2 font-extrabold text-zinc-900 dark:text-white text-sm">
+                  <Smartphone size={18} className="text-emerald-500" />
+                  <span>{lang === 'ar' ? 'هواتف أندرويد (سامسونج، شاومي، أوبو، إلخ)' : 'Android Devices (Samsung, Xiaomi, Oppo, etc.)'}</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-2 text-zinc-600 dark:text-zinc-400 font-medium">
+                  <li>
+                    <strong className="text-zinc-800 dark:text-zinc-200">{lang === 'ar' ? 'تثبيت التطبيق:' : 'Install App:'}</strong> {lang === 'ar' ? 'افتح قائمة المتصفح (⋮) ثم اختر "إضافة إلى الشاشة الرئيسية" ليتم تثبيته كـ PWA مستقل.' : 'Open browser menu (⋮) -> Add to Home Screen.'}
+                  </li>
+                  <li>
+                    <strong className="text-zinc-800 dark:text-zinc-200">{lang === 'ar' ? 'إلغاء قيود البطارية:' : 'Unrestrict Battery:'}</strong> {lang === 'ar' ? 'ادخل على إعدادات الهاتف -> التطبيقات -> اختر Rich Land (أو Chrome) -> البطارية -> اختر "غير محدد / Unrestricted" بدلاً من محسّن.' : 'Go to Settings -> Apps -> Rich Land (or Chrome) -> Battery -> Select "Unrestricted".'}
+                  </li>
+                  <li>
+                    <strong className="text-zinc-800 dark:text-zinc-200">{lang === 'ar' ? 'بيانات الخلفية والإشعارات:' : 'Background Data & Alerts:'}</strong> {lang === 'ar' ? 'تأكد من السماح بـ "بيانات الخلفية" وتفعيل جميع أصوات وتنبيهات الإشعارات.' : 'Ensure "Background Data" is ON and all notification categories are allowed.'}
+                  </li>
+                </ol>
+              </div>
+
+              {/* Step 3: iPhone / iOS */}
+              <div className="space-y-3 bg-zinc-50 dark:bg-zinc-800/50 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+                <div className="flex items-center gap-2 font-extrabold text-zinc-900 dark:text-white text-sm">
+                  <Shield size={18} className="text-teal-500" />
+                  <span>{lang === 'ar' ? 'هواتف آيفون (iPhone / iOS)' : 'iPhone / iOS Devices'}</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-2 text-zinc-600 dark:text-zinc-400 font-medium">
+                  <li>
+                    <strong className="text-zinc-800 dark:text-zinc-200">{lang === 'ar' ? 'إضافة للشاشة الرئيسية:' : 'Add to Home Screen:'}</strong> {lang === 'ar' ? 'افتح Safari واضغط زر المشاركة (Share) ثم اختر "إضافة إلى الشاشة الرئيسية".' : 'Open Safari -> tap Share button -> Add to Home Screen.'}
+                  </li>
+                  <li>
+                    <strong className="text-zinc-800 dark:text-zinc-200">{lang === 'ar' ? 'تحديث التطبيقات في الخلفية:' : 'Background App Refresh:'}</strong> {lang === 'ar' ? 'ادخل إعدادات الآيفون -> عام -> تحديث التطبيقات في الخلفية -> تأكد من تفعيل الخيار.' : 'Go to iPhone Settings -> General -> Background App Refresh -> ON.'}
+                  </li>
+                  <li>
+                    <strong className="text-zinc-800 dark:text-zinc-200">{lang === 'ar' ? 'سماح الإشعارات:' : 'Allow Notifications:'}</strong> {lang === 'ar' ? 'ادخل إعدادات الآيفون -> الإشعارات -> Rich Land -> تفعيل التنبيهات على شاشة القفل.' : 'Go to Settings -> Notifications -> Rich Land -> Allow Notifications & Lock Screen.'}
+                  </li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center shrink-0">
+              <button
+                onClick={() => {
+                  sendSystemNotification(
+                    lang === 'ar' ? 'تنبيه خلفية تجريبي' : 'Background Test Notification',
+                    lang === 'ar' ? 'وصلك التنبيه بنجاح مع رنة الصوت ورقم الأيقونة!' : 'Notification received with chime & badge!',
+                    false
+                  );
+                }}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Bell size={14} />
+                <span>{lang === 'ar' ? 'تجربة إرسال تنبيه' : 'Send Test Alert'}</span>
+              </button>
+
+              <button 
+                onClick={() => setIsBackgroundModalOpen(false)}
+                className="px-6 py-2 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-800 dark:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                {lang === 'ar' ? 'إغلاق' : 'Close'}
               </button>
             </div>
           </div>
