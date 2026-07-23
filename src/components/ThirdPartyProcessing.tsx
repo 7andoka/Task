@@ -27,7 +27,8 @@ import {
   Tag,
   ChevronDown,
   ChevronUp,
-  Shield
+  Shield,
+  Bell
 } from 'lucide-react';
 import { 
   Language, 
@@ -42,6 +43,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, delete
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
+import { playNotificationSound, triggerVibration, requestNotificationPermission } from '../services/notificationService';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
@@ -459,6 +461,12 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         serverTimestamp: serverTimestamp()
       });
       const label = getJobStatusLabel(newStatus, lang === 'ar');
+      const isAlert = newStatus === 'Rejected';
+      
+      // Sound chime and vibration
+      playNotificationSound(isAlert);
+      triggerVibration(isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300]);
+
       toast.success(
         lang === 'ar' 
           ? `تم تغيير حالة التشغيلة بنجاح إلى: ${label}` 
@@ -809,6 +817,9 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     }
   }, [availableOutputItems, currentOutput.itemCode]);
 
+  const isFirstLoadRef = React.useRef(true);
+  const prevJobsRef = React.useRef<Map<string, JobStatus>>(new Map());
+
   useEffect(() => {
     const q = query(
       collection(db, COLLECTIONS.THIRD_PARTY_PROCESSING), 
@@ -820,6 +831,60 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         id: doc.id,
         ...doc.data()
       } as ProcessingJob));
+
+      if (isFirstLoadRef.current) {
+        jobsData.forEach(j => prevJobsRef.current.set(j.id, j.status));
+        isFirstLoadRef.current = false;
+      } else {
+        snapshot.docChanges().forEach((change) => {
+          const job = { id: change.doc.id, ...change.doc.data() } as ProcessingJob;
+          if (change.type === 'added') {
+            if (!prevJobsRef.current.has(job.id)) {
+              const isRtl = lang === 'ar';
+              const title = isRtl ? 'تشغيلة جديدة!' : 'New Processing Job!';
+              const msg = `${isRtl ? 'تم إنشاء تشغيلة جديدة:' : 'New job created:'} ${job.jobCode || ''} (${job.warehouseName || ''})`;
+              
+              playNotificationSound(false);
+              triggerVibration([300, 100, 300, 100, 300]);
+              toast.info(msg, { icon: '🔔' });
+              
+              if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                  new Notification(title, { body: msg, icon: '/pwa-192x192.png' });
+                } catch (e) {
+                  console.error("PWA Notification failed:", e);
+                }
+              }
+            }
+          } else if (change.type === 'modified') {
+            const oldStatus = prevJobsRef.current.get(job.id);
+            if (oldStatus && oldStatus !== job.status) {
+              const isRtl = lang === 'ar';
+              const statusLabel = getJobStatusLabel(job.status, isRtl);
+              const isAlert = job.status === 'Rejected';
+              const title = isRtl ? 'تغيرت حالة التشغيلة' : 'Job Status Changed';
+              const msg = `${job.jobCode || ''} (${job.warehouseName || ''}) -> ${statusLabel}`;
+              
+              playNotificationSound(isAlert);
+              triggerVibration(isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300]);
+              toast.info(msg, { icon: isAlert ? '⚠️' : '🔔' });
+              
+              if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                  new Notification(title, { body: msg, icon: '/pwa-192x192.png' });
+                } catch (e) {
+                  console.error("PWA Notification failed:", e);
+                }
+              }
+            }
+          }
+        });
+
+        const newMap = new Map<string, JobStatus>();
+        jobsData.forEach(j => newMap.set(j.id, j.status));
+        prevJobsRef.current = newMap;
+      }
+
       setJobs(jobsData);
     });
 
@@ -1475,6 +1540,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           ...jobData,
           serverTimestamp: serverTimestamp()
         });
+        playNotificationSound(false);
+        triggerVibration([200, 100, 200]);
         toast.success(lang === 'ar' ? 'تم تحديث عملية التشغيل بنجاح' : 'Processing job updated successfully');
         
         // Auto share after edit
@@ -1494,6 +1561,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           createdBy: user.uid,
           serverTimestamp: serverTimestamp()
         });
+        playNotificationSound(false);
+        triggerVibration([300, 100, 300, 100, 300]);
         toast.success(lang === 'ar' ? 'تم حفظ عملية التشغيل بنجاح' : 'Processing job saved successfully');
         
         // Auto share after new job
@@ -1585,6 +1654,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         serverTimestamp: serverTimestamp()
       };
       await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
+      playNotificationSound(false);
+      triggerVibration([300, 100, 300]);
       toast.success(lang === 'ar' ? 'تم اعتماد المخزن بنجاح' : 'Warehouse approval successful');
       
       // Auto share after warehouse approval
@@ -1635,6 +1706,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       }
 
       await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
+      playNotificationSound(!isAccepted);
+      triggerVibration(isAccepted ? [300, 100, 300] : [400, 100, 400, 100, 400]);
       toast.success(isAccepted 
         ? (lang === 'ar' ? 'تم اعتماد الجودة بنجاح' : 'Quality approval successful')
         : (lang === 'ar' ? 'تم رفض التشغيلة' : 'Job rejected')
@@ -1658,6 +1731,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         serverTimestamp: serverTimestamp()
       };
       await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
+      playNotificationSound(false);
+      triggerVibration([300, 100, 300]);
       toast.success(lang === 'ar' ? 'تم اعتماد المشتريات بنجاح' : 'Purchasing approval successful');
 
       // Auto share after purchasing approval
@@ -1677,6 +1752,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         poNumber: po,
         serverTimestamp: serverTimestamp()
       });
+      playNotificationSound(false);
+      triggerVibration([300, 100, 300, 100, 300]);
       toast.success(lang === 'ar' ? 'تم إكمال التشغيلة بنجاح' : 'Job completed successfully');
       
       // Auto share Word via Outlook after completion
@@ -3598,7 +3675,25 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         </div>
 
         {!isAdding && !isSettingsOpen && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button 
+              onClick={async () => {
+                await requestNotificationPermission();
+                playNotificationSound(false);
+                triggerVibration([300, 100, 300, 100, 300]);
+                toast.success(
+                  lang === 'ar' 
+                    ? 'تم تجربة رنة التنبيه والاهتزاز بنجاح! التنبيهات مفعلة على الـ PWA.' 
+                    : 'Ring chime and vibration alert tested successfully! PWA alerts active.'
+                );
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 rounded-2xl font-bold transition-all border border-amber-200 dark:border-amber-800 shadow-xs"
+              title={lang === 'ar' ? 'تفعيل وتجربة التنبيه بالصوت والاهتزاز' : 'Enable and test sound/vibration alert'}
+            >
+              <Bell size={18} className="text-amber-500 animate-bounce" />
+              <span className="text-xs font-bold">{lang === 'ar' ? 'اختبار الصوت والاهتزاز' : 'Test Sound & Vibration'}</span>
+            </button>
+
             {hasRole('Admin') && (
               <button 
                 onClick={() => setIsSettingsOpen(true)}

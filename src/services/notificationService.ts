@@ -11,35 +11,36 @@ export const playNotificationSound = (isAlert = false) => {
       ctx.resume();
     }
     
-    const playBeep = (time: number, freq: number, type: OscillatorType = 'sine') => {
+    const playTone = (time: number, freq: number, duration = 0.25, type: OscillatorType = 'sine', volume = 0.25) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = type;
       osc.frequency.setValueAtTime(freq, time);
-      gain.gain.setValueAtTime(0.1, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+      gain.gain.setValueAtTime(volume, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(time);
-      osc.stop(time + 0.3);
+      osc.stop(time + duration);
     };
 
     if (isAlert) {
-      // Urgent sound (3 quick beeps)
-      playBeep(ctx.currentTime, 440, 'square');
-      playBeep(ctx.currentTime + 0.15, 440, 'square');
-      playBeep(ctx.currentTime + 0.3, 440, 'square');
+      // Urgent alert sound (3 loud alert beeps)
+      playTone(ctx.currentTime, 880, 0.2, 'square', 0.25);
+      playTone(ctx.currentTime + 0.22, 880, 0.2, 'square', 0.25);
+      playTone(ctx.currentTime + 0.44, 880, 0.3, 'square', 0.25);
     } else {
-      // Pleasant chime (2 ascending beeps)
-      playBeep(ctx.currentTime, 523.25, 'sine'); // C5
-      playBeep(ctx.currentTime + 0.15, 659.25, 'sine'); // E5
+      // Pleasant ring chime (3 ascending melodic tones: C5 -> E5 -> G5)
+      playTone(ctx.currentTime, 523.25, 0.2, 'triangle', 0.25); // C5
+      playTone(ctx.currentTime + 0.18, 659.25, 0.2, 'triangle', 0.25); // E5
+      playTone(ctx.currentTime + 0.36, 783.99, 0.35, 'sine', 0.3);     // G5
     }
   } catch (e) {
     console.error("Audio play failed", e);
   }
 };
 
-export const triggerVibration = (pattern = [200, 100, 200]) => {
+export const triggerVibration = (pattern = [300, 100, 300, 100, 300]) => {
   if ('vibrate' in navigator) {
     try {
       navigator.vibrate(pattern);
@@ -49,13 +50,35 @@ export const triggerVibration = (pattern = [200, 100, 200]) => {
   }
 };
 
+export const requestNotificationPermission = async () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    try {
+      await Notification.requestPermission();
+    } catch (e) {
+      console.error("Notification permission error", e);
+    }
+  }
+};
+
 export const notifyUser = (message: string, isAlert = false) => {
   playNotificationSound(isAlert);
-  triggerVibration(isAlert ? [300, 100, 300, 100, 300] : [200, 100, 200]);
+  triggerVibration(isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300]);
   
   if (isAlert) {
     toast.error(message, { duration: 7000, icon: '⚠️' });
   } else {
     toast.success(message, { duration: 5000, icon: '🔔' });
   }
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(isAlert ? 'تنبيه هامة' : 'تنبيه تشغيل جديد', {
+        body: message,
+        icon: '/pwa-192x192.png'
+      });
+    } catch (e) {
+      console.error("Native notification failed", e);
+    }
+  }
 };
+
