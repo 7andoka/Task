@@ -33,30 +33,85 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - network first, then cache
-self.addEventListener('fetch', (event) => {
-  // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) return;
+// Handle notification click to open/focus the PWA app
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Check if we received a valid response
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
+  // Clear or decrement app badge
+  if ('clearAppBadge' in self.navigator) {
+    self.navigator.clearAppBadge().catch(() => {});
+  }
+
+  const urlToOpen = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
         }
-
-        // Clone the response to store it in cache
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return response;
-      })
-      .catch(() => {
-        // If network fails, try to get from cache
-        return caches.match(event.request);
-      })
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
   );
 });
+
+// Handle Web Push event for background notifications when app is closed
+self.addEventListener('push', (event) => {
+  let data = {
+    title: 'تنبيه جديد - Rich Land',
+    body: 'يوجد تحديث جديد في العمليات',
+    isAlert: false
+  };
+
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg',
+    badge: 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg',
+    vibrate: data.isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300],
+    tag: 'pwa-notification-' + Date.now(),
+    renotify: true,
+    data: { url: '/' }
+  };
+
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(data.title, options),
+      'setAppBadge' in self.navigator ? self.navigator.setAppBadge(1).catch(() => {}) : Promise.resolve()
+    ])
+  );
+});
+
+// Handle incoming client message to show notification or set badge from SW context
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, body, isAlert, count } = event.data;
+    const options = {
+      body,
+      icon: 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg',
+      badge: 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg',
+      vibrate: isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300],
+      tag: 'pwa-notification-' + Date.now(),
+      renotify: true,
+      data: { url: '/' }
+    };
+
+    event.waitUntil(
+      Promise.all([
+        self.registration.showNotification(title, options),
+        count && 'setAppBadge' in self.navigator ? self.navigator.setAppBadge(count).catch(() => {}) : Promise.resolve()
+      ])
+    );
+  }
+});
+

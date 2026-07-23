@@ -43,7 +43,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, delete
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
-import { playNotificationSound, triggerVibration, requestNotificationPermission } from '../services/notificationService';
+import { playNotificationSound, triggerVibration, requestNotificationPermission, sendSystemNotification, clearAppBadge } from '../services/notificationService';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import html2canvas from 'html2canvas';
@@ -821,6 +821,9 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   const prevJobsRef = React.useRef<Map<string, JobStatus>>(new Map());
 
   useEffect(() => {
+    // Clear app badge count when viewing processing page
+    clearAppBadge();
+
     const q = query(
       collection(db, COLLECTIONS.THIRD_PARTY_PROCESSING), 
       orderBy('date', 'desc')
@@ -844,17 +847,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
               const title = isRtl ? 'تشغيلة جديدة!' : 'New Processing Job!';
               const msg = `${isRtl ? 'تم إنشاء تشغيلة جديدة:' : 'New job created:'} ${job.jobCode || ''} (${job.warehouseName || ''})`;
               
-              playNotificationSound(false);
-              triggerVibration([300, 100, 300, 100, 300]);
               toast.info(msg, { icon: '🔔' });
-              
-              if ('Notification' in window && Notification.permission === 'granted') {
-                try {
-                  new Notification(title, { body: msg, icon: '/pwa-192x192.png' });
-                } catch (e) {
-                  console.error("PWA Notification failed:", e);
-                }
-              }
+              sendSystemNotification(title, msg, false);
             }
           } else if (change.type === 'modified') {
             const oldStatus = prevJobsRef.current.get(job.id);
@@ -862,20 +856,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
               const isRtl = lang === 'ar';
               const statusLabel = getJobStatusLabel(job.status, isRtl);
               const isAlert = job.status === 'Rejected';
-              const title = isRtl ? 'تغيرت حالة التشغيلة' : 'Job Status Changed';
+              const title = isRtl ? 'تحديث حالة التشغيلة' : 'Job Status Updated';
               const msg = `${job.jobCode || ''} (${job.warehouseName || ''}) -> ${statusLabel}`;
               
-              playNotificationSound(isAlert);
-              triggerVibration(isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300]);
               toast.info(msg, { icon: isAlert ? '⚠️' : '🔔' });
-              
-              if ('Notification' in window && Notification.permission === 'granted') {
-                try {
-                  new Notification(title, { body: msg, icon: '/pwa-192x192.png' });
-                } catch (e) {
-                  console.error("PWA Notification failed:", e);
-                }
-              }
+              sendSystemNotification(title, msg, isAlert);
             }
           }
         });
@@ -3679,19 +3664,22 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             <button 
               onClick={async () => {
                 await requestNotificationPermission();
-                playNotificationSound(false);
-                triggerVibration([300, 100, 300, 100, 300]);
+                await sendSystemNotification(
+                  lang === 'ar' ? 'اختبار تنبيه التشغيل (PWA)' : 'PWA Job Notification Test',
+                  lang === 'ar' ? 'التنبيهات والشارة على أيقونة التطبيق تعمل بنجاح!' : 'Notifications and app badge icon are working!',
+                  false
+                );
                 toast.success(
                   lang === 'ar' 
-                    ? 'تم تجربة رنة التنبيه والاهتزاز بنجاح! التنبيهات مفعلة على الـ PWA.' 
-                    : 'Ring chime and vibration alert tested successfully! PWA alerts active.'
+                    ? 'تم تجربة رنة التنبيه والاهتزاز والشارة على أيقونة التطبيق بنجاح!' 
+                    : 'Ring chime, vibration, and app icon badge tested successfully!'
                 );
               }}
               className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 rounded-2xl font-bold transition-all border border-amber-200 dark:border-amber-800 shadow-xs"
-              title={lang === 'ar' ? 'تفعيل وتجربة التنبيه بالصوت والاهتزاز' : 'Enable and test sound/vibration alert'}
+              title={lang === 'ar' ? 'تفعيل وتجربة التنبيه والشارة على الأيقونة' : 'Enable and test sound, vibration & badge'}
             >
               <Bell size={18} className="text-amber-500 animate-bounce" />
-              <span className="text-xs font-bold">{lang === 'ar' ? 'اختبار الصوت والاهتزاز' : 'Test Sound & Vibration'}</span>
+              <span className="text-xs font-bold">{lang === 'ar' ? 'اختبار التنبيه وشارة الأيقونة' : 'Test Alert & Icon Badge'}</span>
             </button>
 
             {hasRole('Admin') && (

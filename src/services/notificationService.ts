@@ -60,6 +60,84 @@ export const requestNotificationPermission = async () => {
   }
 };
 
+export const incrementAppBadge = (countToAdd = 1) => {
+  try {
+    const current = parseInt(localStorage.getItem('app_badge_count') || '0', 10);
+    const next = current + countToAdd;
+    localStorage.setItem('app_badge_count', next.toString());
+
+    if ('setAppBadge' in navigator) {
+      navigator.setAppBadge(next).catch(() => {});
+    } else if ((navigator as any).setExperimentalAppBadge) {
+      (navigator as any).setExperimentalAppBadge(next).catch(() => {});
+    }
+  } catch (e) {
+    console.error("App badge error", e);
+  }
+};
+
+export const clearAppBadge = () => {
+  try {
+    localStorage.setItem('app_badge_count', '0');
+
+    if ('clearAppBadge' in navigator) {
+      navigator.clearAppBadge().catch(() => {});
+    } else if ((navigator as any).clearExperimentalAppBadge) {
+      (navigator as any).clearExperimentalAppBadge().catch(() => {});
+    }
+  } catch (e) {
+    console.error("Clear badge error", e);
+  }
+};
+
+export const sendSystemNotification = async (title: string, body: string, isAlert = false) => {
+  playNotificationSound(isAlert);
+  triggerVibration(isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300]);
+  incrementAppBadge(1);
+
+  if (!('Notification' in window)) return;
+
+  if (Notification.permission === 'default') {
+    try {
+      await Notification.requestPermission();
+    } catch (e) {
+      console.error("Permission request error", e);
+    }
+  }
+
+  if (Notification.permission === 'granted') {
+    const options: any = {
+      body,
+      icon: 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg',
+      badge: 'https://i.postimg.cc/1XRRDjGB/1643207840139.jpg',
+      vibrate: isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300],
+      tag: 'pwa-notification-' + Date.now(),
+      renotify: true,
+      data: { url: '/' }
+    };
+
+    // Try sending notification via Service Worker first for background / closed app capability
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration && registration.showNotification) {
+          await registration.showNotification(title, options);
+          return;
+        }
+      } catch (err) {
+        console.warn("SW showNotification failed, using fallback Notification API", err);
+      }
+    }
+
+    // Fallback to standard Notification API
+    try {
+      new Notification(title, options);
+    } catch (e) {
+      console.error("Native notification failed", e);
+    }
+  }
+};
+
 export const notifyUser = (message: string, isAlert = false) => {
   playNotificationSound(isAlert);
   triggerVibration(isAlert ? [400, 100, 400, 100, 400] : [300, 100, 300, 100, 300]);
@@ -70,15 +148,7 @@ export const notifyUser = (message: string, isAlert = false) => {
     toast.success(message, { duration: 5000, icon: '🔔' });
   }
 
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      new Notification(isAlert ? 'تنبيه هامة' : 'تنبيه تشغيل جديد', {
-        body: message,
-        icon: '/pwa-192x192.png'
-      });
-    } catch (e) {
-      console.error("Native notification failed", e);
-    }
-  }
+  sendSystemNotification(isAlert ? 'تنبيه هامة' : 'تنبيه تشغيل جديد', message, isAlert);
 };
+
 
