@@ -31,6 +31,122 @@ interface RawMaterialsInventoryProps {
   lang: Language;
 }
 
+interface SearchableSelectProps {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+  placeholder: string;
+  icon: any;
+  isRtl: boolean;
+}
+
+const SearchableSelect: React.FC<SearchableSelectProps> = ({ 
+  label, 
+  value, 
+  onChange, 
+  options, 
+  placeholder, 
+  icon: Icon,
+  isRtl
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filter, setFilter] = useState(value);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setFilter(value);
+  }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredOptions = useMemo(() => {
+    const term = filter.toLowerCase();
+    return options.filter(opt => opt.toLowerCase().includes(term));
+  }, [options, filter]);
+
+  return (
+    <div className="space-y-1.5 relative" ref={containerRef}>
+      <label className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+        <Icon size={14} className="text-emerald-500" />
+        <span>{label}</span>
+      </label>
+      <div className="relative">
+        <input
+          type="text"
+          value={filter}
+          onFocus={() => {
+            setIsOpen(true);
+          }}
+          onChange={(e) => {
+            const newVal = e.target.value;
+            setFilter(newVal);
+            onChange(newVal);
+            if (!isOpen) setIsOpen(true);
+          }}
+          placeholder={placeholder}
+          className="w-full pl-4 pr-10 py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
+        />
+        <div className={`absolute ${isRtl ? 'left-3.5' : 'right-3.5'} top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none`}>
+          {isOpen ? <ChevronUp size={16} className="text-emerald-500" /> : <ChevronDown size={16} className="text-zinc-400" />}
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl animate-in fade-in slide-in-from-top-2">
+          {filteredOptions.length === 0 ? (
+            <div className="p-3 text-center text-xs text-zinc-500 font-medium">
+              {isRtl ? 'لا توجد نتائج' : 'No results found'}
+            </div>
+          ) : (
+            <div className="p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange('');
+                  setFilter('');
+                  setIsOpen(false);
+                }}
+                className="w-full text-right px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors flex items-center justify-between"
+              >
+                <span>{isRtl ? '-- مسح الاختيار --' : '-- Clear Selection --'}</span>
+                <X size={14} />
+              </button>
+              {filteredOptions.map((opt, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt);
+                    setFilter(opt);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-right px-3 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-between gap-3 ${
+                    value === opt 
+                      ? 'bg-emerald-500 text-white' 
+                      : 'text-zinc-700 dark:text-zinc-300 hover:bg-emerald-50 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  <span className="truncate">{opt}</span>
+                  {value === opt && <Check size={14} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryProps) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +159,7 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
   // Search & Filter for Movements
   const [searchTerm, setSearchTerm] = useState('');
   const [movementsSearchStore, setMovementsSearchStore] = useState('');
+  const [movementsTransactionType, setMovementsTransactionType] = useState('all');
   const [selectedRow, setSelectedRow] = useState<any | null>(null);
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
 
@@ -143,7 +260,7 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
   const colOpening = findColumnKey(['رصيد أول', 'اول المدة', 'رصيد اول', 'opening', 'begin']);
   const colAddition = findColumnKey(['إضافة', 'اضافة', 'addition', 'add', 'وارد']);
   const colDispatch = findColumnKey(['صرف', 'dispatch', 'issue', 'out', 'منصرف']);
-  const colReturn = findColumnKey(['مرتجع', 'return']);
+  const colReturn = findColumnKey(['ارتجاع', 'مرتجع', 'return']);
   const colAdjustment = findColumnKey(['تسوية', 'تسويه', 'adjustment']);
   const colStore = findColumnKey(['اسم المخزن', 'المخزن', 'مخزن', 'store', 'warehouse']);
 
@@ -190,6 +307,17 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
       });
     }
 
+    if (movementsTransactionType !== 'all') {
+      result = result.filter(row => {
+        if (movementsTransactionType === 'opening') return row._opening > 0;
+        if (movementsTransactionType === 'addition') return row._addition > 0;
+        if (movementsTransactionType === 'dispatch') return row._dispatch > 0;
+        if (movementsTransactionType === 'return') return row._return > 0;
+        if (movementsTransactionType === 'adjustment') return row._adjustment !== 0;
+        return true;
+      });
+    }
+
     if (!searchTerm.trim()) return result;
     const term = searchTerm.toLowerCase();
     const searchParts = term.split(/\s+/).filter(p => p.length > 0);
@@ -203,7 +331,7 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
       
       return searchParts.every(part => rowText.includes(part));
     });
-  }, [processedData, searchTerm, movementsSearchStore, colStore]);
+  }, [processedData, searchTerm, movementsSearchStore, movementsTransactionType, colStore]);
 
   // Sorted data
   const sortedData = useMemo(() => {
@@ -365,116 +493,6 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
     setTimeout(() => setCopiedCell(null), 2000);
   };
 
-  // --- Custom Searchable Select Component ---
-  const SearchableSelect = ({ 
-    label, 
-    value, 
-    onChange, 
-    options, 
-    placeholder, 
-    icon: Icon,
-    isRtl
-  }: { 
-    label: string, 
-    value: string, 
-    onChange: (val: string) => void, 
-    options: string[], 
-    placeholder: string,
-    icon: any,
-    isRtl: boolean
-  }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [filter, setFilter] = useState('');
-    const containerRef = React.useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-        if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-          setIsOpen(false);
-        }
-      };
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const filteredOptions = useMemo(() => {
-      const term = filter.toLowerCase();
-      return options.filter(opt => opt.toLowerCase().includes(term));
-    }, [options, filter]);
-
-    return (
-      <div className="space-y-1.5 relative" ref={containerRef}>
-        <label className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-          <Icon size={14} className="text-emerald-500" />
-          <span>{label}</span>
-        </label>
-        <div className="relative">
-          <input
-            type="text"
-            value={isOpen ? filter : value}
-            onFocus={() => {
-              setIsOpen(true);
-              setFilter(value);
-            }}
-            onChange={(e) => {
-              const newVal = e.target.value;
-              setFilter(newVal);
-              onChange(newVal);
-              if (!isOpen) setIsOpen(true);
-            }}
-            placeholder={placeholder}
-            className="w-full pl-4 pr-10 py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
-          />
-          <div className={`absolute ${isRtl ? 'left-3.5' : 'right-3.5'} top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none`}>
-            {isOpen ? <ChevronUp size={16} className="text-emerald-500" /> : <ChevronDown size={16} className="text-zinc-400" />}
-          </div>
-        </div>
-
-        {isOpen && (
-          <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl animate-in fade-in slide-in-from-top-2">
-            {filteredOptions.length === 0 ? (
-              <div className="p-3 text-center text-xs text-zinc-500 font-medium">
-                {isRtl ? 'لا توجد نتائج' : 'No results found'}
-              </div>
-            ) : (
-              <div className="p-1">
-                <button
-                  onClick={() => {
-                    onChange('');
-                    setFilter('');
-                    setIsOpen(false);
-                  }}
-                  className="w-full text-right px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors flex items-center justify-between"
-                >
-                  <span>{isRtl ? '-- مسح الاختيار --' : '-- Clear Selection --'}</span>
-                  <X size={14} />
-                </button>
-                {filteredOptions.map((opt, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      onChange(opt);
-                      setFilter(opt);
-                      setIsOpen(false);
-                    }}
-                    className={`w-full text-right px-3 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-between gap-3 ${
-                      value === opt 
-                        ? 'bg-emerald-500 text-white' 
-                        : 'text-zinc-700 dark:text-zinc-300 hover:bg-emerald-50 dark:hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span className="truncate">{opt}</span>
-                    {value === opt && <Check size={14} />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // Export to Excel
   const exportToExcel = () => {
     const exportRows = sortedData.map((row, idx) => {
@@ -634,24 +652,60 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
           {/* Search & Filter Toolbar */}
           <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col md:flex-row items-end justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-end gap-4 w-full md:w-auto flex-1">
-              {/* Global Search with SearchableSelect */}
-              <div className="w-full sm:w-80">
-                <SearchableSelect
-                  label={isRtl ? 'بحث عام (كود، صنف...)' : 'Global Search (Code, Item...)'}
-                  value={searchTerm}
-                  onChange={(val) => {
-                    setSearchTerm(val);
+              {/* Global Search Input (Smooth & Free Typing) */}
+              <div className="w-full sm:w-72 space-y-1.5">
+                <label className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <Search size={14} className="text-emerald-500" />
+                  <span>{isRtl ? 'بحث عام (كود، صنف...)' : 'Global Search (Code, Item...)'}</span>
+                </label>
+                <div className="relative">
+                  <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder={isRtl ? 'اكتب للبحث بحرية...' : 'Type for free search...'}
+                    className="w-full pl-4 pr-10 py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Transaction Type Filter */}
+              <div className="w-full sm:w-52 space-y-1.5">
+                <label className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <SlidersHorizontal size={14} className="text-emerald-500" />
+                  <span>{isRtl ? 'نوع الحركة' : 'Transaction Type'}</span>
+                </label>
+                <select
+                  value={movementsTransactionType}
+                  onChange={(e) => {
+                    setMovementsTransactionType(e.target.value);
                     setCurrentPage(1);
                   }}
-                  options={uniqueItemsList}
-                  placeholder={isRtl ? 'بحث أو اختيار...' : 'Search or Select...'}
-                  icon={Search}
-                  isRtl={isRtl}
-                />
+                  className="w-full px-3 py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm cursor-pointer"
+                >
+                  <option value="all">{isRtl ? 'جميع الحركات (الكل)' : 'All Movements'}</option>
+                  <option value="opening">{isRtl ? 'رصيد أول المدة' : 'Opening Balance'}</option>
+                  <option value="addition">{isRtl ? 'إضافة / وارد' : 'Addition / In'}</option>
+                  <option value="dispatch">{isRtl ? 'صرف / منصرف' : 'Dispatch / Out'}</option>
+                  <option value="return">{isRtl ? 'مرتجع' : 'Return'}</option>
+                  <option value="adjustment">{isRtl ? 'تسوية' : 'Adjustment'}</option>
+                </select>
               </div>
 
               {/* Store Filter for Movements with SearchableSelect */}
-              <div className="w-full sm:w-64">
+              <div className="w-full sm:w-56">
                 <SearchableSelect
                   label={isRtl ? 'تصفية بالمخزن' : 'Filter by Store'}
                   value={movementsSearchStore}
@@ -835,26 +889,7 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
       {/* TAB 2: FULL-SCREEN BALANCES REPORT VIEW WITH SEARCHABLE INPUTS */}
       {activeTab === 'balances' && (
         <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden flex flex-col animate-fade-in">
-          {/* Header */}
-          <div className="p-6 bg-gradient-to-r from-amber-600 to-orange-700 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
-                <Layers size={26} className="text-white animate-pulse" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black">
-                  {isRtl ? 'تقرير أرصدة الأصناف (بحث وكتابة في القائمة)' : 'Raw Materials Balances Report'}
-                </h2>
-                <p className="text-xs text-amber-100 mt-0.5">
-                  {isRtl ? 'حساب الرصيد الحالي والأرصدة مجمعة حسب كود الساب الصنف والمجموعة' : 'Aggregated balances grouped by SAP item code and category'}
-                </p>
-              </div>
-            </div>
 
-            <div className="text-xs font-bold bg-white/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/30">
-              {isRtl ? `إجمالي الأصناف المعروضة: ${balanceSummaryData.length}` : `Filtered Items: ${balanceSummaryData.length}`}
-            </div>
-          </div>
 
           {/* Searchable Input Toolbars with SearchableSelect */}
           <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800 grid grid-cols-1 sm:grid-cols-3 gap-4">
