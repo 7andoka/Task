@@ -51,11 +51,12 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   isRtl
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [filter, setFilter] = useState(value);
+  const [filter, setFilter] = useState('');
   const containerRef = React.useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setFilter(value);
+  const selectedList = useMemo(() => {
+    if (!value) return [];
+    return value.split(',').map(v => v.trim()).filter(Boolean);
   }, [value]);
 
   useEffect(() => {
@@ -73,30 +74,66 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return options.filter(opt => opt.toLowerCase().includes(term));
   }, [options, filter]);
 
+  const toggleOption = (opt: string) => {
+    let updated: string[];
+    if (selectedList.includes(opt)) {
+      updated = selectedList.filter(s => s !== opt);
+    } else {
+      updated = [...selectedList, opt];
+    }
+    onChange(updated.join(', '));
+  };
+
+  const removeTag = (opt: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = selectedList.filter(s => s !== opt);
+    onChange(updated.join(', '));
+  };
+
   return (
     <div className="space-y-1.5 relative" ref={containerRef}>
       <label className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
         <Icon size={14} className="text-emerald-500" />
         <span>{label}</span>
       </label>
-      <div className="relative">
+      
+      <div 
+        onClick={() => setIsOpen(true)}
+        className="w-full min-h-[42px] px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl cursor-pointer flex flex-wrap items-center gap-1.5 shadow-sm focus-within:ring-2 focus-within:ring-emerald-500 transition-all"
+      >
+        {selectedList.length === 0 && !filter && (
+          <span className="text-xs text-zinc-400 font-medium">{placeholder}</span>
+        )}
+        
+        {selectedList.map((item, idx) => (
+          <span 
+            key={idx} 
+            className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold"
+          >
+            <span className="max-w-[150px] truncate">{item}</span>
+            <button
+              type="button"
+              onClick={(e) => removeTag(item, e)}
+              className="text-emerald-500 hover:text-red-500 transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+
         <input
           type="text"
           value={filter}
-          onFocus={() => {
-            setIsOpen(true);
-          }}
           onChange={(e) => {
-            const newVal = e.target.value;
-            setFilter(newVal);
-            onChange(newVal);
+            setFilter(e.target.value);
             if (!isOpen) setIsOpen(true);
           }}
-          placeholder={placeholder}
-          className="w-full pl-4 pr-10 py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
+          placeholder={selectedList.length === 0 ? '' : (isRtl ? 'إضافة بحث...' : 'Add search...')}
+          className="flex-1 min-w-[80px] bg-transparent text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none"
         />
-        <div className={`absolute ${isRtl ? 'left-3.5' : 'right-3.5'} top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none`}>
-          {isOpen ? <ChevronUp size={16} className="text-emerald-500" /> : <ChevronDown size={16} className="text-zinc-400" />}
+
+        <div className={`absolute ${isRtl ? 'left-3.5' : 'right-3.5'} top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none text-zinc-400`}>
+          {isOpen ? <ChevronUp size={16} className="text-emerald-500" /> : <ChevronDown size={16} />}
         </div>
       </div>
 
@@ -108,37 +145,46 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
             </div>
           ) : (
             <div className="p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  onChange('');
-                  setFilter('');
-                  setIsOpen(false);
-                }}
-                className="w-full text-right px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors flex items-center justify-between"
-              >
-                <span>{isRtl ? '-- مسح الاختيار --' : '-- Clear Selection --'}</span>
-                <X size={14} />
-              </button>
-              {filteredOptions.map((opt, i) => (
+              {selectedList.length > 0 && (
                 <button
-                  key={i}
                   type="button"
                   onClick={() => {
-                    onChange(opt);
-                    setFilter(opt);
-                    setIsOpen(false);
+                    onChange('');
+                    setFilter('');
                   }}
-                  className={`w-full text-right px-3 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-between gap-3 ${
-                    value === opt 
-                      ? 'bg-emerald-500 text-white' 
-                      : 'text-zinc-700 dark:text-zinc-300 hover:bg-emerald-50 dark:hover:bg-zinc-800'
-                  }`}
+                  className="w-full text-right px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors flex items-center justify-between mb-1 border-b border-zinc-100 dark:border-zinc-800"
                 >
-                  <span className="truncate">{opt}</span>
-                  {value === opt && <Check size={14} />}
+                  <span>{isRtl ? '-- مسح كل الاختيارات --' : '-- Clear All Selections --'}</span>
+                  <X size={14} />
                 </button>
-              ))}
+              )}
+              {filteredOptions.map((opt, i) => {
+                const isSelected = selectedList.includes(opt);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => toggleOption(opt)}
+                    className={`w-full text-right px-3 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-between gap-3 ${
+                      isSelected 
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-black' 
+                        : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                        isSelected 
+                          ? 'bg-emerald-500 border-emerald-500 text-white' 
+                          : 'border-zinc-300 dark:border-zinc-600'
+                      }`}>
+                        {isSelected && <Check size={12} />}
+                      </div>
+                      <span className="truncate">{opt}</span>
+                    </div>
+                    {isSelected && <span className="text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-md">{isRtl ? 'مختار' : 'Selected'}</span>}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -295,15 +341,23 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
     });
   }, [data, colOpening, colAddition, colDispatch, colReturn, colAdjustment]);
 
+  // Helper for multi-query matching (comma separated / multi-select)
+  const matchesMultiQuery = (target: string, query: string) => {
+    if (!query.trim()) return true;
+    const terms = query.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    if (terms.length === 0) return true;
+    const targetLower = target.toLowerCase();
+    return terms.some(term => targetLower.includes(term));
+  };
+
   // Filtered data based on search term for Movements Tab
   const filteredData = useMemo(() => {
     let result = processedData;
 
     if (movementsSearchStore.trim()) {
-      const storeTerm = movementsSearchStore.toLowerCase();
       result = result.filter(row => {
-        const storeVal = colStore ? String(row[row[colStore] !== undefined ? colStore : findColumnKey(['مخزن', 'المخزن', 'store'])] || '').toLowerCase() : '';
-        return storeVal.includes(storeTerm);
+        const storeVal = colStore ? String(row[row[colStore] !== undefined ? colStore : findColumnKey(['مخزن', 'المخزن', 'store'])] || '') : '';
+        return matchesMultiQuery(storeVal, movementsSearchStore);
       });
     }
 
@@ -368,10 +422,9 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
     let baseData = processedData;
 
     if (balanceSearchStore.trim()) {
-      const storeTerm = balanceSearchStore.toLowerCase();
       baseData = baseData.filter(row => {
-        const storeVal = colStore ? String(row[colStore] || '').toLowerCase() : '';
-        return storeVal.includes(storeTerm);
+        const storeVal = colStore ? String(row[colStore] || '') : '';
+        return matchesMultiQuery(storeVal, balanceSearchStore);
       });
     }
 
@@ -427,19 +480,17 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
     }));
 
     if (balanceSearchItem.trim()) {
-      const term = balanceSearchItem.toLowerCase();
       list = list.filter(item => {
-        const combined = `${item.itemCode} ${item.itemName}`.toLowerCase();
-        return item.itemName.toLowerCase().includes(term) || 
-               item.itemCode.toLowerCase().includes(term) ||
-               combined.includes(term);
+        const combined = `${item.itemCode} ${item.itemName}`;
+        return matchesMultiQuery(combined, balanceSearchItem) || 
+               matchesMultiQuery(item.itemName, balanceSearchItem) ||
+               matchesMultiQuery(item.itemCode, balanceSearchItem);
       });
     }
 
     if (balanceSearchGroup.trim()) {
-      const groupTerm = balanceSearchGroup.toLowerCase();
       list = list.filter(item => 
-        item.groupName.toLowerCase().includes(groupTerm)
+        matchesMultiQuery(item.groupName, balanceSearchGroup)
       );
     }
 
@@ -567,17 +618,17 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
     <div className="space-y-6 pb-12 animate-fade-in" dir={isRtl ? 'rtl' : 'ltr'}>
       
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 rounded-3xl p-6 md:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 rounded-2xl p-3 md:p-4 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="p-4 bg-white/20 backdrop-blur-md rounded-2xl shadow-inner border border-white/30">
-            <Package size={32} className="text-white animate-pulse" />
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-2xl shadow-inner border border-white/30">
+            <Package size={24} className="text-white animate-pulse" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-lg md:text-xl font-extrabold tracking-tight">
               {isRtl ? 'إدارة أرصدة الخامات الزراعية' : 'Raw Materials Inventory & Balances'}
             </h1>
-            <p className="text-emerald-100 text-xs md:text-sm mt-1 font-medium">
+            <p className="text-emerald-100 text-xs mt-0.5 font-medium">
               {isRtl 
                 ? 'متابعة حركة الخامات، رصيد أول المدة، الإضافات، المنصرف، وحساب الرصيد الحالي لحظياً' 
                 : 'Real-time tracking of raw materials, opening balances, additions, dispatches and current stock'}
