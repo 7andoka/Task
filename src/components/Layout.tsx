@@ -24,7 +24,8 @@ import {
   PlusSquare,
   Database,
   AlertCircle,
-  Sprout
+  Sprout,
+  Layers
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -115,6 +116,7 @@ export default function Layout({
   const menuItems = [
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
     { id: 'agriRawMaterial', label: lang === 'ar' ? '🌿 الخام الزراعي' : '🌿 Agri Raw Material', icon: Sprout },
+    { id: 'rawMaterialsInventory', label: lang === 'ar' ? '📦 الخامات' : '📦 Raw Materials', icon: Layers },
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing, icon: ClipboardList },
@@ -133,6 +135,7 @@ export default function Layout({
     if (user?.permissions && user.permissions.length > 0) {
       if (item.id === 'kpis' && isAdminOrWHManager) return true;
       if (item.id === 'agriRawMaterial' && isAdminOrWHManager) return true;
+      if (item.id === 'rawMaterialsInventory' && isAdminOrWHManager) return true;
       return user.permissions.includes(item.id);
     }
     return !item.roles || (user && item.roles.some(r => userRoles.includes(r as any)));

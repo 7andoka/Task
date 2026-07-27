@@ -19,7 +19,8 @@ import {
   TrendingUp,
   TrendingDown,
   FileText,
-  Trash
+  Trash,
+  RefreshCw
 } from 'lucide-react';
 import { Language, UserProfile, AgriRawMaterial } from '../types';
 import { translations } from '../i18n';
@@ -101,6 +102,143 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
 
   // Hidden File Input Ref for Import
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Sync from Google Sheet CSV URL
+  const handleSyncGoogleSheet = async () => {
+    setIsSyncing(true);
+    try {
+      const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRFNg5YPWFp7SpmNAN5QLaePz-Jbs1IopAaTSTHrAmWENDODzLTu2BJEA0L5cuhZnxgpTmxKQsV65Oj/pub?gid=1406823805&single=true&output=csv";
+      const response = await fetch(csvUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const csvText = await response.text();
+
+      const workbook = XLSX.read(csvText, { type: 'string' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+      if (jsonData.length === 0) {
+        toast.error(isRtl ? 'ملف Google Sheet فارغ' : 'Google Sheet is empty');
+        setIsSyncing(false);
+        return;
+      }
+
+      let importedCount = 0;
+      let skippedDuplicateCount = 0;
+      let validationFailedCount = 0;
+
+      const norm = (val: any) => String(val !== undefined && val !== null ? val : '').trim();
+
+      const activeKeys = new Set(
+        materials.map(m => 
+          `${norm(m.date)}_${norm(m.movementType)}_${norm(m.movementNumber)}_${norm(m.supplier)}_${norm(m.sapNumber)}_${norm(m.postNumber)}_${norm(m.deliveryNote)}_${norm(m.materialCode)}_${norm(m.itemName)}_${norm(m.size)}_${norm(m.batch)}_${Number(m.quantity)}_${norm(m.unit)}_${norm(m.driverName)}_${norm(m.vehicleNumber)}_${norm(m.notes)}`
+        )
+      );
+
+      for (const row of jsonData) {
+        let rawDate = row['التاريخ'] || row['Date'] || row['date'] || Object.values(row)[0];
+        let date = '';
+        if (rawDate !== undefined && rawDate !== null) {
+          const strDate = String(rawDate).trim();
+          if (strDate) {
+            date = strDate;
+          }
+        }
+        if (!date) {
+          date = new Date().toISOString().slice(0, 10);
+        }
+
+        let movementType = String(row['الحركة'] || row['Movement Type'] || row['movementType'] || 'إضافة').trim();
+        let movementNumber = String(row['رقم الحركة'] || row['Movement Number'] || row['movementNumber'] || '').trim();
+        let supplier = String(row['المورد'] || row['Supplier'] || row['supplier'] || '').trim();
+        let sapNumber = String(row['رقم الساب'] || row['SAP Number'] || row['sapNumber'] || '').trim();
+        let postNumber = String(row['رقم البوست'] || row['Post Number'] || row['postNumber'] || '').trim();
+        let deliveryNote = String(row['إذن تسليم المورد'] || row['Supplier Delivery Note'] || row['deliveryNote'] || '').trim();
+        let materialCode = String(row['الكود'] || row['Code'] || row['materialCode'] || '').trim();
+        let itemName = String(row['الصنف'] || row['Item Name'] || row['itemName'] || '').trim();
+        let size = String(row['الحجم'] || row['Size'] || row['size'] || '').trim();
+        let batch = String(row['الباتش'] || row['Batch'] || row['batch'] || '').trim();
+        const rawQuantity = row['الكمية'] || row['Quantity'] || row['quantity'];
+        const quantity = Number(rawQuantity !== undefined && rawQuantity !== null ? rawQuantity : 0);
+        let unit = String(row['الوحدة'] || row['Unit'] || row['unit'] || 'كجم').trim();
+        let driverName = String(row['اسم السائق'] || row['Driver Name'] || row['driverName'] || '').trim();
+        let vehicleNumber = String(row['رقم السيارة'] || row['Vehicle Number'] || row['vehicleNumber'] || '').trim();
+        let notes = String(row['ملاحظات'] || row['Notes'] || row['notes'] || '').trim();
+
+        const hasAnyContent = (itemName !== '' || materialCode !== '' || movementNumber !== '' || supplier !== '' || batch !== '');
+        if (!hasAnyContent && (isNaN(quantity) || quantity <= 0)) {
+          continue;
+        }
+
+        if (isNaN(quantity) || quantity <= 0 || (itemName === '' && materialCode === '')) {
+          validationFailedCount++;
+          continue;
+        }
+
+        if (!movementNumber) movementNumber = '-';
+        if (!supplier) supplier = '-';
+        if (!batch) batch = '-';
+        if (!unit) unit = 'كجم';
+
+        const normalizedType = (movementType.includes('صرف') || movementType.toLowerCase().includes('disp') || movementType.toLowerCase().includes('out')) ? 'صرف' : 'إضافة';
+
+        const uniqueKey = `${norm(date)}_${norm(normalizedType)}_${norm(movementNumber)}_${norm(supplier)}_${norm(sapNumber)}_${norm(postNumber)}_${norm(deliveryNote)}_${norm(materialCode)}_${norm(itemName)}_${norm(size)}_${norm(batch)}_${Number(quantity)}_${norm(unit)}_${norm(driverName)}_${norm(vehicleNumber)}_${norm(notes)}`;
+
+        let isDuplicate = false;
+        if (activeKeys.has(uniqueKey)) {
+          isDuplicate = true;
+          skippedDuplicateCount++;
+        } else {
+          activeKeys.add(uniqueKey);
+        }
+
+        let finalNotes = notes;
+        if (isDuplicate) {
+          finalNotes = notes ? `[مكرر] ${notes}` : 'مكرر';
+        }
+
+        const record: AgriRawMaterial = {
+          id: crypto.randomUUID(),
+          date,
+          movementType: normalizedType,
+          movementNumber,
+          supplier,
+          sapNumber,
+          postNumber,
+          deliveryNote,
+          materialCode,
+          itemName,
+          size,
+          batch,
+          quantity,
+          unit,
+          driverName,
+          vehicleNumber,
+          notes: finalNotes,
+          isDuplicate,
+          createdAt: new Date().toISOString(),
+          lastUpdatedAt: new Date().toISOString()
+        };
+
+        await storageService.saveAgriRawMaterial(record);
+        importedCount++;
+      }
+
+      toast.success(
+        isRtl 
+          ? `تمت مزامنة Google Sheet بنجاح! تم استيراد ${importedCount} سجل (مكرر: ${skippedDuplicateCount}, تخطي غير صالح: ${validationFailedCount})`
+          : `Google Sheet synced successfully! Imported ${importedCount} records (duplicates: ${skippedDuplicateCount}, invalid skipped: ${validationFailedCount})`
+      );
+    } catch (error) {
+      console.error('Error syncing Google Sheet:', error);
+      toast.error(isRtl ? 'حدث خطأ أثناء مزامنة Google Sheet (تأكد من إتاحة النشر العلني للرابط)' : 'Error syncing Google Sheet (Ensure public CSV publish is enabled)');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Fetch Materials on Mount
   useEffect(() => {
@@ -811,6 +949,16 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
           >
             <FileUp size={18} />
             <span>{isRtl ? 'استيراد Excel' : 'Import Excel'}</span>
+          </button>
+
+          <button
+            onClick={handleSyncGoogleSheet}
+            disabled={isSyncing}
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition-all text-sm shadow-sm cursor-pointer disabled:opacity-50"
+            title={isRtl ? 'جلب ومزامنة البيانات من Google Sheet' : 'Sync data from Google Sheet'}
+          >
+            <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
+            <span>{isRtl ? 'مزامنة Google Sheet' : 'Sync Google Sheet'}</span>
           </button>
 
           <button

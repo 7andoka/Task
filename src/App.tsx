@@ -17,6 +17,7 @@ import ThirdPartyProcessing from './components/ThirdPartyProcessing';
 import OliveStock from './components/OliveStock';
 import KPIDashboard from './components/KPIDashboard';
 import CsvDataView from './components/CsvDataView';
+import RawMaterialsInventory from './components/RawMaterialsInventory';
 import OfflineScreen from './components/OfflineScreen';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
@@ -41,6 +42,7 @@ export default function App() {
     const menuItems = [
       { id: 'supplyTracking', roles: undefined },
       { id: 'agriRawMaterial', roles: undefined },
+      { id: 'rawMaterialsInventory', roles: undefined },
       { id: 'coldStorage', roles: undefined },
       { id: 'rawMaterial', roles: undefined },
       { id: 'thirdPartyProcessing', roles: undefined },
@@ -61,6 +63,7 @@ export default function App() {
         .filter(item => {
           if (item.id === 'kpis' && isAdminOrWHManager) return true;
           if (item.id === 'agriRawMaterial' && isAdminOrWHManager) return true;
+          if (item.id === 'rawMaterialsInventory' && isAdminOrWHManager) return true;
           if (item.id === 'finishedProduct') {
             return u.permissions!.includes('finishedProduct') || u.permissions!.includes('oliveStock') || isAdminOrWHManager;
           }
@@ -474,6 +477,8 @@ export default function App() {
         return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
       case 'agriRawMaterial':
         return <AgriRawMaterialPage lang={lang} user={user} />;
+      case 'rawMaterialsInventory':
+        return <RawMaterialsInventory lang={lang} />;
       case 'coldStorage':
         return <ColdStorage lang={lang} user={user} />;
       case 'rawMaterial':
