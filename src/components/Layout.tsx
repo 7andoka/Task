@@ -116,7 +116,7 @@ export default function Layout({
   const menuItems = [
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
     { id: 'agriRawMaterial', label: lang === 'ar' ? '🌿 الخام الزراعي' : '🌿 Agri Raw Material', icon: Sprout },
-    { id: 'rawMaterialsInventory', label: lang === 'ar' ? '📦 الخامات' : '📦 Raw Materials', icon: Layers },
+    { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory, icon: Layers },
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing, icon: ClipboardList },
