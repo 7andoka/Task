@@ -69,15 +69,14 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
   ];
 
   const availablePages = [
+    { id: 'scaleReports', label: t.scaleReports },
     { id: 'supplyTracking', label: t.supplyTracking },
-    { id: 'agriRawMaterial', label: t.agriRawMaterial },
     { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory },
     { id: 'coldStorage', label: t.coldStorage },
     { id: 'rawMaterial', label: t.rawMaterial },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing },
     { id: 'oliveStock', label: t.oliveStock },
     { id: 'finishedProduct', label: t.finishedProduct },
-    { id: 'kpis', label: t.kpis },
     { id: 'tasks', label: t.tasks },
     { id: 'team', label: t.team },
     { id: 'users', label: t.userManagement },

@@ -10,14 +10,13 @@ import UserManagement from './components/UserManagement';
 import Team from './components/Team';
 import Settings from './components/Settings';
 import SupplyTracking from './components/SupplyTracking';
-import AgriRawMaterialPage from './components/AgriRawMaterial';
 import ColdStorage from './components/ColdStorage';
 import RawMaterial from './components/RawMaterial';
 import ThirdPartyProcessing from './components/ThirdPartyProcessing';
 import OliveStock from './components/OliveStock';
-import KPIDashboard from './components/KPIDashboard';
 import CsvDataView from './components/CsvDataView';
 import RawMaterialsInventory from './components/RawMaterialsInventory';
+import ScaleReports from './components/ScaleReports';
 import OfflineScreen from './components/OfflineScreen';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
@@ -40,15 +39,14 @@ export default function App() {
     if (!u) return [];
     
     const menuItems = [
+      { id: 'scaleReports', roles: undefined },
       { id: 'supplyTracking', roles: undefined },
-      { id: 'agriRawMaterial', roles: undefined },
       { id: 'rawMaterialsInventory', roles: undefined },
       { id: 'coldStorage', roles: undefined },
       { id: 'rawMaterial', roles: undefined },
       { id: 'thirdPartyProcessing', roles: undefined },
       { id: 'oliveStock', roles: undefined },
       { id: 'finishedProduct', roles: undefined },
-      { id: 'kpis', roles: undefined },
       { id: 'tasks', roles: undefined },
       { id: 'team', roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
       { id: 'users', roles: ['Warehouse Manager', 'Admin'] },
@@ -61,8 +59,7 @@ export default function App() {
     if (u.permissions && u.permissions.length > 0) {
       return menuItems
         .filter(item => {
-          if (item.id === 'kpis' && isAdminOrWHManager) return true;
-          if (item.id === 'agriRawMaterial' && isAdminOrWHManager) return true;
+          if (item.id === 'scaleReports' && isAdminOrWHManager) return true;
           if (item.id === 'rawMaterialsInventory' && isAdminOrWHManager) return true;
           if (item.id === 'finishedProduct') {
             return u.permissions!.includes('finishedProduct') || u.permissions!.includes('oliveStock') || isAdminOrWHManager;
@@ -89,7 +86,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [lang, setLang] = useState<Language>('ar');
   const [isDark, setIsDark] = useState(true);
-  const [activeTab, setActiveTab] = useState('supplyTracking');
+  const [activeTab, setActiveTab] = useState('scaleReports');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
@@ -473,10 +470,10 @@ export default function App() {
     }
 
     switch (activeTab) {
+      case 'scaleReports':
+        return <ScaleReports lang={lang} user={user} />;
       case 'supplyTracking':
         return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
-      case 'agriRawMaterial':
-        return <AgriRawMaterialPage lang={lang} user={user} />;
       case 'rawMaterialsInventory':
         return <RawMaterialsInventory lang={lang} />;
       case 'coldStorage':
@@ -489,8 +486,6 @@ export default function App() {
         return <OliveStock lang={lang} user={user} />;
       case 'finishedProduct':
         return <CsvDataView lang={lang} />;
-      case 'kpis':
-        return <KPIDashboard lang={lang} user={user} isDark={isDark} setIsDark={setIsDark} />;
       case 'tasks':
         return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':

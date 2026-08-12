@@ -25,7 +25,8 @@ import {
   Database,
   AlertCircle,
   Sprout,
-  Layers
+  Layers,
+  Scale
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -114,15 +115,14 @@ export default function Layout({
   }, []);
 
   const menuItems = [
+    { id: 'scaleReports', label: t.scaleReports, icon: Scale },
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
-    { id: 'agriRawMaterial', label: lang === 'ar' ? '🌿 الخام الزراعي' : '🌿 Agri Raw Material', icon: Sprout },
     { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory, icon: Layers },
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing, icon: ClipboardList },
     { id: 'oliveStock', label: t.oliveStock, icon: Database },
     { id: 'finishedProduct', label: t.finishedProduct, icon: Package },
-    { id: 'kpis', label: t.kpis, icon: BarChart3 },
     { id: 'tasks', label: t.tasks, icon: CheckSquare },
     { id: 'team', label: t.team, icon: Users, roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
     { id: 'users', label: t.userManagement, icon: Users, roles: ['Warehouse Manager', 'Admin'] },
@@ -133,8 +133,7 @@ export default function Layout({
     const userRoles = user?.roles || (user?.role ? [user.role] : []);
     const isAdminOrWHManager = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
     if (user?.permissions && user.permissions.length > 0) {
-      if (item.id === 'kpis' && isAdminOrWHManager) return true;
-      if (item.id === 'agriRawMaterial' && isAdminOrWHManager) return true;
+      if (item.id === 'scaleReports' && isAdminOrWHManager) return true;
       if (item.id === 'rawMaterialsInventory' && isAdminOrWHManager) return true;
       return user.permissions.includes(item.id);
     }
