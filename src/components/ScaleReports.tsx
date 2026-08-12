@@ -222,8 +222,8 @@ export default function ScaleReports({ lang, user }: ScaleReportsProps) {
             </h1>
             <p className="text-emerald-100 text-xs mt-0.5 font-medium">
               {isRtl 
-                ? 'متابعة أوزان وحركات الشاحنات المباشرة من Google Sheets مع إمكانية البحث المتقدم والطباعة الرسمية للتذاكر' 
-                : 'Live weighbridge tracking directly from Google Sheets with advanced search & official ticket printing'}
+                ? 'متابعة أوزان وحركات الشاحنات المباشرة والطباعة الرسمية للتذاكر' 
+                : 'Live weighbridge truck weight tracking and official ticket printing'}
             </p>
           </div>
         </div>
