@@ -288,6 +288,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     }
 
     const eLower = extracted.toLowerCase();
+    const dLower = descr.toLowerCase();
+    if (dLower.includes('pepper')) return 'Pepper';
     if (eLower.includes('manzanilla') || eLower.includes('manzanila')) return 'Manzanilla';
     if (eLower.includes('picual') || eLower.includes('pical')) return 'Picual';
     if (eLower.includes('akas') || eLower.includes('akass') || eLower.includes('akisi') || eLower.includes('aqezi')) return 'Akas';
@@ -300,6 +302,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   };
 
   const getVarietyName = (v: string) => {
+    if (v === 'Pepper') {
+      return isRtl ? 'الفلفل (Pepper)' : 'Pepper';
+    }
     if (v === 'Other') {
       return isRtl ? 'آخر / مشكل' : 'Other / mixed';
     }
@@ -322,6 +327,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50';
       case 'Dolsy':
         return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50';
+      case 'Pepper':
+        return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50';
       default:
         return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800/30 dark:text-zinc-400 dark:border-zinc-700/50';
     }
@@ -770,7 +777,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   }, [dataset]);
 
   const varieties = useMemo(() => {
-    return ['Manzanilla', 'Picual', 'Akas', 'Azizi', 'Kobrosi', 'Kalamata', 'Dolsy', 'Other'];
+    return ['Manzanilla', 'Picual', 'Akas', 'Azizi', 'Kobrosi', 'Kalamata', 'Dolsy', 'Pepper', 'Other'];
   }, []);
 
   const visibleLocations = useMemo(() => {
@@ -1040,6 +1047,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     Kobrosi: '#3b82f6',   // Blue
     Kalamata: '#6366f1',  // Indigo
     Dolsy: '#f43f5e',     // Rose
+    Pepper: '#ef4444',    // Red
     Other: '#64748b'       // Slate
   };
 
