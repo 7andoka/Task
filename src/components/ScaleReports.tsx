@@ -107,12 +107,12 @@ export default function ScaleReports({ lang, user }: ScaleReportsProps) {
             setLoading(false);
           },
           error: (err) => {
-            setError(isRtl ? 'حدث خطأ أثناء جلب البيانات من Google Sheets' : 'Error fetching data from Google Sheets');
+            setError(isRtl ? 'حدث خطأ أثناء جلب بيانات الميزان' : 'Error fetching scale data');
             setLoading(false);
           }
         });
       } catch (err) {
-        setError(isRtl ? 'فشل الاتصال بـ Google Sheets' : 'Failed to connect to Google Sheets');
+        setError(isRtl ? 'فشل الاتصال بالميزان' : 'Failed to connect to scale');
         setLoading(false);
       }
     };
@@ -390,7 +390,7 @@ export default function ScaleReports({ lang, user }: ScaleReportsProps) {
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3">
             <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-bold text-slate-500">{isRtl ? 'جاري تحميل بيانات الميزان من Google Sheets...' : 'Loading scale data from Google Sheets...'}</p>
+            <p className="text-xs font-bold text-slate-500">{isRtl ? 'جاري الاتصال بالميزان...' : 'Connecting to scale...'}</p>
           </div>
         ) : error ? (
           <div className="py-16 text-center text-red-500 font-bold text-sm">
