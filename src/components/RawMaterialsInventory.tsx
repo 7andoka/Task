@@ -22,7 +22,8 @@ import {
   AlertCircle,
   SlidersHorizontal,
   LayoutList,
-  Database
+  Database,
+  Calendar
 } from 'lucide-react';
 import { Language } from '../types';
 import { toast } from 'sonner';
@@ -204,6 +205,8 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
 
   // Search & Filter for Movements
   const [searchTerm, setSearchTerm] = useState('');
+  const [movementsDateFrom, setMovementsDateFrom] = useState('');
+  const [movementsDateTo, setMovementsDateTo] = useState('');
   const [movementsSearchStore, setMovementsSearchStore] = useState('');
   const [movementsTransactionType, setMovementsTransactionType] = useState('all');
   const [selectedRow, setSelectedRow] = useState<any | null>(null);
@@ -350,10 +353,43 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
     return terms.some(term => targetLower.includes(term));
   };
 
+  // Helper for normalizing dates to YYYY-MM-DD
+  const normalizeToIsoDate = (val: any): string => {
+    if (!val) return '';
+    const str = String(val).trim();
+    if (!str) return '';
+
+    // Check for YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+    const isoMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (isoMatch) {
+      const [, y, m, d] = isoMatch;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    // Check for DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+    if (dmyMatch) {
+      const [, d, m, y] = dmyMatch;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+
+    // Check if it's a parseable date string
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 1990 && parsed.getFullYear() < 2100) {
+      const y = parsed.getFullYear();
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const d = String(parsed.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    return '';
+  };
+
   // Filtered data based on search term for Movements Tab
   const filteredData = useMemo(() => {
     let result = processedData;
 
+    // Filter by store
     if (movementsSearchStore.trim()) {
       result = result.filter(row => {
         const storeVal = colStore ? String(row[row[colStore] !== undefined ? colStore : findColumnKey(['مخزن', 'المخزن', 'store'])] || '') : '';
@@ -361,6 +397,7 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
       });
     }
 
+    // Filter by transaction type
     if (movementsTransactionType !== 'all') {
       result = result.filter(row => {
         if (movementsTransactionType === 'opening') return row._opening > 0;
@@ -372,6 +409,35 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
       });
     }
 
+    // Filter by Date Range (Search by Date)
+    if (movementsDateFrom || movementsDateTo) {
+      const colDate = findColumnKey(['تاريخ المستند', 'تاريخ الحركة', 'التاريخ', 'تاريخ', 'date', 'posting date', 'doc date', 'document date', 'entry date', 'created date', 'trans date']);
+
+      result = result.filter(row => {
+        let rowDateStr = '';
+        if (colDate && row[colDate]) {
+          rowDateStr = normalizeToIsoDate(row[colDate]);
+        }
+        
+        if (!rowDateStr) {
+          for (const [k, v] of Object.entries(row)) {
+            if (k.startsWith('_')) continue;
+            const norm = normalizeToIsoDate(v);
+            if (norm) {
+              rowDateStr = norm;
+              break;
+            }
+          }
+        }
+
+        if (!rowDateStr) return false;
+        if (movementsDateFrom && rowDateStr < movementsDateFrom) return false;
+        if (movementsDateTo && rowDateStr > movementsDateTo) return false;
+        return true;
+      });
+    }
+
+    // Free text global search
     if (!searchTerm.trim()) return result;
     const term = searchTerm.toLowerCase();
     const searchParts = term.split(/\s+/).filter(p => p.length > 0);
@@ -385,7 +451,7 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
       
       return searchParts.every(part => rowText.includes(part));
     });
-  }, [processedData, searchTerm, movementsSearchStore, movementsTransactionType, colStore]);
+  }, [processedData, searchTerm, movementsDateFrom, movementsDateTo, movementsSearchStore, movementsTransactionType, colStore]);
 
   // Sorted data
   const sortedData = useMemo(() => {
@@ -769,6 +835,56 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
                   icon={Database}
                   isRtl={isRtl}
                 />
+              </div>
+
+              {/* Date Filter (البحث بالتاريخ) */}
+              <div className="w-full sm:w-auto space-y-1.5">
+                <div className="flex items-center justify-between gap-1.5">
+                  <label className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                    <Calendar size={14} className="text-emerald-500" />
+                    <span>{isRtl ? 'البحث بالتاريخ' : 'Search by Date'}</span>
+                  </label>
+                  {(movementsDateFrom || movementsDateTo) && (
+                    <button
+                      onClick={() => {
+                        setMovementsDateFrom('');
+                        setMovementsDateTo('');
+                        setCurrentPage(1);
+                      }}
+                      className="text-[10px] text-red-500 hover:text-red-600 font-bold hover:underline cursor-pointer"
+                      title={isRtl ? 'إلغاء تصفية التاريخ' : 'Clear date filter'}
+                    >
+                      {isRtl ? 'مسح التاريخ' : 'Clear'}
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={movementsDateFrom}
+                      onChange={(e) => {
+                        setMovementsDateFrom(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      title={isRtl ? 'من تاريخ' : 'From date'}
+                      className="w-full sm:w-36 px-2.5 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-zinc-400">{isRtl ? 'إلى' : 'to'}</span>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={movementsDateTo}
+                      onChange={(e) => {
+                        setMovementsDateTo(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      title={isRtl ? 'إلى تاريخ' : 'To date'}
+                      className="w-full sm:w-36 px-2.5 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 

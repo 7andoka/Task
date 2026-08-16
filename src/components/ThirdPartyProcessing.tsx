@@ -551,7 +551,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   const [jobActionsState, setJobActionsState] = useState<{
     [jobId: string]: {
       qualityComments?: string;
-      confirmedPrice?: number;
+      confirmedPrice?: number | string;
       poNumber?: string;
       defectForeignBodies?: number;
       defectOlivesInsects?: number;
@@ -587,10 +587,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     }));
   };
 
-  const handleUpdateManualPrice = async (jobId: string, newPrice: number) => {
+  const handleUpdateManualPrice = async (jobId: string, newPrice: number | string) => {
     try {
+      const numericPrice = typeof newPrice === 'number' ? newPrice : parseFloat(String(newPrice || '0')) || 0;
       await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, jobId), {
-        confirmedPrice: newPrice,
+        confirmedPrice: numericPrice,
         serverTimestamp: serverTimestamp()
       });
       toast.success(lang === 'ar' ? 'تم تحديث السعر بنجاح' : 'Price updated successfully');
@@ -1711,7 +1712,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
   const handleApprovePurchasing = async (job: ProcessingJob) => {
     try {
-      const price = jobActionsState[job.id]?.confirmedPrice || job.confirmedPrice || 0;
+      const rawPrice = jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || 0);
+      const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice || '0')) || 0;
       const updateData = {
         status: 'Pending Completion',
         purchasingApproverId: user.uid,
@@ -3700,10 +3702,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
               <span className="text-xs font-bold">{lang === 'ar' ? 'اختبار التنبيه' : 'Test Alert'}</span>
             </button>
 
-            {hasRole('Admin') && (
+            {hasRole(['Admin', 'Warehouse Operations', 'Warehouse Manager', 'Warehouse Specialist', 'Warehouse Keeper', 'Assistant Warehouse Keeper', 'Warehouse']) && (
               <button 
                 onClick={() => setIsSettingsOpen(true)}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-2xl font-bold transition-all"
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white rounded-2xl font-bold transition-all cursor-pointer"
               >
                 <Settings size={20} className="text-zinc-500" />
                 {lang === 'ar' ? 'ضبط التشغيلات' : 'Processing Settings'}
@@ -3887,6 +3889,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   <label className="text-xs font-bold text-zinc-500 block px-1 uppercase">{lang === 'ar' ? 'سعر التشغيل للكيلو' : 'Processing Price / KG'}</label>
                   <input 
                     type="number" 
+                    step="any"
+                    min="0"
                     value={newWarehouse.processingPricePerKg}
                     onChange={e => setNewWarehouse({...newWarehouse, processingPricePerKg: e.target.value})}
                     placeholder="0.00"
@@ -5039,10 +5043,12 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-1.5 rounded-xl w-full sm:w-auto shadow-sm">
                                 <input
                                   type="number"
-                                  placeholder={lang === 'ar' ? 'سعر الكيلو' : 'Price/kg'}
-                                  value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || '')}
-                                  onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', parseFloat(e.target.value))}
-                                  className="w-full sm:w-24 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-bold text-center h-8"
+                                  step="any"
+                                  min="0"
+                                  placeholder={lang === 'ar' ? 'سعر الكيلو (مثال: 1.75)' : 'Price/kg (e.g. 1.75)'}
+                                  value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice !== undefined && job.confirmedPrice !== null ? job.confirmedPrice : '')}
+                                  onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', e.target.value)}
+                                  className="w-full sm:w-28 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-bold text-center h-8"
                                 />
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleApprovePurchasing(job); }}
@@ -5279,12 +5285,14 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                                    <div className="flex items-center gap-2">
                                      <input 
                                        type="number"
+                                       step="any"
+                                       min="0"
                                        className="text-xs font-black text-emerald-600 bg-transparent border-b border-emerald-500/30 outline-none w-20"
-                                       value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || 0)}
-                                       onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', parseFloat(e.target.value))}
+                                       value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice !== undefined && job.confirmedPrice !== null ? job.confirmedPrice : 0)}
+                                       onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', e.target.value)}
                                      />
                                      <button 
-                                       onClick={(e) => { e.stopPropagation(); handleUpdateManualPrice(job.id, jobActionsState[job.id]?.confirmedPrice || 0); }}
+                                       onClick={(e) => { e.stopPropagation(); handleUpdateManualPrice(job.id, jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || 0)); }}
                                        className="p-1 text-emerald-600 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-all"
                                        title={lang === 'ar' ? 'حفظ السعر' : 'Save Price'}
                                      >
