@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Language, UserProfile, AgriRawMaterial } from '../types';
 import { translations } from '../i18n';
+import { DateRangeFilter, DateFilterValue } from './DateRangeFilter';
 import { collection, query, orderBy, onSnapshot, doc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
@@ -61,7 +62,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('All');
   const [filterType, setFilterType] = useState('All'); // 'All' | 'إضافة' | 'صرف'
-  const [filterDate, setFilterDate] = useState('');
+  const [filterDateRange, setFilterDateRange] = useState<DateFilterValue>({ mode: 'all' });
   const [filterItemName, setFilterItemName] = useState('All');
 
   // Pagination State
@@ -268,6 +269,9 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
   // Filter unique item names for the filter dropdown
   const uniqueItemNames = Array.from(new Set(materials.map(m => m.itemName).filter(Boolean)));
 
+  // Filter unique dates for the date picker dropdown
+  const uniqueDates = Array.from(new Set(materials.map(m => m.date).filter(Boolean))).sort().reverse();
+
   // Filter and Search Logic
   const filteredMaterials = materials.filter(item => {
     // Search Term Filter
@@ -289,8 +293,17 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
     // Movement Type Filter
     const matchesType = filterType === 'All' ? true : item.movementType === filterType;
 
-    // Date Filter
-    const matchesDate = filterDate ? item.date === filterDate : true;
+    // Smart Date & Range Filter
+    let matchesDate = true;
+    if (filterDateRange.mode !== 'all') {
+      const rowDate = (item.date || '').trim();
+      if (filterDateRange.mode === 'single' && filterDateRange.singleDate) {
+        matchesDate = rowDate === filterDateRange.singleDate;
+      } else {
+        if (filterDateRange.startDate && rowDate < filterDateRange.startDate) matchesDate = false;
+        if (filterDateRange.endDate && rowDate > filterDateRange.endDate) matchesDate = false;
+      }
+    }
 
     return matchesSearch && matchesSupplier && matchesItemName && matchesType && matchesDate;
   });
@@ -1143,20 +1156,22 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
             </select>
           </div>
 
-          {/* Date Filter */}
-          <div className="relative">
-            <Calendar className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-zinc-400`} size={18} />
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              className={`w-full ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all text-zinc-900 dark:text-zinc-100`}
+          {/* Smart Date Range & Day Filter */}
+          <div className="w-full">
+            <DateRangeFilter
+              value={filterDateRange}
+              onChange={(val) => {
+                setFilterDateRange(val);
+                setCurrentPage(1);
+              }}
+              availableDates={uniqueDates}
+              isRtl={isRtl}
             />
           </div>
         </div>
 
         {/* Clear Filters indicator */}
-        {(searchTerm || filterSupplier !== 'All' || filterItemName !== 'All' || filterType !== 'All' || filterDate) && (
+        {(searchTerm || filterSupplier !== 'All' || filterItemName !== 'All' || filterType !== 'All' || filterDateRange.mode !== 'all') && (
           <div className="flex justify-end">
             <button
               onClick={() => {
@@ -1164,7 +1179,7 @@ export default function AgriRawMaterialPage({ lang, user }: AgriRawMaterialProps
                 setFilterSupplier('All');
                 setFilterItemName('All');
                 setFilterType('All');
-                setFilterDate('');
+                setFilterDateRange({ mode: 'all' });
               }}
               className="text-xs text-red-500 hover:underline flex items-center gap-1 font-medium"
             >

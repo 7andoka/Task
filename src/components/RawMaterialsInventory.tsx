@@ -25,6 +25,7 @@ import {
   Database,
   Calendar
 } from 'lucide-react';
+import { DateRangeFilter, DateFilterValue } from './DateRangeFilter';
 import { Language } from '../types';
 import { toast } from 'sonner';
 
@@ -205,12 +206,9 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
 
   // Search & Filter for Movements
   const [searchTerm, setSearchTerm] = useState('');
-  const [movementsSearchDate, setMovementsSearchDate] = useState('');
-  const [movementsDateFrom, setMovementsDateFrom] = useState('');
-  const [movementsDateTo, setMovementsDateTo] = useState('');
+  const [movementsDateFilter, setMovementsDateFilter] = useState<DateFilterValue>({ mode: 'all' });
   const [movementsSearchStore, setMovementsSearchStore] = useState('');
   const [movementsTransactionType, setMovementsTransactionType] = useState('all');
-  const [showDateRange, setShowDateRange] = useState(false);
   const [selectedRow, setSelectedRow] = useState<any | null>(null);
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
 
@@ -412,11 +410,8 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
       });
     }
 
-    // Filter by Selected Date from list (البحث واختيار التاريخ من القائمة)
-    if (movementsSearchDate.trim()) {
-      const selectedDateTerms = movementsSearchDate.split(',').map(t => t.trim()).filter(Boolean);
-      const selectedDateIsos = selectedDateTerms.map(t => normalizeToIsoDate(t) || t.toLowerCase());
-
+    // Filter by movementsDateFilter (Smart Date & Range Selector)
+    if (movementsDateFilter.mode !== 'all') {
       result = result.filter(row => {
         let rowDateRaw = '';
         let rowDateIso = '';
@@ -437,37 +432,19 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
           }
         }
 
-        return selectedDateTerms.some((term, idx) => {
-          const targetIso = selectedDateIsos[idx];
-          if (rowDateIso && targetIso && rowDateIso === targetIso) return true;
-          if (rowDateRaw && rowDateRaw.toLowerCase().includes(term.toLowerCase())) return true;
+        // If single date filter
+        if (movementsDateFilter.mode === 'single' && movementsDateFilter.singleDate) {
+          if (rowDateIso && rowDateIso === movementsDateFilter.singleDate) return true;
+          if (rowDateRaw && rowDateRaw.includes(movementsDateFilter.singleDate)) return true;
           return false;
-        });
-      });
-    }
-
-    // Filter by Date Range (Search by Date)
-    if (movementsDateFrom || movementsDateTo) {
-      result = result.filter(row => {
-        let rowDateStr = '';
-        if (colDate && row[colDate]) {
-          rowDateStr = normalizeToIsoDate(row[colDate]);
-        }
-        
-        if (!rowDateStr) {
-          for (const [k, v] of Object.entries(row)) {
-            if (k.startsWith('_')) continue;
-            const norm = normalizeToIsoDate(v);
-            if (norm) {
-              rowDateStr = norm;
-              break;
-            }
-          }
         }
 
-        if (!rowDateStr) return false;
-        if (movementsDateFrom && rowDateStr < movementsDateFrom) return false;
-        if (movementsDateTo && rowDateStr > movementsDateTo) return false;
+        // If range or preset with start / end dates
+        const dateToTest = rowDateIso || rowDateRaw;
+        if (!dateToTest) return false;
+
+        if (movementsDateFilter.startDate && dateToTest < movementsDateFilter.startDate) return false;
+        if (movementsDateFilter.endDate && dateToTest > movementsDateFilter.endDate) return false;
         return true;
       });
     }
@@ -486,7 +463,7 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
       
       return searchParts.every(part => rowText.includes(part));
     });
-  }, [processedData, searchTerm, movementsSearchDate, movementsDateFrom, movementsDateTo, movementsSearchStore, movementsTransactionType, colStore, colDate]);
+  }, [processedData, searchTerm, movementsDateFilter, movementsSearchStore, movementsTransactionType, colStore, colDate]);
 
   // Sorted data
   const sortedData = useMemo(() => {
@@ -902,88 +879,17 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
                 />
               </div>
 
-              {/* Date Search with Dropdown Results (اختيار التاريخ من النتائج) */}
-              <div className="w-full sm:w-64">
-                <SearchableSelect
-                  label={isRtl ? 'البحث واختيار التاريخ' : 'Search & Select Date'}
-                  value={movementsSearchDate}
+              {/* Smart Date Range & Day Filter (طريقة اختيار التاريخ والفترة الذكية) */}
+              <div className="w-full sm:w-72">
+                <DateRangeFilter
+                  value={movementsDateFilter}
                   onChange={(val) => {
-                    setMovementsSearchDate(val);
+                    setMovementsDateFilter(val);
                     setCurrentPage(1);
                   }}
-                  options={uniqueDatesList}
-                  placeholder={isRtl ? 'اختر التاريخ من النتائج...' : 'Select date from results...'}
-                  icon={Calendar}
+                  availableDates={uniqueDatesList}
                   isRtl={isRtl}
                 />
-              </div>
-
-              {/* Optional Date Range Filter (مدى زمني: من / إلى) */}
-              <div className="w-full sm:w-auto space-y-1.5">
-                <div className="flex items-center justify-between gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowDateRange(!showDateRange)}
-                    className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 hover:text-emerald-600 transition-colors cursor-pointer"
-                  >
-                    <Calendar size={14} className="text-emerald-500" />
-                    <span>{isRtl ? 'فترة زمنية (من / إلى)' : 'Date Range (From / To)'}</span>
-                    <span className="text-[10px] text-zinc-400 font-normal">({showDateRange ? (isRtl ? 'إخفاء' : 'Hide') : (isRtl ? 'تحديد مدى' : 'Range')})</span>
-                  </button>
-                  {(movementsDateFrom || movementsDateTo) && (
-                    <button
-                      onClick={() => {
-                        setMovementsDateFrom('');
-                        setMovementsDateTo('');
-                        setCurrentPage(1);
-                      }}
-                      className="text-[10px] text-red-500 hover:text-red-600 font-bold hover:underline cursor-pointer"
-                      title={isRtl ? 'إلغاء تصفية المدى' : 'Clear date range'}
-                    >
-                      {isRtl ? 'مسح المدى' : 'Clear Range'}
-                    </button>
-                  )}
-                </div>
-                {showDateRange ? (
-                  <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={movementsDateFrom}
-                        onChange={(e) => {
-                          setMovementsDateFrom(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        title={isRtl ? 'من تاريخ' : 'From date'}
-                        className="w-full sm:w-36 px-2.5 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
-                      />
-                    </div>
-                    <span className="text-xs font-bold text-zinc-400">{isRtl ? 'إلى' : 'to'}</span>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={movementsDateTo}
-                        onChange={(e) => {
-                          setMovementsDateTo(e.target.value);
-                          setCurrentPage(1);
-                        }}
-                        title={isRtl ? 'إلى تاريخ' : 'To date'}
-                        className="w-full sm:w-36 px-2.5 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div 
-                    onClick={() => setShowDateRange(true)} 
-                    className="cursor-pointer text-[11px] font-medium text-zinc-400 dark:text-zinc-500 py-2.5 px-3 bg-zinc-50 dark:bg-zinc-900/50 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl hover:border-emerald-500/50 transition-all"
-                  >
-                    {movementsDateFrom || movementsDateTo ? (
-                      <span className="text-emerald-600 font-bold">{movementsDateFrom || '...'} → {movementsDateTo || '...'}</span>
-                    ) : (
-                      <span>{isRtl ? 'انقر لتحديد تاريخ بداية ونهاية' : 'Click to set from / to dates'}</span>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 

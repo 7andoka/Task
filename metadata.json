@@ -1,5 +1,6 @@
 {
   "name": "Rich Land",
   "description": "Rich Land Food Industries - Advanced task management and workforce analytics application.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

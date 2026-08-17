@@ -288,4 +288,42 @@ export interface AgriRawMaterial {
   lastUpdatedAt: string;
 }
 
+export interface ScaleSettings {
+  companyName?: string;
+  companyAddress?: string;
+  companyLogo?: string;
+  unit?: string;
+  [key: string]: any;
+}
+
+export interface Operation {
+  id?: string;
+  operationNo: string;
+  vehicleNo: string;
+  driver?: string;
+  supplier?: string;
+  customer?: string;
+  item: string;
+  poNumber?: string;
+  soNumber?: string;
+  permitNumber?: string;
+  direction?: string;
+  quantity?: number | string;
+  grossWeight?: number;
+  tareWeight?: number;
+  firstWeight?: number;
+  secondWeight?: number;
+  netWeight: number;
+  date: string;
+  time: string;
+  firstWeightDate?: string;
+  firstWeightTime?: string;
+  secondWeightDate?: string;
+  secondWeightTime?: string;
+  userName?: string;
+  remarks?: string;
+  [key: string]: any;
+}
+
 export type Language = 'ar' | 'en';
+
