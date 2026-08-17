@@ -24,8 +24,11 @@ import { storageService } from './services/storageService';
 import { translations } from './i18n';
 import { Toaster, toast } from 'sonner';
 import { notifyUser } from './services/notificationService';
+import { useTheme } from './contexts/ThemeContext';
 
 export default function App() {
+  const { isDark, setTheme, toggleTheme } = useTheme();
+  const setIsDark = (val: boolean) => setTheme(val ? 'dark' : 'light');
   const [user, setUser] = useState<UserProfile | null>(null);
   const hasRole = (rolesToCheck: string | string[]) => {
     const userRoles = user?.roles || (user?.role ? [user.role] : []);
@@ -85,7 +88,6 @@ export default function App() {
 
   const [loading, setLoading] = useState(true);
   const [lang, setLang] = useState<Language>('ar');
-  const [isDark, setIsDark] = useState(true);
   const [activeTab, setActiveTab] = useState('scaleReports');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   
@@ -430,7 +432,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black">
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black">
         <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );

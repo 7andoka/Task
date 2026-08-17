@@ -143,14 +143,14 @@ export default function Layout({
   return (
     <div className={cn(
       "min-h-screen flex transition-colors duration-300",
-      isDark ? "dark bg-black text-zinc-50" : "bg-white text-zinc-900",
+      isDark ? "dark bg-black text-zinc-50" : "bg-zinc-100/70 text-zinc-900",
       isRtl ? "font-sans text-right" : "font-sans text-left",
       !isDesktopMode && "flex-col"
     )} dir={isRtl ? 'rtl' : 'ltr'}>
       
       {/* Top Bar */}
       {activeTab !== 'kpis' && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-zinc-100/80 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 backdrop-blur-md">
+        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-white/90 dark:bg-zinc-900/90 border-b border-zinc-200 dark:border-zinc-800 backdrop-blur-md">
         
         {/* Left Side Controls (Connection Status) */}
         <div className="flex items-center gap-3 shrink-0 z-10">
@@ -172,12 +172,32 @@ export default function Layout({
           </div>
         </div>
 
-        {/* Right Side Controls (Logout/Mode Toggle) */}
-        <div className="flex items-center gap-3 shrink-0 z-10">
+        {/* Right Side Controls (Theme Toggle / Mobile Mode / Logout) */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 z-10">
+          {/* Theme Toggle Button */}
+          <button
+            onClick={() => setIsDark(!isDark)}
+            title={isDark ? (lang === 'ar' ? 'التبديل إلى الوضع النهاري (Light Mode)' : 'Switch to Light Mode') : (lang === 'ar' ? 'التبديل إلى الوضع الليلي (Dark Mode)' : 'Switch to Dark Mode')}
+            aria-label="Toggle theme mode"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700/80 transition-all font-bold text-xs shadow-xs cursor-pointer select-none active:scale-95"
+          >
+            {isDark ? (
+              <>
+                <Sun size={16} className="text-amber-400 animate-pulse" />
+                <span className="hidden md:inline text-amber-300 font-extrabold">{lang === 'ar' ? 'نهاري' : 'Light'}</span>
+              </>
+            ) : (
+              <>
+                <Moon size={16} className="text-indigo-600" />
+                <span className="hidden md:inline text-zinc-800 font-extrabold">{lang === 'ar' ? 'ليلي' : 'Dark'}</span>
+              </>
+            )}
+          </button>
+
           <button 
             onClick={() => setIsDesktopMode(!isDesktopMode)}
             title={isDesktopMode ? (lang === 'ar' ? 'وضع الهاتف' : 'Mobile Mode') : (lang === 'ar' ? 'وضع الكمبيوتر' : 'Desktop Mode')}
-            className="p-2 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
+            className="p-2 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
           >
             {isDesktopMode ? <Smartphone size={18} /> : <Monitor size={18} />}
           </button>
@@ -206,7 +226,7 @@ export default function Layout({
 
       {/* Bottom Navigation (Always at bottom, Scrollable if it exceeds screen) */}
       {activeTab !== 'kpis' && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 h-16 bg-zinc-100/90 dark:bg-zinc-900/90 border-t border-zinc-200 dark:border-zinc-800 backdrop-blur-md flex items-center overflow-x-auto scrollbar-none px-2 select-none">
+        <div className="fixed bottom-0 left-0 right-0 z-50 h-16 bg-white/95 dark:bg-zinc-900/95 border-t border-zinc-200 dark:border-zinc-800 backdrop-blur-md flex items-center overflow-x-auto scrollbar-none px-2 select-none">
           <div className="flex items-center gap-1 md:gap-2 min-w-max mx-auto">
             {filteredMenuItems.map((item) => (
               <button

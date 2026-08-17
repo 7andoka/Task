@@ -2064,20 +2064,20 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl p-6 overflow-hidden text-right z-10"
+              className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-6 overflow-hidden text-right z-10"
               dir={isRtl ? 'rtl' : 'ltr'}
             >
               {/* Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
                 <div className="flex items-center gap-2.5">
                   <span className="p-2.5 bg-amber-500/10 text-amber-500 rounded-2xl">
                     <TrendingUp size={22} className={comparison.totalDiff > 0 ? "rotate-0" : "rotate-180"} />
                   </span>
                   <div>
-                    <h2 className="text-lg font-black text-white">
+                    <h2 className="text-lg font-black text-zinc-900 dark:text-white">
                       {isRtl ? 'تفاصيل مقارنة أرصدة المخزون' : 'Stock Balance Comparison Details'}
                     </h2>
-                    <p className="text-xs text-zinc-400 mt-0.5">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                       {isRtl 
                         ? 'مقارنة بين الرصيد الجديد المحدث والرصيد المرجعي السابق' 
                         : 'Comparison details between newly fetched sheets and standard reference state'}
@@ -2086,14 +2086,14 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 </div>
                 <button
                   onClick={() => setIsComparisonModalOpen(false)}
-                  className="p-1.5 hover:bg-zinc-850 text-zinc-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-white rounded-xl transition-colors cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
               {/* Quick Summary Bar */}
-              <div className="grid grid-cols-3 gap-3 my-4 bg-zinc-950/40 p-3.5 rounded-2xl border border-zinc-800">
+              <div className="grid grid-cols-3 gap-3 my-4 bg-zinc-50 dark:bg-zinc-950/40 p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800">
                 <div className="text-center">
                   <p className="text-[10px] font-bold text-zinc-500 uppercase">
                     {isRtl ? 'إجمالي الفرق' : 'Net Difference'}
@@ -2102,7 +2102,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                     {comparison.totalDiff > 0 ? '+' : ''}{formatNumber(comparison.totalDiff)} <span className="text-[9px] font-bold">kg</span>
                   </p>
                 </div>
-                <div className="text-center border-x border-zinc-800/80">
+                <div className="text-center border-x border-zinc-200 dark:border-zinc-800/80">
                   <p className="text-[10px] font-bold text-zinc-500 uppercase">
                     {isRtl ? 'أصناف زادت' : 'Increased Items'}
                   </p>
@@ -2121,18 +2121,18 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
               </div>
 
               {/* Items List */}
-              <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 max-h-[40vh] my-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+              <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 max-h-[40vh] my-1 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-800 scrollbar-track-transparent">
                 {comparison.details.map(item => (
                   <div 
                     key={item.materialCode}
-                    className="p-3 bg-zinc-950/20 hover:bg-zinc-950/30 rounded-2xl border border-zinc-800/60 flex items-center justify-between gap-4 transition-all"
+                    className="p-3 bg-zinc-50/70 dark:bg-zinc-950/20 hover:bg-zinc-100/70 dark:hover:bg-zinc-950/30 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/60 flex items-center justify-between gap-4 transition-all"
                   >
                     <div className="flex-1 min-w-0 text-right">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-mono text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded font-black border border-zinc-700/50">
+                        <span className="font-mono text-[10px] bg-zinc-200/70 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-400 px-1.5 py-0.5 rounded font-black border border-zinc-300/50 dark:border-zinc-700/50">
                           {item.materialCode}
                         </span>
-                        <span className="text-xs font-bold text-zinc-150 truncate max-w-[280px]">
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-100 truncate max-w-[280px]">
                           {item.description}
                         </span>
                       </div>
@@ -2140,7 +2140,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                         <span>
                           {isRtl ? 'الرصيد السابق:' : 'Previous:'} {formatNumber(item.oldQty)}
                         </span>
-                        <span className="text-zinc-800">•</span>
+                        <span className="text-zinc-400 dark:text-zinc-800">•</span>
                         <span>
                           {isRtl ? 'الرصيد الحالي:' : 'Current:'} {formatNumber(item.newQty)}
                         </span>
@@ -2150,8 +2150,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                     <div className="text-left font-sans">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-xl text-xs font-black font-mono border ${
                         item.diff > 0 
-                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                          : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+                          : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
                       }`}>
                         {item.diff > 0 ? '+' : ''}{formatNumber(item.diff)}
                       </span>

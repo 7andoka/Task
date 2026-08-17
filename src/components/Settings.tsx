@@ -1,9 +1,10 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Bell, Save, CheckCircle2, Download } from 'lucide-react';
+import { Bell, Save, CheckCircle2, Download, Moon, Sun, Palette } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile, NotificationPreferences } from '../types';
 import { storageService } from '../services/storageService';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface SettingsProps {
   lang: Language;
@@ -13,6 +14,7 @@ interface SettingsProps {
 
 export default function Settings({ lang, user, setUser }: SettingsProps) {
   const t = translations[lang];
+  const { theme, isDark, setTheme } = useTheme();
   
   const defaultPrefs: NotificationPreferences = {
     newAssignments: true,
@@ -60,6 +62,85 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Theme Appearance Section */}
+      <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 md:p-8 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <Palette size={24} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+              {lang === 'ar' ? 'مظهر التطبيق والثيم' : 'App Appearance & Theme'}
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {lang === 'ar' ? 'التبديل الفوري بين الوضعين النهاري والليلي' : 'Switch seamlessly between light and dark modes'}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Dark Mode Card */}
+          <button
+            type="button"
+            onClick={() => setTheme('dark')}
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between gap-3 cursor-pointer ${
+              isDark
+                ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20 shadow-md'
+                : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 hover:border-zinc-300 dark:hover:border-zinc-700'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-zinc-900 text-amber-300 flex items-center justify-center border border-zinc-800 shadow-sm">
+                <Moon size={20} />
+              </div>
+              <span className={`text-xs px-2.5 py-1 rounded-full font-black ${
+                isDark ? 'bg-emerald-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
+              }`}>
+                {isDark ? (lang === 'ar' ? 'مفعّل حالياً' : 'Active') : (lang === 'ar' ? 'اختيار' : 'Select')}
+              </span>
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-zinc-900 dark:text-white flex items-center gap-1.5">
+                <span>🌙 {lang === 'ar' ? 'الوضع الليلي (Dark Mode)' : 'Dark Mode'}</span>
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                {lang === 'ar' ? 'مريح للعين ومناسب لبيئات الإضاءة المنخفضة (افتراضي)' : 'Comfortable for low light and battery efficient (Default)'}
+              </p>
+            </div>
+          </button>
+
+          {/* Light Mode Card */}
+          <button
+            type="button"
+            onClick={() => setTheme('light')}
+            className={`p-4 rounded-2xl border-2 text-right transition-all flex flex-col justify-between gap-3 cursor-pointer ${
+              !isDark
+                ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20 shadow-md'
+                : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 hover:border-zinc-300 dark:hover:border-zinc-700'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center border border-amber-200 shadow-sm">
+                <Sun size={20} />
+              </div>
+              <span className={`text-xs px-2.5 py-1 rounded-full font-black ${
+                !isDark ? 'bg-emerald-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
+              }`}>
+                {!isDark ? (lang === 'ar' ? 'مفعّل حالياً' : 'Active') : (lang === 'ar' ? 'اختيار' : 'Select')}
+              </span>
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-zinc-900 dark:text-white flex items-center gap-1.5">
+                <span>☀️ {lang === 'ar' ? 'الوضع النهاري (Light Mode)' : 'Light Mode'}</span>
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                {lang === 'ar' ? 'واجهة بيضاء واضحة ذات تباين عالي للقراءة في النهار' : 'Crisp high-contrast layout for daytime readability'}
+              </p>
+            </div>
+          </button>
+        </div>
+      </div>
+
       <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 md:p-8 border border-zinc-200 dark:border-zinc-800 shadow-sm">
         <div className="flex items-center gap-4 mb-8">
           <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">

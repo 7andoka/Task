@@ -22,6 +22,25 @@
     <meta name="msapplication-TileColor" content="#006B62" />
     <meta name="msapplication-TileImage" content="https://i.postimg.cc/1XRRDjGB/1643207840139.jpg" />
     <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/1XRRDjGB/1643207840139.jpg" />
+
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('app_theme');
+          if (saved === 'light') {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
+            document.documentElement.style.colorScheme = 'light';
+          } else {
+            document.documentElement.classList.add('dark');
+            document.documentElement.classList.remove('light');
+            document.documentElement.style.colorScheme = 'dark';
+          }
+        } catch (e) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
