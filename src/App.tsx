@@ -17,6 +17,7 @@ import OliveStock from './components/OliveStock';
 import CsvDataView from './components/CsvDataView';
 import RawMaterialsInventory from './components/RawMaterialsInventory';
 import ScaleReports from './components/ScaleReports';
+import FreshSupply from './components/FreshSupply';
 import OfflineScreen from './components/OfflineScreen';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
@@ -44,6 +45,7 @@ export default function App() {
     const menuItems = [
       { id: 'scaleReports', roles: undefined },
       { id: 'supplyTracking', roles: undefined },
+      { id: 'freshSupply', roles: undefined },
       { id: 'rawMaterialsInventory', roles: undefined },
       { id: 'coldStorage', roles: undefined },
       { id: 'rawMaterial', roles: undefined },
@@ -63,6 +65,7 @@ export default function App() {
       return menuItems
         .filter(item => {
           if (item.id === 'scaleReports' && isAdminOrWHManager) return true;
+          if (item.id === 'freshSupply' && isAdminOrWHManager) return true;
           if (item.id === 'rawMaterialsInventory' && isAdminOrWHManager) return true;
           if (item.id === 'finishedProduct') {
             return u.permissions!.includes('finishedProduct') || u.permissions!.includes('oliveStock') || isAdminOrWHManager;
@@ -476,6 +479,8 @@ export default function App() {
         return <ScaleReports lang={lang} user={user} />;
       case 'supplyTracking':
         return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
+      case 'freshSupply':
+        return <FreshSupply lang={lang} user={user} />;
       case 'rawMaterialsInventory':
         return <RawMaterialsInventory lang={lang} />;
       case 'coldStorage':

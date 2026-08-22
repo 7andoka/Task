@@ -117,6 +117,7 @@ export default function Layout({
   const menuItems = [
     { id: 'scaleReports', label: t.scaleReports, icon: Scale },
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
+    { id: 'freshSupply', label: t.freshSupply, icon: Sprout },
     { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory, icon: Layers },
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
@@ -134,6 +135,7 @@ export default function Layout({
     const isAdminOrWHManager = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
     if (user?.permissions && user.permissions.length > 0) {
       if (item.id === 'scaleReports' && isAdminOrWHManager) return true;
+      if (item.id === 'freshSupply' && isAdminOrWHManager) return true;
       if (item.id === 'rawMaterialsInventory' && isAdminOrWHManager) return true;
       return user.permissions.includes(item.id);
     }

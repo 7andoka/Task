@@ -160,7 +160,8 @@ export const translations = {
     processingJobs: "سجل عمليات التشغيل",
     finishedProduct: "منتج تام",
     rawMaterialsInventory: "الخامات",
-    scaleReports: "تقارير الميزان البسكول"
+    scaleReports: "تقارير الميزان البسكول",
+    freshSupply: "توريد الفريش"
   },
   en: {
     warehouseManager: "Warehouse Manager",
@@ -323,6 +324,7 @@ export const translations = {
     processingJobs: "Processing Jobs Log",
     finishedProduct: "Finished Product",
     rawMaterialsInventory: "Raw Materials",
-    scaleReports: "Scale Reports"
+    scaleReports: "Scale Reports",
+    freshSupply: "Fresh Supply"
   }
 };
