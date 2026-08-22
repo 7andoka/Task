@@ -35,6 +35,7 @@ interface FreshAnalyticsDashboardProps {
   items: FreshItemSummaryData[];
   suppliers: FreshSupplierSummaryData[];
   dailyData: Array<{ date: string; kg: number; tons: number }>;
+  records?: Array<any>;
   totalKg: number;
   totalTons: number;
   barrelTons: number;
@@ -52,6 +53,7 @@ export const FreshAnalyticsDashboard: React.FC<FreshAnalyticsDashboardProps> = (
   items,
   suppliers,
   dailyData,
+  records = [],
   totalKg,
   totalTons,
   barrelTons,
@@ -63,6 +65,28 @@ export const FreshAnalyticsDashboard: React.FC<FreshAnalyticsDashboardProps> = (
   onFilterBySupplier
 }) => {
   const [activeChartGroup, setActiveChartGroup] = useState<'all' | 'volume' | 'timeline' | 'storage'>('all');
+  const [timelineMode, setTimelineMode] = useState<'all' | 'item' | 'supplier'>('all');
+  const [timelineSelectedValue, setTimelineSelectedValue] = useState<string>('ALL');
+
+  // Computed timeline data based on selected item or supplier
+  const computedDailyData = useMemo(() => {
+    if (!records || records.length === 0 || timelineMode === 'all' || timelineSelectedValue === 'ALL') {
+      return dailyData;
+    }
+    const map = new Map<string, number>();
+    records.forEach((r: any) => {
+      if (timelineMode === 'item' && r.itemName !== timelineSelectedValue) return;
+      if (timelineMode === 'supplier' && r.costCenter !== timelineSelectedValue) return;
+      const key = r.date || 'بدون تاريخ';
+      map.set(key, (map.get(key) || 0) + (r.quantityKg || 0));
+    });
+    return Array.from(map.entries())
+      .map(([date, kg]) => ({
+        date,
+        kg,
+        tons: parseFloat((kg / 1000).toFixed(2))
+      }));
+  }, [records, dailyData, timelineMode, timelineSelectedValue]);
 
   // Variety distribution
   const varietyData = useMemo(() => {
@@ -291,25 +315,75 @@ export const FreshAnalyticsDashboard: React.FC<FreshAnalyticsDashboardProps> = (
 
       </div>
 
-      {/* 4. Timeline Intake Area Chart */}
+      {/* 4. Timeline Intake Area Chart with Item/Supplier selector */}
       <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-teal-500" />
               <span>{isRtl ? 'المسار الزمني لحركة التوريد اليومية (بالطن)' : 'Daily Intake Timeline (Tons)'}</span>
             </h3>
-            <p className="text-xs text-zinc-400">{isRtl ? 'تطور تدفق التوريدات واستلام الفريش على مدار الأيام' : 'Timeline progression of daily produce intake'}</p>
+            <p className="text-xs text-zinc-400">{isRtl ? 'تطور تدفق التوريدات واستلام الفريش على مدار الأيام مع إمكانية التصفية' : 'Timeline progression with item/supplier selector'}</p>
           </div>
 
-          <div className="text-xs font-mono font-bold text-zinc-500 flex items-center gap-2">
-            <span>{dailyData.length} {isRtl ? 'أيام عمل' : 'days recorded'}</span>
+          {/* Timeline Selector Controls */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+              <button
+                onClick={() => { setTimelineMode('all'); setTimelineSelectedValue('ALL'); }}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  timelineMode === 'all' ? 'bg-teal-600 text-white shadow-xs' : 'text-zinc-600 dark:text-zinc-400'
+                }`}
+              >
+                {isRtl ? 'الكل' : 'All'}
+              </button>
+              <button
+                onClick={() => { setTimelineMode('item'); setTimelineSelectedValue(items[0]?.itemName || 'ALL'); }}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  timelineMode === 'item' ? 'bg-teal-600 text-white shadow-xs' : 'text-zinc-600 dark:text-zinc-400'
+                }`}
+              >
+                {isRtl ? 'حسب الصنف' : 'By Item'}
+              </button>
+              <button
+                onClick={() => { setTimelineMode('supplier'); setTimelineSelectedValue(suppliers[0]?.costCenter || 'ALL'); }}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  timelineMode === 'supplier' ? 'bg-teal-600 text-white shadow-xs' : 'text-zinc-600 dark:text-zinc-400'
+                }`}
+              >
+                {isRtl ? 'حسب المورد' : 'By Supplier'}
+              </button>
+            </div>
+
+            {timelineMode === 'item' && (
+              <select
+                value={timelineSelectedValue}
+                onChange={(e) => setTimelineSelectedValue(e.target.value)}
+                className="px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                {items.map(i => (
+                  <option key={i.itemName} value={i.itemName}>{i.itemName}</option>
+                ))}
+              </select>
+            )}
+
+            {timelineMode === 'supplier' && (
+              <select
+                value={timelineSelectedValue}
+                onChange={(e) => setTimelineSelectedValue(e.target.value)}
+                className="px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                {suppliers.map(s => (
+                  <option key={s.costCenter} value={s.costCenter}>{s.costCenter}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={dailyData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+            <AreaChart data={computedDailyData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
               <defs>
                 <linearGradient id="colorDailyTons" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#0f766e" stopOpacity={0.8}/>

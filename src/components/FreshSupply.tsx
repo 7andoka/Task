@@ -2083,12 +2083,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 <h1 className="text-xl md:text-2xl font-black text-zinc-900 dark:text-white tracking-tight">
                   {isRtl ? 'توريد الفريش (الخام الطازج)' : 'Fresh Produce Supply'}
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                  Google Sheets Live
-                </span>
               </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 flex items-center gap-2">
-                <span>{isRtl ? 'سحب فوري ومباشر لبيانات استلامات الفريش' : 'Real-time sync of fresh intake records'}</span>
+                <span>{isRtl ? 'إدارة ومتابعة استلامات الخضروات والفواكه الطازجة' : 'Manage and track fresh produce intake records'}</span>
                 {lastSynced && (
                   <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
                     {isRtl ? `آخر مزامنة: ${lastSynced}` : `Last sync: ${lastSynced}`}
@@ -2182,7 +2179,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       </div>
 
       {/* 2. Interactive KPI Cards (انقر على أي بطاقة لعرض تفاصيلها وتصفية الجدول) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         
         {/* Total Weight in Tons */}
         <div 
@@ -2190,30 +2187,30 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           role="button"
           tabIndex={0}
           title={isRtl ? 'انقر لعرض التحليل الشامل لإجمالي الكميات والتعبئة' : 'Click for total intake & packaging overview'}
-          className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white p-4 rounded-2xl shadow-md flex flex-col justify-between col-span-2 sm:col-span-1 lg:col-span-2 cursor-pointer hover:shadow-xl hover:scale-[1.02] transition-all group active:scale-95 select-none relative overflow-hidden"
+          className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white p-3 rounded-xl shadow-xs flex flex-col justify-between col-span-2 sm:col-span-1 lg:col-span-2 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all group active:scale-95 select-none relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 left-0 h-1 bg-white/30 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black text-emerald-100 flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-emerald-100 flex items-center gap-1">
               <span>{isRtl ? 'إجمالي توريد الفريش' : 'Total Fresh Intake'}</span>
-              <span className="text-[9px] bg-white/20 px-1.5 py-0.2 rounded font-mono font-normal">تفاصيل ↗</span>
+              <span className="text-[8px] bg-white/20 px-1 py-0.2 rounded font-mono">تفاصيل ↗</span>
             </span>
-            <div className="w-8 h-8 rounded-xl bg-white/15 group-hover:bg-white/25 flex items-center justify-center transition-colors">
-              <TrendingUp className="w-4 h-4 text-emerald-200" />
+            <div className="w-6 h-6 rounded-lg bg-white/15 group-hover:bg-white/25 flex items-center justify-center transition-colors">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-200" />
             </div>
           </div>
-          <div className="mt-2">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl lg:text-3xl font-black font-mono tracking-tight">
+          <div className="mt-1">
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl lg:text-2xl font-black font-mono tracking-tight">
                 {stats.totalTons.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              <span className="text-xs font-bold text-emerald-100">{isRtl ? 'طن' : 'Tons'}</span>
+              <span className="text-[11px] font-bold text-emerald-100">{isRtl ? 'طن' : 'Tons'}</span>
             </div>
             <div className="flex items-center justify-between mt-0.5">
-              <p className="text-[11px] font-mono text-emerald-200/90">
-                = {stats.totalKg.toLocaleString('en-US')} {isRtl ? 'كيلوجرام' : 'KG'}
+              <p className="text-[10px] font-mono text-emerald-200/90">
+                = {stats.totalKg.toLocaleString('en-US')} {isRtl ? 'كجم' : 'KG'}
               </p>
-              <span className="text-[10px] text-emerald-200 underline opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-[9px] text-emerald-200 underline opacity-0 group-hover:opacity-100 transition-opacity">
                 {isRtl ? 'عرض التوزيع' : 'View Breakdown'}
               </span>
             </div>
@@ -2226,23 +2223,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           role="button"
           tabIndex={0}
           title={isRtl ? 'انقر لعرض تحليل أذون وحركات الاستلام' : 'Click for movements breakdown'}
-          className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between cursor-pointer hover:border-blue-400 hover:shadow-lg hover:scale-[1.02] transition-all group active:scale-95 select-none relative overflow-hidden"
+          className="bg-white dark:bg-zinc-900 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-blue-400 hover:shadow-sm hover:scale-[1.01] transition-all group active:scale-95 select-none relative overflow-hidden"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black text-zinc-600 dark:text-zinc-300">
+            <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300">
               {isRtl ? 'عدد الحركات' : 'Movements'}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center transition-colors">
+            <div className="w-6 h-6 rounded-md bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center transition-colors">
               <FileCheck2 className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <span className="text-xl lg:text-2xl font-black font-mono text-zinc-900 dark:text-white">
+          <div className="mt-1">
+            <span className="text-lg lg:text-xl font-black font-mono text-zinc-900 dark:text-white">
               {stats.movementCount.toLocaleString()}
             </span>
             <div className="flex items-center justify-between mt-0.5">
-              <p className="text-[10px] text-zinc-400">{isRtl ? 'إذن إضافة واستلام' : 'Receipts'}</p>
-              <span className="text-[9px] font-bold text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+              <p className="text-[9px] text-zinc-400">{isRtl ? 'إذن إضافة واستلام' : 'Receipts'}</p>
+              <span className="text-[8px] font-bold text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
                 {isRtl ? 'عرض ↗' : 'View ↗'}
               </span>
             </div>
@@ -2255,23 +2252,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           role="button"
           tabIndex={0}
           title={isRtl ? 'انقر لعرض تفاصيل الأصناف وكمية كل صنف وتصفيتها' : 'Click to view all items and their quantities'}
-          className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 shadow-sm flex flex-col justify-between cursor-pointer hover:border-amber-500 hover:shadow-lg hover:scale-[1.02] transition-all group active:scale-95 select-none relative overflow-hidden bg-gradient-to-b from-amber-50/20 to-transparent dark:from-amber-950/10"
+          className="bg-white dark:bg-zinc-900 p-3 rounded-xl border border-amber-200/80 dark:border-amber-900/40 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-amber-500 hover:shadow-sm hover:scale-[1.01] transition-all group active:scale-95 select-none relative overflow-hidden bg-gradient-to-b from-amber-50/20 to-transparent dark:from-amber-950/10"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black text-amber-900 dark:text-amber-300 flex items-center gap-1">
+            <span className="text-[10px] font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1">
               <span>{isRtl ? 'الأصناف الطازجة' : 'Fresh Items'}</span>
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
             </span>
-            <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center transition-colors">
+            <div className="w-6 h-6 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center transition-colors">
               <PackageCheck className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <span className="text-xl lg:text-2xl font-black font-mono text-zinc-900 dark:text-white">
+          <div className="mt-1">
+            <span className="text-lg lg:text-xl font-black font-mono text-zinc-900 dark:text-white">
               {stats.uniqueItems}
             </span>
             <div className="flex items-center justify-between mt-0.5">
-              <p className="text-[10px] text-amber-700 dark:text-amber-400 font-bold">{isRtl ? 'انقر لعرض كميات الأصناف' : 'Click for item list'}</p>
+              <p className="text-[9px] text-amber-700 dark:text-amber-400 font-bold">{isRtl ? 'انقر لعرض الأصناف' : 'Click for items'}</p>
               <span className="text-[9px] font-black text-amber-600 dark:text-amber-400">⚡</span>
             </div>
           </div>
@@ -2283,23 +2280,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           role="button"
           tabIndex={0}
           title={isRtl ? 'انقر لعرض تفاصيل الموردين وكميات كل مورد ومزرعة' : 'Click to view all suppliers and their quantities'}
-          className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-purple-200/80 dark:border-purple-900/40 shadow-sm flex flex-col justify-between cursor-pointer hover:border-purple-500 hover:shadow-lg hover:scale-[1.02] transition-all group active:scale-95 select-none relative overflow-hidden bg-gradient-to-b from-purple-50/20 to-transparent dark:from-purple-950/10"
+          className="bg-white dark:bg-zinc-900 p-3 rounded-xl border border-purple-200/80 dark:border-purple-900/40 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-purple-500 hover:shadow-sm hover:scale-[1.01] transition-all group active:scale-95 select-none relative overflow-hidden bg-gradient-to-b from-purple-50/20 to-transparent dark:from-purple-950/10"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black text-purple-900 dark:text-purple-300 flex items-center gap-1">
+            <span className="text-[10px] font-bold text-purple-900 dark:text-purple-300 flex items-center gap-1">
               <span>{isRtl ? 'الموردين والمزارع' : 'Suppliers'}</span>
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
             </span>
-            <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 group-hover:bg-purple-500 group-hover:text-white flex items-center justify-center transition-colors">
+            <div className="w-6 h-6 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 group-hover:bg-purple-500 group-hover:text-white flex items-center justify-center transition-colors">
               <Building2 className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <span className="text-xl lg:text-2xl font-black font-mono text-zinc-900 dark:text-white">
+          <div className="mt-1">
+            <span className="text-lg lg:text-xl font-black font-mono text-zinc-900 dark:text-white">
               {stats.uniqueSuppliers}
             </span>
             <div className="flex items-center justify-between mt-0.5">
-              <p className="text-[10px] text-purple-700 dark:text-purple-400 font-bold">{isRtl ? 'انقر لعرض كميات الموردين' : 'Click for supplier list'}</p>
+              <p className="text-[9px] text-purple-700 dark:text-purple-400 font-bold">{isRtl ? 'انقر لعرض الموردين' : 'Click for suppliers'}</p>
               <span className="text-[9px] font-black text-purple-600 dark:text-purple-400">⚡</span>
             </div>
           </div>
@@ -2311,30 +2308,30 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           role="button"
           tabIndex={0}
           title={isRtl ? 'انقر لعرض أسطول الشاحنات وسائقي النقل والحمولات' : 'Click to view trucks and drivers logistics'}
-          className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between cursor-pointer hover:border-teal-500 hover:shadow-lg hover:scale-[1.02] transition-all group active:scale-95 select-none relative overflow-hidden"
+          className="bg-white dark:bg-zinc-900 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xs flex flex-col justify-between cursor-pointer hover:border-teal-500 hover:shadow-sm hover:scale-[1.01] transition-all group active:scale-95 select-none relative overflow-hidden"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black text-zinc-600 dark:text-zinc-300">
+            <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300">
               {isRtl ? 'السيارات والسائقين' : 'Trucks & Drivers'}
             </span>
-            <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400 group-hover:bg-teal-600 group-hover:text-white flex items-center justify-center transition-colors">
+            <div className="w-6 h-6 rounded-md bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400 group-hover:bg-teal-600 group-hover:text-white flex items-center justify-center transition-colors">
               <Truck className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-lg lg:text-xl font-black font-mono text-zinc-900 dark:text-white">
+          <div className="mt-1">
+            <div className="flex items-center gap-1">
+              <span className="text-base lg:text-lg font-black font-mono text-zinc-900 dark:text-white">
                 {stats.uniqueTrucks}
               </span>
-              <span className="text-[10px] text-zinc-400">سيارة /</span>
-              <span className="text-lg lg:text-xl font-black font-mono text-zinc-900 dark:text-white">
+              <span className="text-[9px] text-zinc-400">س /</span>
+              <span className="text-base lg:text-lg font-black font-mono text-zinc-900 dark:text-white">
                 {stats.uniqueDrivers}
               </span>
-              <span className="text-[10px] text-zinc-400">سائق</span>
+              <span className="text-[9px] text-zinc-400">سائق</span>
             </div>
             <div className="flex items-center justify-between mt-0.5">
-              <p className="text-[10px] text-zinc-400">{isRtl ? 'حركة النقل اللوجستي' : 'Logistics'}</p>
-              <span className="text-[9px] font-bold text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity">
+              <p className="text-[9px] text-zinc-400">{isRtl ? 'حركة النقل' : 'Logistics'}</p>
+              <span className="text-[8px] font-bold text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity">
                 {isRtl ? 'عرض ↗' : 'View ↗'}
               </span>
             </div>
@@ -2841,6 +2838,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           items={itemsSummary}
           suppliers={suppliersSummary}
           dailyData={dailySummary}
+          records={data}
           totalKg={stats.totalKg}
           totalTons={stats.totalTons}
           barrelTons={stats.barrelKg / 1000}
