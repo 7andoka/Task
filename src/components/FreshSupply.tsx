@@ -57,7 +57,11 @@ import {
   MapPin,
   Sparkle,
   Sliders,
-  RotateCcw
+  RotateCcw,
+  Trophy,
+  Award,
+  ArrowUpRight,
+  CircleDot
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -74,6 +78,9 @@ import {
   AreaChart,
   Area
 } from 'recharts';
+import { FreshItemsDashboard } from './FreshItemsDashboard';
+import { FreshSuppliersDashboard } from './FreshSuppliersDashboard';
+import { FreshAnalyticsDashboard } from './FreshAnalyticsDashboard';
 import { DateRangeFilter, DateFilterValue, getPresetDates } from './DateRangeFilter';
 import { Language, UserProfile } from '../types';
 import { translations } from '../i18n';
@@ -348,6 +355,18 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const [activeView, setActiveView] = useState<'table' | 'itemsSummary' | 'suppliersSummary' | 'reports' | 'analytics'>('table');
   const [activeReportTab, setActiveReportTab] = useState<'oliveStockStyle' | 'matrix' | 'logistics' | 'packaging' | 'daily' | 'poRecon'>('oliveStockStyle');
   const [matrixUnit, setMatrixUnit] = useState<'tons' | 'kg'>('tons');
+
+  // Summary Dashboard Customization State
+  const [itemsSummaryMode, setItemsSummaryMode] = useState<'dashboard' | 'cards' | 'table'>('dashboard');
+  const [itemsSummarySearch, setItemsSummarySearch] = useState('');
+  const [itemsSummarySort, setItemsSummarySort] = useState<'tons_desc' | 'tons_asc' | 'movements_desc' | 'name_asc'>('tons_desc');
+
+  const [suppliersSummaryMode, setSuppliersSummaryMode] = useState<'dashboard' | 'cards' | 'table'>('dashboard');
+  const [suppliersSummarySearch, setSuppliersSummarySearch] = useState('');
+  const [suppliersSummarySort, setSuppliersSummarySort] = useState<'tons_desc' | 'tons_asc' | 'movements_desc' | 'name_asc'>('tons_desc');
+
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'overview' | 'items' | 'suppliers' | 'timeline' | 'storage'>('overview');
+  const [activeSummaryChartTab, setActiveSummaryChartTab] = useState<'donut' | 'bar' | 'variety'>('donut');
   
   // Interactive Drill-Down (like OliveStock)
   const [drillDown, setDrillDown] = useState<{ 
@@ -1025,47 +1044,97 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     };
   }, [filteredData]);
 
-  // Grouping by Item
+  // Enhanced Grouping by Item with Variety, Packaging Breakdown & Top Supplier
   const itemsSummary = useMemo(() => {
     const map = new Map<string, {
       itemName: string;
       sapCode: string;
       oldCode: string;
       unit: string;
+      variety: string;
+      varietyName: string;
+      varietyColor: string;
       totalKg: number;
       totalTons: number;
       count: number;
       suppliers: Set<string>;
+      suppliersMap: Map<string, number>;
+      topSupplier: string;
       locations: Set<string>;
+      tankKg: number;
+      tankTons: number;
+      barrelKg: number;
+      barrelTons: number;
+      stores: Set<string>;
     }>();
 
     filteredData.forEach(r => {
       const key = r.itemName || 'غير محدد';
       if (!map.has(key)) {
+        const v = detectFreshVariety(key);
         map.set(key, {
           itemName: key,
           sapCode: r.sapCode,
           oldCode: r.oldCode,
-          unit: r.unit,
+          unit: r.unit || 'كيلو',
+          variety: v,
+          varietyName: getFreshVarietyName(v, isRtl),
+          varietyColor: VARIETY_COLORS[v] || '#10b981',
           totalKg: 0,
           totalTons: 0,
           count: 0,
           suppliers: new Set(),
-          locations: new Set()
+          suppliersMap: new Map(),
+          topSupplier: '',
+          locations: new Set(),
+          tankKg: 0,
+          tankTons: 0,
+          barrelKg: 0,
+          barrelTons: 0,
+          stores: new Set()
         });
       }
       const item = map.get(key)!;
       item.totalKg += r.quantityKg;
       item.totalTons += r.quantityTons;
       item.count += 1;
-      if (r.costCenter) item.suppliers.add(r.costCenter);
+      if (r.sapCode && !item.sapCode) item.sapCode = r.sapCode;
+      if (r.oldCode && !item.oldCode) item.oldCode = r.oldCode;
+      if (r.costCenter) {
+        item.suppliers.add(r.costCenter);
+        item.suppliersMap.set(r.costCenter, (item.suppliersMap.get(r.costCenter) || 0) + r.quantityKg);
+      }
       if (r.location) item.locations.add(r.location);
+      if (r.store) item.stores.add(r.store);
+
+      const locStr = (r.location || '').toLowerCase();
+      const isTank = locStr.includes('تانك') || locStr.includes('tank') || Boolean(r.tankNo);
+      if (isTank) {
+        item.tankKg += r.quantityKg;
+        item.tankTons += r.quantityTons;
+      } else {
+        item.barrelKg += r.quantityKg;
+        item.barrelTons += r.quantityTons;
+      }
     });
 
-    return Array.from(map.values()).sort((a, b) => b.totalKg - a.totalKg);
-  }, [filteredData]);
+    return Array.from(map.values()).map(item => {
+      let topSup = '-';
+      let maxKg = 0;
+      item.suppliersMap.forEach((kg, sup) => {
+        if (kg > maxKg) {
+          maxKg = kg;
+          topSup = sup;
+        }
+      });
+      return {
+        ...item,
+        topSupplier: topSup
+      };
+    }).sort((a, b) => b.totalKg - a.totalKg);
+  }, [filteredData, isRtl]);
 
-  // Grouping by Supplier / Cost Center
+  // Enhanced Grouping by Supplier / Cost Center
   const suppliersSummary = useMemo(() => {
     const map = new Map<string, {
       costCenter: string;
@@ -1074,7 +1143,15 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       totalTons: number;
       count: number;
       items: Set<string>;
+      itemsMap: Map<string, number>;
+      topItem: string;
       trucks: Set<string>;
+      drivers: Set<string>;
+      tankKg: number;
+      tankTons: number;
+      barrelKg: number;
+      barrelTons: number;
+      dates: Set<string>;
     }>();
 
     filteredData.forEach(r => {
@@ -1087,19 +1164,209 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           totalTons: 0,
           count: 0,
           items: new Set(),
-          trucks: new Set()
+          itemsMap: new Map(),
+          topItem: '',
+          trucks: new Set(),
+          drivers: new Set(),
+          tankKg: 0,
+          tankTons: 0,
+          barrelKg: 0,
+          barrelTons: 0,
+          dates: new Set()
         });
       }
       const sup = map.get(key)!;
       sup.totalKg += r.quantityKg;
       sup.totalTons += r.quantityTons;
       sup.count += 1;
-      if (r.itemName) sup.items.add(r.itemName);
+      if (r.costCenterCode && !sup.costCenterCode) sup.costCenterCode = r.costCenterCode;
+      if (r.itemName) {
+        sup.items.add(r.itemName);
+        sup.itemsMap.set(r.itemName, (sup.itemsMap.get(r.itemName) || 0) + r.quantityKg);
+      }
       if (r.truckNo) sup.trucks.add(r.truckNo);
+      if (r.driver) sup.drivers.add(r.driver);
+      if (r.date) sup.dates.add(r.date);
+
+      const locStr = (r.location || '').toLowerCase();
+      const isTank = locStr.includes('تانك') || locStr.includes('tank') || Boolean(r.tankNo);
+      if (isTank) {
+        sup.tankKg += r.quantityKg;
+        sup.tankTons += r.quantityTons;
+      } else {
+        sup.barrelKg += r.quantityKg;
+        sup.barrelTons += r.quantityTons;
+      }
     });
 
-    return Array.from(map.values()).sort((a, b) => b.totalKg - a.totalKg);
+    return Array.from(map.values()).map(sup => {
+      let topItm = '-';
+      let maxKg = 0;
+      sup.itemsMap.forEach((kg, itm) => {
+        if (kg > maxKg) {
+          maxKg = kg;
+          topItm = itm;
+        }
+      });
+      return {
+        ...sup,
+        topItem: topItm,
+        avgShipmentTons: sup.count > 0 ? sup.totalTons / sup.count : 0
+      };
+    }).sort((a, b) => b.totalKg - a.totalKg);
   }, [filteredData]);
+
+  // 1. Items Pie / Donut Chart Data (Top 6 + Others)
+  const itemsPieChartData = useMemo(() => {
+    if (!itemsSummary.length) return [];
+    const totalTons = stats.totalTons || 1;
+    const topItems = itemsSummary.slice(0, 6);
+    const otherItems = itemsSummary.slice(6);
+    
+    const result = topItems.map((item, idx) => ({
+      name: item.itemName,
+      tons: parseFloat(item.totalTons.toFixed(2)),
+      kg: item.totalKg,
+      percent: parseFloat(((item.totalTons / totalTons) * 100).toFixed(1)),
+      color: CHART_COLORS[idx % CHART_COLORS.length],
+      count: item.count
+    }));
+
+    if (otherItems.length > 0) {
+      const otherTons = otherItems.reduce((acc, i) => acc + i.totalTons, 0);
+      const otherKg = otherItems.reduce((acc, i) => acc + i.totalKg, 0);
+      result.push({
+        name: isRtl ? `باقي الأصناف (${otherItems.length})` : `Other Items (${otherItems.length})`,
+        tons: parseFloat(otherTons.toFixed(2)),
+        kg: otherKg,
+        percent: parseFloat(((otherTons / totalTons) * 100).toFixed(1)),
+        color: '#94a3b8',
+        count: otherItems.reduce((acc, i) => acc + i.count, 0)
+      });
+    }
+
+    return result;
+  }, [itemsSummary, stats.totalTons, isRtl]);
+
+  // 2. Items Variety Donut Chart Data (Manzanilla, Picual, Kalamata, etc.)
+  const itemsVarietyPieData = useMemo(() => {
+    const totalTons = stats.totalTons || 1;
+    const map = new Map<string, { tons: number; kg: number; count: number }>();
+    itemsSummary.forEach(item => {
+      const v = item.variety;
+      if (!map.has(v)) {
+        map.set(v, { tons: 0, kg: 0, count: 0 });
+      }
+      const entry = map.get(v)!;
+      entry.tons += item.totalTons;
+      entry.kg += item.totalKg;
+      entry.count += item.count;
+    });
+
+    return Array.from(map.entries())
+      .map(([variety, data]) => ({
+        id: variety,
+        name: getFreshVarietyName(variety, isRtl),
+        tons: parseFloat(data.tons.toFixed(2)),
+        kg: data.kg,
+        percent: parseFloat(((data.tons / totalTons) * 100).toFixed(1)),
+        color: VARIETY_COLORS[variety] || '#10b981',
+        count: data.count
+      }))
+      .sort((a, b) => b.tons - a.tons);
+  }, [itemsSummary, stats.totalTons, isRtl]);
+
+  // 3. Suppliers Pie / Donut Chart Data (Top 7 + Others)
+  const suppliersPieChartData = useMemo(() => {
+    if (!suppliersSummary.length) return [];
+    const totalTons = stats.totalTons || 1;
+    const topSuppliers = suppliersSummary.slice(0, 7);
+    const otherSuppliers = suppliersSummary.slice(7);
+
+    const result = topSuppliers.map((sup, idx) => ({
+      name: sup.costCenter,
+      code: sup.costCenterCode,
+      tons: parseFloat(sup.totalTons.toFixed(2)),
+      kg: sup.totalKg,
+      percent: parseFloat(((sup.totalTons / totalTons) * 100).toFixed(1)),
+      color: CHART_COLORS[idx % CHART_COLORS.length],
+      count: sup.count
+    }));
+
+    if (otherSuppliers.length > 0) {
+      const otherTons = otherSuppliers.reduce((acc, s) => acc + s.totalTons, 0);
+      const otherKg = otherSuppliers.reduce((acc, s) => acc + s.totalKg, 0);
+      result.push({
+        name: isRtl ? `باقي الموردين (${otherSuppliers.length})` : `Other Suppliers (${otherSuppliers.length})`,
+        code: '-',
+        tons: parseFloat(otherTons.toFixed(2)),
+        kg: otherKg,
+        percent: parseFloat(((otherTons / totalTons) * 100).toFixed(1)),
+        color: '#94a3b8',
+        count: otherSuppliers.reduce((acc, s) => acc + s.count, 0)
+      });
+    }
+
+    return result;
+  }, [suppliersSummary, stats.totalTons, isRtl]);
+
+  // Filtered & Sorted Items Summary
+  const filteredSortedItems = useMemo(() => {
+    let result = [...itemsSummary];
+    if (itemsSummarySearch.trim()) {
+      const q = itemsSummarySearch.toLowerCase().trim();
+      result = result.filter(item => 
+        item.itemName.toLowerCase().includes(q) ||
+        item.sapCode.toLowerCase().includes(q) ||
+        item.oldCode.toLowerCase().includes(q) ||
+        item.varietyName.toLowerCase().includes(q) ||
+        item.topSupplier.toLowerCase().includes(q)
+      );
+    }
+    switch (itemsSummarySort) {
+      case 'tons_desc':
+        result.sort((a, b) => b.totalKg - a.totalKg);
+        break;
+      case 'tons_asc':
+        result.sort((a, b) => a.totalKg - b.totalKg);
+        break;
+      case 'movements_desc':
+        result.sort((a, b) => b.count - a.count);
+        break;
+      case 'name_asc':
+        result.sort((a, b) => a.itemName.localeCompare(b.itemName, 'ar'));
+        break;
+    }
+    return result;
+  }, [itemsSummary, itemsSummarySearch, itemsSummarySort]);
+
+  // Filtered & Sorted Suppliers Summary
+  const filteredSortedSuppliers = useMemo(() => {
+    let result = [...suppliersSummary];
+    if (suppliersSummarySearch.trim()) {
+      const q = suppliersSummarySearch.toLowerCase().trim();
+      result = result.filter(sup => 
+        sup.costCenter.toLowerCase().includes(q) ||
+        sup.costCenterCode.toLowerCase().includes(q) ||
+        sup.topItem.toLowerCase().includes(q)
+      );
+    }
+    switch (suppliersSummarySort) {
+      case 'tons_desc':
+        result.sort((a, b) => b.totalKg - a.totalKg);
+        break;
+      case 'tons_asc':
+        result.sort((a, b) => a.totalKg - b.totalKg);
+        break;
+      case 'movements_desc':
+        result.sort((a, b) => b.count - a.count);
+        break;
+      case 'name_asc':
+        result.sort((a, b) => a.costCenter.localeCompare(b.costCenter, 'ar'));
+        break;
+    }
+    return result;
+  }, [suppliersSummary, suppliersSummarySearch, suppliersSummarySort]);
 
   // Daily Timeline for Chart
   const dailySummary = useMemo(() => {
@@ -1479,6 +1746,63 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     } catch (err) {
       console.error('Export Excel Error:', err);
       toast.error(isRtl ? 'فشل تصدير الإكسيل' : 'Failed to export Excel');
+    }
+  };
+
+  // Export Items Summary to Excel
+  const handleExportItemsSummaryExcel = () => {
+    try {
+      const rows = filteredSortedItems.map((item, idx) => ({
+        'م': idx + 1,
+        'اسم الصنف': item.itemName,
+        'النوع': item.varietyName,
+        'كود ساب': item.sapCode || '-',
+        'كود قديم': item.oldCode || '-',
+        'إجمالي الكمية (كجم)': item.totalKg,
+        'إجمالي الكمية (طن)': parseFloat(item.totalTons.toFixed(3)),
+        'النسبة من الإجمالي': `${stats.totalKg > 0 ? ((item.totalKg / stats.totalKg) * 100).toFixed(2) : 0}%`,
+        'عدد الحركات': item.count,
+        'عدد الموردين': item.suppliers.size,
+        'أعلى مورد': item.topSupplier,
+        'تخزين براميل (طن)': parseFloat(item.barrelTons.toFixed(3)),
+        'تخزين تانكات (طن)': parseFloat(item.tankTons.toFixed(3))
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'ملخص الأصناف');
+      XLSX.writeFile(workbook, `ملخص_أصناف_الفريش_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(isRtl ? 'تم تصدير ملخص الأصناف للإكسيل' : 'Items summary exported');
+    } catch (err) {
+      toast.error(isRtl ? 'فشل تصدير ملخص الأصناف' : 'Failed to export items summary');
+    }
+  };
+
+  // Export Suppliers Summary to Excel
+  const handleExportSuppliersSummaryExcel = () => {
+    try {
+      const rows = filteredSortedSuppliers.map((sup, idx) => ({
+        'م': idx + 1,
+        'المورد / مركز التكلفة': sup.costCenter,
+        'كود مركز التكلفة': sup.costCenterCode || '-',
+        'إجمالي الكمية (كجم)': sup.totalKg,
+        'إجمالي الكمية (طن)': parseFloat(sup.totalTons.toFixed(3)),
+        'النسبة من الإجمالي': `${stats.totalKg > 0 ? ((sup.totalKg / stats.totalKg) * 100).toFixed(2) : 0}%`,
+        'عدد الحركات / النقلات': sup.count,
+        'متوسط النقلة (طن)': parseFloat(sup.avgShipmentTons.toFixed(2)),
+        'عدد الأصناف الموردة': sup.items.size,
+        'الصنف الأكثر توريداً': sup.topItem,
+        'عدد السيارات': sup.trucks.size,
+        'عدد السائقين': sup.drivers.size
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'ملخص الموردين');
+      XLSX.writeFile(workbook, `ملخص_موردي_الفريش_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(isRtl ? 'تم تصدير ملخص الموردين للإكسيل' : 'Suppliers summary exported');
+    } catch (err) {
+      toast.error(isRtl ? 'فشل تصدير ملخص الموردين' : 'Failed to export suppliers summary');
     }
   };
 
@@ -2552,324 +2876,61 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         </div>
       )}
 
-      {/* View 2: Items Summary Grid & Aggregate Table */}
+      {/* View 2: Items Summary Dashboard & Visuals */}
       {!loading && activeView === 'itemsSummary' && (
-        <div className="space-y-6">
-          
-          {/* Summary Cards per Item */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {itemsSummary.map((item, idx) => {
-              const percent = stats.totalKg > 0 ? ((item.totalKg / stats.totalKg) * 100).toFixed(1) : '0';
-              return (
-                <div 
-                  key={item.itemName}
-                  className="bg-white dark:bg-zinc-900 rounded-2xl p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-black text-sm text-zinc-900 dark:text-white leading-tight">
-                          {item.itemName}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          {item.sapCode && (
-                            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.2 rounded">
-                              SAP: {item.sapCode}
-                            </span>
-                          )}
-                          {item.oldCode && (
-                            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.2 rounded">
-                              كود: {item.oldCode}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-mono font-black bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                        {percent}%
-                      </span>
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="text-[10px] text-zinc-500 block">{isRtl ? 'الكمية بالطن' : 'Tons'}</span>
-                        <strong className="text-lg font-mono font-black text-emerald-600 dark:text-emerald-400">
-                          {item.totalTons.toFixed(2)} <span className="text-xs font-sans">طن</span>
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-zinc-500 block">{isRtl ? 'الكمية بالكيلو' : 'Kilograms'}</span>
-                        <strong className="text-base font-mono font-bold text-zinc-900 dark:text-white">
-                          {item.totalKg.toLocaleString()} <span className="text-xs font-sans">كجم</span>
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-[11px] text-zinc-500">
-                    <span>{item.count} {isRtl ? 'حركة توريد' : 'movements'}</span>
-                    <span>{item.suppliers.size} {isRtl ? 'مورد / مزرعة' : 'suppliers'}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Detailed Item Aggregate Table */}
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-700">
-              <h3 className="font-black text-sm text-zinc-900 dark:text-white">
-                {isRtl ? 'جدول تجميع كميات الأصناف ومقارنتها' : 'Item Aggregation & Comparison Table'}
-              </h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-                <thead>
-                  <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-black border-b border-zinc-200 dark:border-zinc-700">
-                    <th className="py-3 px-4">#</th>
-                    <th className="py-3 px-4">{isRtl ? 'اسم الصنف' : 'Item'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'كود ساب / قديم' : 'Codes'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'إجمالي الكمية (كجم)' : 'Total KG'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'إجمالي الكمية (طن)' : 'Total Tons'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'النسبة المئوية' : '% Share'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'عدد الحركات' : 'Movements'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'الموردين' : 'Suppliers'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {itemsSummary.map((item, idx) => {
-                    const percent = stats.totalKg > 0 ? ((item.totalKg / stats.totalKg) * 100).toFixed(2) : '0';
-                    return (
-                      <tr key={item.itemName} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                        <td className="py-3 px-4 font-mono text-zinc-400">{idx + 1}</td>
-                        <td className="py-3 px-4 font-black text-zinc-900 dark:text-white">{item.itemName}</td>
-                        <td className="py-3 px-4 font-mono text-zinc-500">{item.sapCode || item.oldCode || '-'}</td>
-                        <td className="py-3 px-4 font-mono font-black">{item.totalKg.toLocaleString()} كجم</td>
-                        <td className="py-3 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">{item.totalTons.toFixed(3)} طن</td>
-                        <td className="py-3 px-4 font-mono font-bold text-zinc-700 dark:text-zinc-300">{percent}%</td>
-                        <td className="py-3 px-4 font-mono">{item.count}</td>
-                        <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400">{Array.from(item.suppliers).join(', ')}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
+        <FreshItemsDashboard
+          items={itemsSummary}
+          totalKg={stats.totalKg}
+          totalTons={stats.totalTons}
+          barrelTons={stats.barrelKg / 1000}
+          tankTons={stats.tankKg / 1000}
+          isRtl={isRtl}
+          onFilterByItem={(item) => {
+            setSelectedItem(item || 'ALL');
+            setActiveView('table');
+          }}
+          onExportExcel={handleExportItemsSummaryExcel}
+        />
       )}
 
-      {/* View 3: Suppliers Summary Grid & Aggregate Table */}
+      {/* View 3: Suppliers Summary Dashboard & Visuals */}
       {!loading && activeView === 'suppliersSummary' && (
-        <div className="space-y-6">
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {suppliersSummary.map((sup, idx) => {
-              const percent = stats.totalKg > 0 ? ((sup.totalKg / stats.totalKg) * 100).toFixed(1) : '0';
-              return (
-                <div 
-                  key={sup.costCenter}
-                  className="bg-white dark:bg-zinc-900 rounded-2xl p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h3 className="font-black text-sm text-zinc-900 dark:text-white leading-tight">
-                          {sup.costCenter}
-                        </h3>
-                        {sup.costCenterCode && (
-                          <span className="text-[10px] font-mono text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.2 rounded mt-1 inline-block">
-                            مركز تكلفة: {sup.costCenterCode}
-                          </span>
-                        )}
-                      </div>
-                      <span className="px-2.5 py-1 rounded-full text-xs font-mono font-black bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
-                        {percent}%
-                      </span>
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="text-[10px] text-zinc-500 block">{isRtl ? 'إجمالي التوريد (طن)' : 'Tons'}</span>
-                        <strong className="text-lg font-mono font-black text-purple-600 dark:text-purple-400">
-                          {sup.totalTons.toFixed(2)} <span className="text-xs font-sans">طن</span>
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-zinc-500 block">{isRtl ? 'إجمالي التوريد (كجم)' : 'Kilograms'}</span>
-                        <strong className="text-base font-mono font-bold text-zinc-900 dark:text-white">
-                          {sup.totalKg.toLocaleString()} <span className="text-xs font-sans">كجم</span>
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-[11px] text-zinc-500">
-                    <span>{sup.count} {isRtl ? 'حركة' : 'movements'}</span>
-                    <span>{sup.items.size} {isRtl ? 'أصناف موردة' : 'items'}</span>
-                    <span>{sup.trucks.size} {isRtl ? 'سيارة' : 'trucks'}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Supplier Table */}
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-700">
-              <h3 className="font-black text-sm text-zinc-900 dark:text-white">
-                {isRtl ? 'جدول تجميع الموردين ومراكز التكلفة' : 'Suppliers & Cost Centers Aggregate'}
-              </h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-                <thead>
-                  <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-black border-b border-zinc-200 dark:border-zinc-700">
-                    <th className="py-3 px-4">#</th>
-                    <th className="py-3 px-4">{isRtl ? 'المورد / مركز التكلفة' : 'Supplier'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'الكود' : 'Code'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'إجمالي الكمية (كجم)' : 'Total KG'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'إجمالي الكمية (طن)' : 'Total Tons'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'النسبة' : '%'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'الحركات' : 'Movements'}</th>
-                    <th className="py-3 px-4">{isRtl ? 'الأصناف الموردة' : 'Items'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  {suppliersSummary.map((sup, idx) => {
-                    const percent = stats.totalKg > 0 ? ((sup.totalKg / stats.totalKg) * 100).toFixed(2) : '0';
-                    return (
-                      <tr key={sup.costCenter} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                        <td className="py-3 px-4 font-mono text-zinc-400">{idx + 1}</td>
-                        <td className="py-3 px-4 font-black text-zinc-900 dark:text-white">{sup.costCenter}</td>
-                        <td className="py-3 px-4 font-mono text-zinc-500">{sup.costCenterCode || '-'}</td>
-                        <td className="py-3 px-4 font-mono font-black">{sup.totalKg.toLocaleString()} كجم</td>
-                        <td className="py-3 px-4 font-mono font-black text-purple-600 dark:text-purple-400">{sup.totalTons.toFixed(3)} طن</td>
-                        <td className="py-3 px-4 font-mono font-bold text-zinc-700 dark:text-zinc-300">{percent}%</td>
-                        <td className="py-3 px-4 font-mono">{sup.count}</td>
-                        <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400">{Array.from(sup.items).join(', ')}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
+        <FreshSuppliersDashboard
+          suppliers={suppliersSummary}
+          totalKg={stats.totalKg}
+          totalTons={stats.totalTons}
+          uniqueTrucks={stats.uniqueTrucks}
+          isRtl={isRtl}
+          onFilterBySupplier={(sup) => {
+            setSelectedSupplier(sup || 'ALL');
+            setActiveView('table');
+          }}
+          onExportExcel={handleExportSuppliersSummaryExcel}
+        />
       )}
 
-      {/* View 4: Visual Analytics & Charts */}
+      {/* View 4: Visual Analytics & Executive Charts */}
       {!loading && activeView === 'analytics' && (
-        <div className="space-y-6">
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Chart 1: Quantities by Item */}
-            <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-black text-sm text-zinc-900 dark:text-white">
-                    {isRtl ? 'كميات التوريد حسب الصنف (بالطن)' : 'Supply by Item (Tons)'}
-                  </h3>
-                  <p className="text-xs text-zinc-400">{isRtl ? 'مقارنة إجمالي أوزان الفريش المستلم' : 'Fresh produce weight comparison'}</p>
-                </div>
-                <BarChart3 className="w-5 h-5 text-emerald-500" />
-              </div>
-
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={itemsSummary} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis 
-                      dataKey="itemName" 
-                      tick={{ fontSize: 10 }} 
-                      angle={-25} 
-                      textAnchor="end" 
-                      interval={0}
-                    />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip 
-                      formatter={(val: any) => [`${Number(val).toFixed(2)} طن`, 'الكمية']}
-                      contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff' }}
-                    />
-                    <Bar dataKey="totalTons" fill="#10b981" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Chart 2: Quantities by Supplier */}
-            <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-black text-sm text-zinc-900 dark:text-white">
-                    {isRtl ? 'كميات التوريد حسب المورد / المزرعة (بالطن)' : 'Supply by Supplier (Tons)'}
-                  </h3>
-                  <p className="text-xs text-zinc-400">{isRtl ? 'توزيع التوريد على مراكز التكلفة' : 'Distribution across cost centers'}</p>
-                </div>
-                <Building2 className="w-5 h-5 text-purple-500" />
-              </div>
-
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={suppliersSummary} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                    <XAxis 
-                      dataKey="costCenter" 
-                      tick={{ fontSize: 10 }} 
-                      angle={-25} 
-                      textAnchor="end" 
-                      interval={0}
-                    />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip 
-                      formatter={(val: any) => [`${Number(val).toFixed(2)} طن`, 'الكمية']}
-                      contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff' }}
-                    />
-                    <Bar dataKey="totalTons" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Chart 3: Daily Trend Area Chart */}
-          <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-black text-sm text-zinc-900 dark:text-white">
-                  {isRtl ? 'حركة التوريد اليومية عبر الأيام (طن)' : 'Daily Intake Timeline (Tons)'}
-                </h3>
-                <p className="text-xs text-zinc-400">{isRtl ? 'متابعة مسار التوريد الزمني' : 'Timeline of shipments'}</p>
-              </div>
-              <TrendingUp className="w-5 h-5 text-teal-500" />
-            </div>
-
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dailySummary} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
-                  <defs>
-                    <linearGradient id="colorTons" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0f766e" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#0f766e" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip 
-                    formatter={(val: any) => [`${Number(val).toFixed(2)} طن`, 'الكمية اليومية']}
-                    contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff' }}
-                  />
-                  <Area type="monotone" dataKey="tons" stroke="#0f766e" strokeWidth={3} fillOpacity={1} fill="url(#colorTons)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-        </div>
+        <FreshAnalyticsDashboard
+          items={itemsSummary}
+          suppliers={suppliersSummary}
+          dailyData={dailySummary}
+          totalKg={stats.totalKg}
+          totalTons={stats.totalTons}
+          barrelTons={stats.barrelKg / 1000}
+          tankTons={stats.tankKg / 1000}
+          uniqueTrucks={stats.uniqueTrucks}
+          uniqueDrivers={stats.uniqueDrivers}
+          isRtl={isRtl}
+          onFilterByItem={(item) => {
+            setSelectedItem(item || 'ALL');
+            setActiveView('table');
+          }}
+          onFilterBySupplier={(sup) => {
+            setSelectedSupplier(sup || 'ALL');
+            setActiveView('table');
+          }}
+        />
       )}
 
       {/* View 5: Advanced Supply Reports (تقارير التوريد الإضافية المتقدمة) */}
