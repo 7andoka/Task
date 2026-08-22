@@ -352,7 +352,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const [lastSynced, setLastSynced] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_TIME_KEY);
   });
-  const [activeView, setActiveView] = useState<'table' | 'itemsSummary' | 'suppliersSummary' | 'reports' | 'analytics'>('table');
+  const [activeView, setActiveView] = useState<'table' | 'analytics'>('table');
   const [activeReportTab, setActiveReportTab] = useState<'oliveStockStyle' | 'matrix' | 'logistics' | 'packaging' | 'daily' | 'poRecon'>('oliveStockStyle');
   const [matrixUnit, setMatrixUnit] = useState<'tons' | 'kg'>('tons');
 
@@ -404,6 +404,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Interactive KPI Modal state
   const [kpiModal, setKpiModal] = useState<'items' | 'suppliers' | 'totals' | 'movements' | 'trucks' | 'packaging' | null>(null);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [expandedSupplier, setExpandedSupplier] = useState<string | null>(null);
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
@@ -2165,51 +2167,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           </button>
 
           <button
-            onClick={() => setActiveView('itemsSummary')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
-              activeView === 'itemsSummary'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>{isRtl ? 'ملخص حسب الأصناف' : 'Summary by Item'}</span>
-            <span className="px-1.5 py-0.2 bg-black/20 rounded-full text-[10px] font-mono">
-              {itemsSummary.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveView('suppliersSummary')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
-              activeView === 'suppliersSummary'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>{isRtl ? 'ملخص حسب الموردين والمزارع' : 'Summary by Supplier'}</span>
-            <span className="px-1.5 py-0.2 bg-black/20 rounded-full text-[10px] font-mono">
-              {suppliersSummary.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveView('reports')}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
-              activeView === 'reports'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-            }`}
-          >
-            <FileBarChart className="w-4 h-4 text-amber-500" />
-            <span>{isRtl ? 'تقارير التوريد الإضافية المتقدمة' : 'Advanced Supply Reports'}</span>
-            <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-600 dark:text-amber-300 rounded-full text-[10px] font-bold">
-              5 {isRtl ? 'تقارير' : 'Reports'}
-            </span>
-          </button>
-
-          <button
             onClick={() => setActiveView('analytics')}
             className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
               activeView === 'analytics'
@@ -2876,38 +2833,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         </div>
       )}
 
-      {/* View 2: Items Summary Dashboard & Visuals */}
-      {!loading && activeView === 'itemsSummary' && (
-        <FreshItemsDashboard
-          items={itemsSummary}
-          totalKg={stats.totalKg}
-          totalTons={stats.totalTons}
-          barrelTons={stats.barrelKg / 1000}
-          tankTons={stats.tankKg / 1000}
-          isRtl={isRtl}
-          onFilterByItem={(item) => {
-            setSelectedItem(item || 'ALL');
-            setActiveView('table');
-          }}
-          onExportExcel={handleExportItemsSummaryExcel}
-        />
-      )}
 
-      {/* View 3: Suppliers Summary Dashboard & Visuals */}
-      {!loading && activeView === 'suppliersSummary' && (
-        <FreshSuppliersDashboard
-          suppliers={suppliersSummary}
-          totalKg={stats.totalKg}
-          totalTons={stats.totalTons}
-          uniqueTrucks={stats.uniqueTrucks}
-          isRtl={isRtl}
-          onFilterBySupplier={(sup) => {
-            setSelectedSupplier(sup || 'ALL');
-            setActiveView('table');
-          }}
-          onExportExcel={handleExportSuppliersSummaryExcel}
-        />
-      )}
 
       {/* View 4: Visual Analytics & Executive Charts */}
       {!loading && activeView === 'analytics' && (
@@ -2931,1311 +2857,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             setActiveView('table');
           }}
         />
-      )}
-
-      {/* View 5: Advanced Supply Reports (تقارير التوريد الإضافية المتقدمة) */}
-      {!loading && activeView === 'reports' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          
-          {/* Reports Sub-Navigation Bar */}
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl p-4 md:p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h2 className="text-base md:text-lg font-black text-zinc-900 dark:text-white flex items-center gap-2">
-                  <FileBarChart className="w-5 h-5 text-amber-500" />
-                  <span>{isRtl ? 'تقارير توريد الفريش المتقدمة' : 'Advanced Supply Reports'}</span>
-                </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  {isRtl ? 'تحليلات عميقة للمصفوفات اللوجستية، أسطول الشاحنات، التانكات، والمسار الزمني' : 'Deep insights into cross-tab matrix, logistics fleet, tanks & timeline'}
-                </p>
-              </div>
-
-              {/* Sub-Tabs Selector */}
-              <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl overflow-x-auto">
-                
-                <button
-                  onClick={() => setActiveReportTab('oliveStockStyle')}
-                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeReportTab === 'oliveStockStyle'
-                      ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>{isRtl ? 'تحليل رصيد الأصناف والمواقع (مثل رصيد الزيتون)' : 'Olive Stock-Style Report'}</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveReportTab('matrix')}
-                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeReportTab === 'matrix'
-                      ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Grid3X3 className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'مصفوفة الأصناف والموردين' : 'Cross-Tab Matrix'}</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveReportTab('logistics')}
-                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeReportTab === 'logistics'
-                      ? 'bg-white dark:bg-zinc-900 text-teal-600 dark:text-teal-400 shadow-xs'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Truck className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'أسطول السيارات والسائقين' : 'Logistics Fleet'}</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveReportTab('packaging')}
-                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeReportTab === 'packaging'
-                      ? 'bg-white dark:bg-zinc-900 text-cyan-600 dark:text-cyan-400 shadow-xs'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Container className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'التانكات والتعبئة' : 'Tanks & Barrels'}</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveReportTab('daily')}
-                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeReportTab === 'daily'
-                      ? 'bg-white dark:bg-zinc-900 text-amber-600 dark:text-amber-400 shadow-xs'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  <CalendarDays className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'المسار والتوريد اليومي' : 'Daily Velocity'}</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveReportTab('poRecon')}
-                  className={`px-3 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeReportTab === 'poRecon'
-                      ? 'bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-xs'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                  }`}
-                >
-                  <FileCheck2 className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'مطابقة PO و ساب' : 'PO Reconciliation'}</span>
-                </button>
-
-              </div>
-            </div>
-          </div>
-
-          {/* Sub-Report 0: Olive Stock Style Report (تحليل رصيد الأصناف والمواقع مثل رصيد الزيتون) */}
-          {activeReportTab === 'oliveStockStyle' && (
-            <div className="space-y-6">
-              
-              {/* Baseline Comparison Alert Banner */}
-              {comparison.hasChanges && (
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-4 md:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-amber-900 dark:text-amber-300 shadow-sm animate-in fade-in duration-200">
-                  <div className="flex items-center gap-3.5">
-                    <div className="p-3 bg-amber-500 text-white rounded-2xl shadow-sm shrink-0">
-                      <AlertCircle className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-black text-sm text-zinc-900 dark:text-white">
-                        {isRtl ? 'تنبيه: تم رصد تغيير في بيانات التوريد مقارنة بالرصيد المرجعي المعتمد!' : 'Notice: Changes detected in supply intake compared to reference baseline!'}
-                      </h4>
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
-                        {isRtl 
-                          ? `فرق إجمالي: ${comparison.totalDiff > 0 ? '+' : ''}${(comparison.totalDiff / 1000).toFixed(2)} طن عبر ${comparison.details.length} صنف` 
-                          : `Total diff: ${comparison.totalDiff > 0 ? '+' : ''}${(comparison.totalDiff / 1000).toFixed(2)} T across ${comparison.details.length} items`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => setIsComparisonModalOpen(true)}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
-                    >
-                      {isRtl ? 'عرض الفروقات' : 'View Diff'}
-                    </button>
-                    <button
-                      onClick={handleAcceptNewSupplyBalance}
-                      className="px-4 py-2 bg-white dark:bg-zinc-800 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-zinc-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
-                    >
-                      {isRtl ? 'اعتماد الرصيد الجديد' : 'Accept New Balance'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Fixed Core Totals Cards Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1.5">
-                    <span className="text-[11px] font-bold">{isRtl ? 'إجمالي التوريد' : 'Total Supply'}</span>
-                    <Weight className="w-3.5 h-3.5 text-emerald-500" />
-                  </div>
-                  <div className="text-lg font-black text-zinc-900 dark:text-white">
-                    {(unmodifiedTotals.totalIntake / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                    <span className="text-xs font-normal text-zinc-400 ml-1 mr-1">{isRtl ? 'طن' : 'T'}</span>
-                  </div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5 font-bold">
-                    {unmodifiedTotals.totalIntake.toLocaleString()} {isRtl ? 'كجم' : 'KG'}
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1.5">
-                    <span className="text-[11px] font-bold">{isRtl ? 'منزانيللا' : 'Manzanilla'}</span>
-                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  </div>
-                  <div className="text-lg font-black text-amber-600 dark:text-amber-400">
-                    {(unmodifiedTotals.totalManzanilla / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                    <span className="text-xs font-normal text-zinc-400 ml-1 mr-1">{isRtl ? 'طن' : 'T'}</span>
-                  </div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5 font-bold">
-                    {unmodifiedTotals.totalIntake > 0 ? ((unmodifiedTotals.totalManzanilla / unmodifiedTotals.totalIntake) * 100).toFixed(1) : 0}%
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1.5">
-                    <span className="text-[11px] font-bold">{isRtl ? 'بيكوال' : 'Picual'}</span>
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  </div>
-                  <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                    {(unmodifiedTotals.totalPicual / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                    <span className="text-xs font-normal text-zinc-400 ml-1 mr-1">{isRtl ? 'طن' : 'T'}</span>
-                  </div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5 font-bold">
-                    {unmodifiedTotals.totalIntake > 0 ? ((unmodifiedTotals.totalPicual / unmodifiedTotals.totalIntake) * 100).toFixed(1) : 0}%
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1.5">
-                    <span className="text-[11px] font-bold">{isRtl ? 'كالماتا' : 'Kalamata'}</span>
-                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                  </div>
-                  <div className="text-lg font-black text-indigo-600 dark:text-indigo-400">
-                    {(unmodifiedTotals.totalKalamata / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                    <span className="text-xs font-normal text-zinc-400 ml-1 mr-1">{isRtl ? 'طن' : 'T'}</span>
-                  </div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5 font-bold">
-                    {unmodifiedTotals.totalIntake > 0 ? ((unmodifiedTotals.totalKalamata / unmodifiedTotals.totalIntake) * 100).toFixed(1) : 0}%
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1.5">
-                    <span className="text-[11px] font-bold">{isRtl ? 'براميل' : 'Barrels'}</span>
-                    <Boxes className="w-3.5 h-3.5 text-cyan-500" />
-                  </div>
-                  <div className="text-lg font-black text-cyan-600 dark:text-cyan-400">
-                    {(unmodifiedTotals.totalBarrels / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                    <span className="text-xs font-normal text-zinc-400 ml-1 mr-1">{isRtl ? 'طن' : 'T'}</span>
-                  </div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5 font-bold">
-                    {unmodifiedTotals.totalIntake > 0 ? ((unmodifiedTotals.totalBarrels / unmodifiedTotals.totalIntake) * 100).toFixed(1) : 0}%
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 shadow-xs">
-                  <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-1.5">
-                    <span className="text-[11px] font-bold">{isRtl ? 'تانكات' : 'Tanks'}</span>
-                    <Container className="w-3.5 h-3.5 text-purple-500" />
-                  </div>
-                  <div className="text-lg font-black text-purple-600 dark:text-purple-400">
-                    {(unmodifiedTotals.totalTanks / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                    <span className="text-xs font-normal text-zinc-400 ml-1 mr-1">{isRtl ? 'طن' : 'T'}</span>
-                  </div>
-                  <div className="text-[10px] text-zinc-400 mt-0.5 font-bold">
-                    {unmodifiedTotals.totalIntake > 0 ? ((unmodifiedTotals.totalTanks / unmodifiedTotals.totalIntake) * 100).toFixed(1) : 0}%
-                  </div>
-                </div>
-              </div>
-
-              {/* MultiSelect Floating Filter Bar */}
-              <div className="bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 text-xs font-black text-zinc-700 dark:text-zinc-300 ml-2">
-                    <Sliders className="w-4 h-4 text-emerald-500" />
-                    <span>{isRtl ? 'فلاتر سريعة:' : 'Filters:'}</span>
-                  </div>
-
-                  <MultiSelect
-                    label={isRtl ? 'الأصناف' : 'Varieties'}
-                    options={filterOptions.varieties}
-                    selected={selectedVarieties}
-                    onChange={setSelectedVarieties}
-                    icon={<Tag size={13} className="text-emerald-500" />}
-                    lang={lang}
-                  />
-
-                  <MultiSelect
-                    label={isRtl ? 'الموردين' : 'Suppliers'}
-                    options={filterOptions.suppliers.map(s => ({ id: s, label: s }))}
-                    selected={selectedMultiSuppliers}
-                    onChange={setSelectedMultiSuppliers}
-                    icon={<User size={13} className="text-teal-500" />}
-                    lang={lang}
-                  />
-
-                  <MultiSelect
-                    label={isRtl ? 'المخازن' : 'Stores'}
-                    options={filterOptions.stores.map(s => ({ id: s, label: s }))}
-                    selected={selectedMultiStores}
-                    onChange={setSelectedMultiStores}
-                    icon={<Building2 size={13} className="text-amber-500" />}
-                    lang={lang}
-                  />
-
-                  <MultiSelect
-                    label={isRtl ? 'المواقع والتعبئة' : 'Packaging'}
-                    options={filterOptions.locations.map(l => ({ id: l, label: l }))}
-                    selected={selectedMultiLocations}
-                    onChange={setSelectedMultiLocations}
-                    icon={<MapPin size={13} className="text-cyan-500" />}
-                    lang={lang}
-                  />
-
-                  {(selectedVarieties.length > 0 || selectedMultiSuppliers.length > 0 || selectedMultiStores.length > 0 || selectedMultiLocations.length > 0) && (
-                    <button
-                      onClick={() => {
-                        setSelectedVarieties([]);
-                        setSelectedMultiSuppliers([]);
-                        setSelectedMultiStores([]);
-                        setSelectedMultiLocations([]);
-                      }}
-                      className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-2xl transition-colors cursor-pointer"
-                    >
-                      <RotateCcw size={12} />
-                      <span>{isRtl ? 'إعادة ضبط' : 'Reset'}</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="text-xs font-bold text-zinc-500 dark:text-zinc-400">
-                  {isRtl ? `عرض ${filteredData.length} حركة (${stats.totalTons.toFixed(1)} طن)` : `Showing ${filteredData.length} records (${stats.totalTons.toFixed(1)} T)`}
-                </div>
-              </div>
-
-              {/* Interactive Donut Charts Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                
-                {/* Donut Chart 1: Varieties */}
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 shadow-xs flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800 mb-3">
-                      <h4 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-                        <PieChartIcon className="w-4 h-4 text-emerald-500" />
-                        <span>{isRtl ? 'توزيع الأصناف والأوزان' : 'Varieties Breakdown'}</span>
-                      </h4>
-                      <span className="text-[11px] font-bold text-zinc-400">{varietyChartData.length} {isRtl ? 'أصناف' : 'varieties'}</span>
-                    </div>
-
-                    <div className="h-56 relative flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={varietyChartData}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={85}
-                            paddingAngle={3}
-                            onClick={(data: any) => setDrillDown({ type: 'variety', id: data.id, label: data.name })}
-                            className="cursor-pointer outline-none"
-                          >
-                            {varietyChartData.map((entry) => (
-                              <Cell 
-                                key={`cell-v-${entry.id}`} 
-                                fill={VARIETY_COLORS[entry.id] || '#64748b'} 
-                                className="hover:opacity-80 transition-opacity"
-                              />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            formatter={(value: any) => [`${(Number(value) / 1000).toFixed(2)} طن`, isRtl ? 'الكمية' : 'Quantity']}
-                            contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff' }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-
-                      {/* Center Total Text */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-xs font-bold text-zinc-400">{isRtl ? 'الإجمالي' : 'Total'}</span>
-                        <span className="text-base font-black text-zinc-900 dark:text-white">
-                          {stats.totalTons.toFixed(1)}
-                        </span>
-                        <span className="text-[10px] text-zinc-400">{isRtl ? 'طن' : 'Tons'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Progress bars list */}
-                  <div className="space-y-2 mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                    {varietyChartData.slice(0, 5).map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setDrillDown({ type: 'variety', id: item.id, label: item.name })}
-                        className="w-full text-right group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 p-1.5 rounded-xl transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <div className="flex items-center gap-1.5">
-                            <div 
-                              className="w-2.5 h-2.5 rounded-full shrink-0" 
-                              style={{ backgroundColor: VARIETY_COLORS[item.id] || '#64748b' }} 
-                            />
-                            <span className="font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-[120px]">{item.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-zinc-500 font-medium">{(item.value / 1000).toFixed(1)} {isRtl ? 'طن' : 'T'}</span>
-                            <span className="font-black text-zinc-900 dark:text-white">{item.percentage.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full rounded-full transition-all duration-500" 
-                            style={{ 
-                              width: `${item.percentage}%`,
-                              backgroundColor: VARIETY_COLORS[item.id] || '#64748b'
-                            }} 
-                          />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Donut Chart 2: Suppliers / Cost Centers */}
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 shadow-xs flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800 mb-3">
-                      <h4 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-                        <User className="w-4 h-4 text-teal-500" />
-                        <span>{isRtl ? 'أعلى الموردين ومراكز التكلفة' : 'Top Suppliers / Cost Centers'}</span>
-                      </h4>
-                      <span className="text-[11px] font-bold text-zinc-400">{supplierChartData.length} {isRtl ? 'مورد' : 'suppliers'}</span>
-                    </div>
-
-                    <div className="h-56 relative flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={supplierChartData}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={85}
-                            paddingAngle={3}
-                            onClick={(data: any) => setDrillDown({ type: 'supplier', id: data.id, label: data.name })}
-                            className="cursor-pointer outline-none"
-                          >
-                            {supplierChartData.map((entry) => (
-                              <Cell 
-                                key={`cell-s-${entry.id}`} 
-                                fill={entry.color} 
-                                className="hover:opacity-80 transition-opacity"
-                              />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            formatter={(value: any) => [`${(Number(value) / 1000).toFixed(2)} طن`, isRtl ? 'الكمية' : 'Quantity']}
-                            contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff' }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-
-                      {/* Center Total Text */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-xs font-bold text-zinc-400">{isRtl ? 'الموردين' : 'Suppliers'}</span>
-                        <span className="text-base font-black text-zinc-900 dark:text-white">
-                          {stats.uniqueSuppliers}
-                        </span>
-                        <span className="text-[10px] text-zinc-400">{isRtl ? 'مورد' : 'Vendors'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Progress bars list */}
-                  <div className="space-y-2 mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                    {supplierChartData.slice(0, 5).map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setDrillDown({ type: 'supplier', id: item.id, label: item.name })}
-                        className="w-full text-right group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 p-1.5 rounded-xl transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <div className="flex items-center gap-1.5">
-                            <div 
-                              className="w-2.5 h-2.5 rounded-full shrink-0" 
-                              style={{ backgroundColor: item.color }} 
-                            />
-                            <span className="font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-[120px]">{item.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-zinc-500 font-medium">{(item.value / 1000).toFixed(1)} {isRtl ? 'طن' : 'T'}</span>
-                            <span className="font-black text-zinc-900 dark:text-white">{item.percentage.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full rounded-full transition-all duration-500" 
-                            style={{ 
-                              width: `${item.percentage}%`,
-                              backgroundColor: item.color
-                            }} 
-                          />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Donut Chart 3: Storage & Packaging */}
-                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 shadow-xs flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800 mb-3">
-                      <h4 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-                        <Container className="w-4 h-4 text-cyan-500" />
-                        <span>{isRtl ? 'التعبئة والتخزين (تانكات / براميل)' : 'Storage & Packaging'}</span>
-                      </h4>
-                      <span className="text-[11px] font-bold text-zinc-400">{storageChartData.length} {isRtl ? 'أوعية' : 'types'}</span>
-                    </div>
-
-                    <div className="h-56 relative flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={storageChartData}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={85}
-                            paddingAngle={3}
-                            onClick={(data: any) => setDrillDown({ type: 'location', id: data.id, label: data.name })}
-                            className="cursor-pointer outline-none"
-                          >
-                            {storageChartData.map((entry) => (
-                              <Cell 
-                                key={`cell-l-${entry.id}`} 
-                                fill={entry.color} 
-                                className="hover:opacity-80 transition-opacity"
-                              />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            formatter={(value: any) => [`${(Number(value) / 1000).toFixed(2)} طن`, isRtl ? 'الكمية' : 'Quantity']}
-                            contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff' }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-
-                      {/* Center Total Text */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-xs font-bold text-zinc-400">{isRtl ? 'براميل/تانك' : 'Storage'}</span>
-                        <span className="text-base font-black text-zinc-900 dark:text-white">
-                          {(stats.tankTons > 0 ? stats.tankTons : stats.barrelTons).toFixed(1)}
-                        </span>
-                        <span className="text-[10px] text-zinc-400">{isRtl ? 'طن' : 'Tons'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Progress bars list */}
-                  <div className="space-y-2 mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                    {storageChartData.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setDrillDown({ type: 'location', id: item.id, label: item.name })}
-                        className="w-full text-right group hover:bg-zinc-50 dark:hover:bg-zinc-800/50 p-1.5 rounded-xl transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <div className="flex items-center gap-1.5">
-                            <div 
-                              className="w-2.5 h-2.5 rounded-full shrink-0" 
-                              style={{ backgroundColor: item.color }} 
-                            />
-                            <span className="font-bold text-zinc-700 dark:text-zinc-300 truncate max-w-[120px]">{item.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-zinc-500 font-medium">{(item.value / 1000).toFixed(1)} {isRtl ? 'طن' : 'T'}</span>
-                            <span className="font-black text-zinc-900 dark:text-white">{item.percentage.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full rounded-full transition-all duration-500" 
-                            style={{ 
-                              width: `${item.percentage}%`,
-                              backgroundColor: item.color
-                            }} 
-                          />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Dynamic Drill Down Details Panel */}
-              <AnimatePresence>
-                {drillDown && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="bg-emerald-500/5 border-2 border-emerald-500/30 rounded-3xl p-5 overflow-hidden"
-                  >
-                    <div className="flex items-center justify-between pb-4 mb-4 border-b border-emerald-500/20">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-emerald-500 text-white rounded-2xl shadow-sm">
-                          <Eye className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                              {drillDown.type === 'variety' ? (isRtl ? 'تفاصيل الصنف المحدد' : 'Selected Variety Details') :
-                               drillDown.type === 'supplier' ? (isRtl ? 'تفاصيل المورد المحدد' : 'Selected Supplier Details') :
-                               (isRtl ? 'تفاصيل الموقع المحدد' : 'Selected Location Details')}
-                            </span>
-                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-md text-xs font-black">
-                              {drillDownRecords.length} {isRtl ? 'حركة' : 'records'}
-                            </span>
-                          </div>
-                          <h3 className="text-base font-black text-zinc-900 dark:text-white mt-0.5">
-                            {drillDown.label}
-                          </h3>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <span className="text-xs text-zinc-500 font-bold block">{isRtl ? 'إجمالي الكمية' : 'Total Qty'}</span>
-                          <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                            {(drillDownRecords.reduce((acc, r) => acc + r.quantityKg, 0) / 1000).toFixed(2)} {isRtl ? 'طن' : 'Tons'}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setDrillDown(null)}
-                          className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Drill-down records cards grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
-                      {drillDownRecords.map((r, idx) => (
-                        <div 
-                          key={`dd-${r.id}-${idx}`}
-                          onClick={() => setSelectedRecord(r)}
-                          className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 p-3.5 rounded-2xl hover:border-emerald-500/50 hover:shadow-md transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate max-w-[160px]">
-                              {r.itemName}
-                            </span>
-                            <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
-                              {(r.quantityKg / 1000).toFixed(2)} {isRtl ? 'طن' : 'T'}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 pt-1.5 border-t border-zinc-100 dark:border-zinc-800">
-                            <div>{isRtl ? 'التاريخ:' : 'Date:'} <span className="font-bold text-zinc-700 dark:text-zinc-300">{r.date}</span></div>
-                            <div>{isRtl ? 'حركة:' : 'Mov:'} <span className="font-bold text-zinc-700 dark:text-zinc-300">{r.movementNo || '-'}</span></div>
-                            <div>{isRtl ? 'المورد:' : 'Supplier:'} <span className="font-bold text-zinc-700 dark:text-zinc-300 truncate block">{r.costCenter || '-'}</span></div>
-                            <div>{isRtl ? 'التعبئة:' : 'Loc:'} <span className="font-bold text-zinc-700 dark:text-zinc-300 truncate block">{r.location || r.tankNo || '-'}</span></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Pivoted Supply Matrix Table with Pinned Columns */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 shadow-xs space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                  <div>
-                    <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-                      <TableIcon className="w-4 h-4 text-emerald-500" />
-                      <span>{isRtl ? 'جدول رصيد وتوزيع التوريد التفصيلي (مع تثبيت الأعمدة)' : 'Detailed Supply Balance Matrix with Pinned Columns'}</span>
-                    </h3>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      {isRtl ? 'عرض كميات كل صنف موزعة على الموردين والمواقع مع إمكانية تثبيت الأعمدة والتصدير' : 'Item distribution matrix with column pinning and export'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleExportMatrixExcel}
-                      className="px-3.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>{isRtl ? 'تصدير إكسيل' : 'Export Excel'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto max-h-[500px] border border-zinc-200 dark:border-zinc-800 rounded-2xl custom-scrollbar">
-                  <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-                    <thead className="bg-zinc-50 dark:bg-zinc-800/80 sticky top-0 z-20 text-zinc-600 dark:text-zinc-300 font-black border-b border-zinc-200 dark:border-zinc-700">
-                      <tr>
-                        {/* Item Code (Pinnable) */}
-                        <th 
-                          className={`p-3 whitespace-nowrap bg-zinc-50 dark:bg-zinc-800/80 ${
-                            pinnedColumns.includes('item_code') ? 'sticky right-0 z-30 shadow-sm' : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span>{isRtl ? 'كود الصنف' : 'Item Code'}</span>
-                            <button
-                              onClick={() => togglePin('item_code')}
-                              className={`p-1 rounded-md transition-colors cursor-pointer ${
-                                pinnedColumns.includes('item_code') ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40' : 'text-zinc-400 hover:text-zinc-600'
-                              }`}
-                              title={isRtl ? 'تثبيت العمود' : 'Pin Column'}
-                            >
-                              <Pin size={11} className={pinnedColumns.includes('item_code') ? 'fill-current' : ''} />
-                            </button>
-                          </div>
-                        </th>
-
-                        {/* Item Name (Pinnable) */}
-                        <th 
-                          className={`p-3 whitespace-nowrap bg-zinc-50 dark:bg-zinc-800/80 min-w-[200px] ${
-                            pinnedColumns.includes('item_name') ? (pinnedColumns.includes('item_code') ? 'sticky right-[120px] z-30 shadow-sm' : 'sticky right-0 z-30 shadow-sm') : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span>{isRtl ? 'اسم الصنف' : 'Item Description'}</span>
-                            <button
-                              onClick={() => togglePin('item_name')}
-                              className={`p-1 rounded-md transition-colors cursor-pointer ${
-                                pinnedColumns.includes('item_name') ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40' : 'text-zinc-400 hover:text-zinc-600'
-                              }`}
-                              title={isRtl ? 'تثبيت العمود' : 'Pin Column'}
-                            >
-                              <Pin size={11} className={pinnedColumns.includes('item_name') ? 'fill-current' : ''} />
-                            </button>
-                          </div>
-                        </th>
-
-                        <th className="p-3 whitespace-nowrap text-center">{isRtl ? 'الصنف' : 'Variety'}</th>
-                        
-                        {/* Dynamic Supplier Columns */}
-                        {pivotedSupplyMatrix.suppliers.map((sup) => (
-                          <th key={`th-sup-${sup}`} className="p-3 whitespace-nowrap text-center min-w-[110px]">
-                            {sup}
-                          </th>
-                        ))}
-
-                        {/* Total Column */}
-                        <th className="p-3 whitespace-nowrap text-center bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 sticky left-0 z-20">
-                          {isRtl ? 'الإجمالي (طن)' : 'Total (Tons)'}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                      {pivotedSupplyMatrix.items.map((row, idx) => (
-                        <tr 
-                          key={`piv-row-${row.code}-${idx}`} 
-                          className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors"
-                        >
-                          {/* Code */}
-                          <td 
-                            className={`p-3 font-mono font-bold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 ${
-                              pinnedColumns.includes('item_code') ? 'sticky right-0 z-10' : ''
-                            }`}
-                          >
-                            {row.sapCode || row.code}
-                          </td>
-
-                          {/* Name */}
-                          <td 
-                            className={`p-3 font-bold text-zinc-900 dark:text-white bg-white dark:bg-zinc-900 ${
-                              pinnedColumns.includes('item_name') ? (pinnedColumns.includes('item_code') ? 'sticky right-[120px] z-10' : 'sticky right-0 z-10') : ''
-                            }`}
-                          >
-                            {row.itemName}
-                          </td>
-
-                          {/* Variety Chip */}
-                          <td className="p-3 text-center">
-                            <span 
-                              className="px-2 py-0.5 rounded-md text-[10px] font-black"
-                              style={{ 
-                                backgroundColor: `${VARIETY_COLORS[row.variety] || '#64748b'}20`,
-                                color: VARIETY_COLORS[row.variety] || '#64748b'
-                              }}
-                            >
-                              {getFreshVarietyName(row.variety, isRtl)}
-                            </span>
-                          </td>
-
-                          {/* Quantities per supplier */}
-                          {pivotedSupplyMatrix.suppliers.map((sup) => {
-                            const valKg = row.suppliers[sup] || 0;
-                            const valTons = valKg / 1000;
-                            return (
-                              <td key={`cell-${row.code}-${sup}`} className="p-3 text-center font-mono">
-                                {valKg > 0 ? (
-                                  <span className="font-bold text-zinc-800 dark:text-zinc-200">
-                                    {valTons.toFixed(2)}
-                                  </span>
-                                ) : (
-                                  <span className="text-zinc-300 dark:text-zinc-700">-</span>
-                                )}
-                              </td>
-                            );
-                          })}
-
-                          {/* Total */}
-                          <td className="p-3 text-center font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 sticky left-0 z-10">
-                            {row.totalTons.toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-zinc-100 dark:bg-zinc-800 font-black text-zinc-900 dark:text-white sticky bottom-0 z-20 border-t-2 border-zinc-300 dark:border-zinc-700">
-                      <tr>
-                        <td 
-                          colSpan={3} 
-                          className={`p-3 text-right ${pinnedColumns.includes('item_code') || pinnedColumns.includes('item_name') ? 'sticky right-0 z-30 bg-zinc-100 dark:bg-zinc-800' : ''}`}
-                        >
-                          {isRtl ? 'إجمالي الأعمدة (طن)' : 'Column Totals (Tons)'}
-                        </td>
-                        {pivotedSupplyMatrix.suppliers.map((sup) => {
-                          const colTotalKg = pivotedSupplyMatrix.items.reduce((acc, row) => acc + (row.suppliers[sup] || 0), 0);
-                          return (
-                            <td key={`tf-${sup}`} className="p-3 text-center font-mono font-black">
-                              {(colTotalKg / 1000).toFixed(2)}
-                            </td>
-                          );
-                        })}
-                        <td className="p-3 text-center font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900 sticky left-0 z-30">
-                          {stats.totalTons.toFixed(2)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* Sub-Report 1: Cross-Tab Matrix (مصفوفة الأصناف مقابل الموردين) */}
-          {activeReportTab === 'matrix' && (
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden space-y-4 p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                <div>
-                  <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-                    <span>{isRtl ? 'مصفوفة تقاطع الأصناف والموردين (Pivot Matrix)' : 'Cross-Tab Item vs Supplier Pivot Matrix'}</span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold">
-                      {matrixData.items.length} {isRtl ? 'صنف' : 'items'} × {matrixData.suppliers.length} {isRtl ? 'مورد' : 'suppliers'}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    {isRtl ? 'جدول تقاطعي يوضح كمية كل صنف تم توريدها من كل مورد / مركز تكلفة على حدة' : 'Matrix displaying exact volume of each fresh item supplied by each cost center'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Toggle Units */}
-                  <div className="flex items-center p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-xs font-bold">
-                    <button
-                      onClick={() => setMatrixUnit('tons')}
-                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                        matrixUnit === 'tons'
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'text-zinc-600 dark:text-zinc-400'
-                      }`}
-                    >
-                      {isRtl ? 'بالطن' : 'Tons'}
-                    </button>
-                    <button
-                      onClick={() => setMatrixUnit('kg')}
-                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                        matrixUnit === 'kg'
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'text-zinc-600 dark:text-zinc-400'
-                      }`}
-                    >
-                      {isRtl ? 'بالكيلوجرام' : 'KG'}
-                    </button>
-                  </div>
-
-                  {/* Export Matrix Excel */}
-                  <button
-                    onClick={handleExportMatrixExcel}
-                    className="px-3.5 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>{isRtl ? 'تصدير المصفوفة Excel' : 'Export Matrix'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Scrollable Matrix Table */}
-              <div className="overflow-x-auto max-h-[600px] border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-                  <thead className="sticky top-0 z-20">
-                    <tr className="bg-zinc-100/95 dark:bg-zinc-800/95 backdrop-blur text-zinc-900 dark:text-white font-black border-b border-zinc-200 dark:border-zinc-700">
-                      <th className="py-3 px-3.5 sticky right-0 z-30 bg-zinc-100/95 dark:bg-zinc-800/95 shadow-sm min-w-[180px]">
-                        {isRtl ? 'الصنف / المورد ⤹' : 'Item / Supplier ⤹'}
-                      </th>
-                      {matrixData.suppliers.map(sup => (
-                        <th key={sup} className="py-3 px-3 whitespace-nowrap min-w-[140px] text-center">
-                          <span className="block truncate font-bold text-[11px]" title={sup}>{sup}</span>
-                        </th>
-                      ))}
-                      <th className="py-3 px-4 sticky left-0 z-30 bg-emerald-100/95 dark:bg-emerald-950/95 text-emerald-900 dark:text-emerald-200 min-w-[130px] text-center font-black">
-                        {isRtl ? 'إجمالي الصنف' : 'Item Total'}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                    {matrixData.items.map((item, idx) => {
-                      let rowSum = 0;
-                      return (
-                        <tr key={item} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
-                          <td className="py-3 px-3.5 font-black text-zinc-900 dark:text-white sticky right-0 z-10 bg-white dark:bg-zinc-900 shadow-sm">
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] flex items-center justify-center font-black shrink-0">
-                                {idx + 1}
-                              </span>
-                              <span className="truncate">{item}</span>
-                            </div>
-                          </td>
-                          {matrixData.suppliers.map(sup => {
-                            const val = matrixUnit === 'tons' ? matrixData.getTons(item, sup) : matrixData.getKg(item, sup);
-                            rowSum += matrixUnit === 'tons' ? matrixData.getTons(item, sup) : matrixData.getKg(item, sup);
-                            return (
-                              <td key={sup} className="py-3 px-3 text-center font-mono">
-                                {val > 0 ? (
-                                  <span className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 rounded font-bold border border-emerald-200 dark:border-emerald-800">
-                                    {val.toLocaleString('en-US', { minimumFractionDigits: matrixUnit === 'tons' ? 2 : 0, maximumFractionDigits: 2 })}
-                                  </span>
-                                ) : (
-                                  <span className="text-zinc-300 dark:text-zinc-700">-</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                          <td className="py-3 px-4 text-center font-mono font-black text-emerald-700 dark:text-emerald-300 sticky left-0 z-10 bg-emerald-50/80 dark:bg-emerald-950/60 shadow-sm">
-                            {rowSum.toLocaleString('en-US', { minimumFractionDigits: matrixUnit === 'tons' ? 2 : 0, maximumFractionDigits: 2 })} {matrixUnit === 'tons' ? 'طن' : 'كجم'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="sticky bottom-0 z-20">
-                    <tr className="bg-zinc-200/95 dark:bg-zinc-800/95 backdrop-blur font-black text-zinc-900 dark:text-white border-t-2 border-zinc-300 dark:border-zinc-700">
-                      <td className="py-3.5 px-3.5 sticky right-0 z-30 bg-zinc-200/95 dark:bg-zinc-800/95 shadow-sm">
-                        {isRtl ? 'إجمالي المورد:' : 'Supplier Total:'}
-                      </td>
-                      {matrixData.suppliers.map(sup => {
-                        let colSum = 0;
-                        matrixData.items.forEach(item => {
-                          colSum += matrixUnit === 'tons' ? matrixData.getTons(item, sup) : matrixData.getKg(item, sup);
-                        });
-                        return (
-                          <td key={sup} className="py-3.5 px-3 text-center font-mono font-black text-purple-700 dark:text-purple-300">
-                            {colSum.toLocaleString('en-US', { minimumFractionDigits: matrixUnit === 'tons' ? 2 : 0, maximumFractionDigits: 2 })}
-                          </td>
-                        );
-                      })}
-                      <td className="py-3.5 px-4 text-center font-mono font-black text-emerald-800 dark:text-emerald-200 sticky left-0 z-30 bg-emerald-200/95 dark:bg-emerald-900/95 shadow-sm text-sm">
-                        {(matrixUnit === 'tons' ? stats.totalTons : stats.totalKg).toLocaleString('en-US', { minimumFractionDigits: matrixUnit === 'tons' ? 2 : 0, maximumFractionDigits: 2 })} {matrixUnit === 'tons' ? 'طن' : 'كجم'}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Sub-Report 2: Logistics & Fleet Breakdown (تحليل أسطول النقل والشاحنات) */}
-          {activeReportTab === 'logistics' && (
-            <div className="space-y-6">
-              
-              {/* Fleet Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-zinc-400 font-bold block">{isRtl ? 'إجمالي أسطول السيارات' : 'Active Trucks Fleet'}</span>
-                    <span className="text-2xl font-black font-mono text-zinc-900 dark:text-white mt-1 block">
-                      {logisticsSummary.length} {isRtl ? 'سيارة' : 'Trucks'}
-                    </span>
-                  </div>
-                  <div className="w-12 h-12 rounded-2xl bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400 flex items-center justify-center">
-                    <Truck className="w-6 h-6" />
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-zinc-400 font-bold block">{isRtl ? 'إجمالي السائقين المسجلين' : 'Registered Drivers'}</span>
-                    <span className="text-2xl font-black font-mono text-zinc-900 dark:text-white mt-1 block">
-                      {stats.uniqueDrivers} {isRtl ? 'سائق' : 'Drivers'}
-                    </span>
-                  </div>
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                    <User className="w-6 h-6" />
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-zinc-400 font-bold block">{isRtl ? 'متوسط حمولة النقلة' : 'Avg Payload / Trip'}</span>
-                    <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
-                      {stats.movementCount > 0 ? (stats.totalTons / stats.movementCount).toFixed(2) : '0'} {isRtl ? 'طن' : 'Tons'}
-                    </span>
-                  </div>
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <TrendingUp className="w-6 h-6" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Fleet Table */}
-              <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-black text-sm text-zinc-900 dark:text-white">
-                      {isRtl ? 'تفاصيل أداء أسطول وسيارات التوريد' : 'Truck Logistics & Performance Table'}
-                    </h3>
-                    <p className="text-xs text-zinc-400">{isRtl ? 'عدد الرحلات والأوزان المنقولة ومتوسط الحمولة لكل سيارة' : 'Trip counts, total weight and average payload per truck'}</p>
-                  </div>
-
-                  <button
-                    onClick={handleExportLogisticsExcel}
-                    className="px-3.5 py-1.5 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>{isRtl ? 'تصدير اللوجستيات Excel' : 'Export Fleet Excel'}</span>
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                  <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-                    <thead>
-                      <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-black border-b border-zinc-200 dark:border-zinc-700">
-                        <th className="py-3 px-4">#</th>
-                        <th className="py-3 px-4">{isRtl ? 'رقم السيارة' : 'Truck No'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'السائقين' : 'Drivers'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'عدد النقلات' : 'Trips'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'إجمالي الكمية (طن)' : 'Total Tons'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'متوسط النقلة (طن)' : 'Avg Load'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'الأصناف المنقولة' : 'Transported Items'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'الموردين' : 'Suppliers'}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                      {logisticsSummary.map((t, idx) => (
-                        <tr key={t.truckNo} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                          <td className="py-3 px-4 font-mono text-zinc-400">{idx + 1}</td>
-                          <td className="py-3 px-4 font-mono font-black text-zinc-900 dark:text-white">
-                            <span className="bg-amber-100 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800">
-                              {t.truckNo}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-bold text-zinc-700 dark:text-zinc-300">
-                            {Array.from(t.drivers).join(' / ') || '-'}
-                          </td>
-                          <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">{t.count}</td>
-                          <td className="py-3 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">{t.totalTons.toFixed(2)} طن</td>
-                          <td className="py-3 px-4 font-mono font-bold text-teal-600 dark:text-teal-400">{t.avgLoadTons.toFixed(2)} طن</td>
-                          <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400 max-w-xs truncate" title={Array.from(t.items).join(', ')}>
-                            {Array.from(t.items).join(', ')}
-                          </td>
-                          <td className="py-3 px-4 text-zinc-500 max-w-xs truncate" title={Array.from(t.suppliers).join(', ')}>
-                            {Array.from(t.suppliers).join(', ')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* Sub-Report 3: Packaging & Tanks (تقرير التعبئة والتانكات والبراميل) */}
-          {activeReportTab === 'packaging' && (
-            <div className="space-y-6">
-              
-              {/* Packaging Comparison Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Barrels Card */}
-                <div className="bg-gradient-to-br from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-zinc-900 p-6 rounded-3xl border border-amber-200 dark:border-amber-900/60 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
-                        <Boxes className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-black text-base text-zinc-900 dark:text-white">
-                          {isRtl ? 'تعبئة البراميل (Barrels)' : 'Barrels Packaging'}
-                        </h3>
-                        <p className="text-xs text-amber-800 dark:text-amber-300 font-bold">{packagingSummary.barrels.count} {isRtl ? 'حركة استلام براميل' : 'movements'}</p>
-                      </div>
-                    </div>
-                    <span className="text-2xl font-black font-mono text-amber-700 dark:text-amber-400">
-                      {packagingSummary.barrels.totalTons.toFixed(2)} <span className="text-sm font-bold">طن</span>
-                    </span>
-                  </div>
-
-                  <div className="p-4 bg-white/80 dark:bg-zinc-900/80 rounded-2xl border border-amber-200/60 dark:border-amber-900/40 text-xs space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500 font-bold">{isRtl ? 'النسبة من إجمالي التوريد:' : 'Intake Share:'}</span>
-                      <span className="font-mono font-black text-zinc-900 dark:text-white">
-                        {stats.totalKg > 0 ? ((packagingSummary.barrels.totalKg / stats.totalKg) * 100).toFixed(1) : 0}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500 font-bold">{isRtl ? 'الأصناف المعبأة:' : 'Packed Items:'}</span>
-                      <span className="font-bold text-zinc-800 dark:text-zinc-200">{packagingSummary.barrels.items.size} {isRtl ? 'أصناف' : 'items'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500 font-bold">{isRtl ? 'الموردين:' : 'Suppliers:'}</span>
-                      <span className="font-bold text-zinc-800 dark:text-zinc-200">{packagingSummary.barrels.suppliers.size} {isRtl ? 'مورد' : 'suppliers'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tanks Card */}
-                <div className="bg-gradient-to-br from-cyan-50 to-teal-100/60 dark:from-cyan-950/30 dark:to-zinc-900 p-6 rounded-3xl border border-cyan-200 dark:border-cyan-900/60 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-cyan-600 text-white flex items-center justify-center shadow-md shadow-cyan-600/20">
-                        <Container className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-black text-base text-zinc-900 dark:text-white">
-                          {isRtl ? 'تعبئة التانكات (Tanks)' : 'Tanks Storage'}
-                        </h3>
-                        <p className="text-xs text-cyan-800 dark:text-cyan-300 font-bold">{packagingSummary.tanks.count} {isRtl ? 'حركة استلام تانكات' : 'movements'}</p>
-                      </div>
-                    </div>
-                    <span className="text-2xl font-black font-mono text-cyan-700 dark:text-cyan-400">
-                      {packagingSummary.tanks.totalTons.toFixed(2)} <span className="text-sm font-bold">طن</span>
-                    </span>
-                  </div>
-
-                  <div className="p-4 bg-white/80 dark:bg-zinc-900/80 rounded-2xl border border-cyan-200/60 dark:border-cyan-900/40 text-xs space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500 font-bold">{isRtl ? 'النسبة من إجمالي التوريد:' : 'Intake Share:'}</span>
-                      <span className="font-mono font-black text-zinc-900 dark:text-white">
-                        {stats.totalKg > 0 ? ((packagingSummary.tanks.totalKg / stats.totalKg) * 100).toFixed(1) : 0}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500 font-bold">{isRtl ? 'عدد التانكات النشطة:' : 'Active Tanks:'}</span>
-                      <span className="font-bold text-cyan-700 dark:text-cyan-400 font-mono">{packagingSummary.tanksList.length} {isRtl ? 'تانك' : 'tanks'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500 font-bold">{isRtl ? 'الأصناف بالتانكات:' : 'Tank Items:'}</span>
-                      <span className="font-bold text-zinc-800 dark:text-zinc-200">{packagingSummary.tanks.items.size} {isRtl ? 'أصناف' : 'items'}</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Tanks Allocated Table */}
-              <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-                      <Container className="w-4 h-4 text-cyan-500" />
-                      <span>{isRtl ? 'جدول تخصيص التانكات وحمولتها' : 'Tanks Allocation & Stored Volumes'}</span>
-                    </h3>
-                    <p className="text-xs text-zinc-400">{isRtl ? 'بيان بجميع التانكات المستخدمة والكميات المخزنة بداخلها' : 'List of all operational tanks and stored produce weight'}</p>
-                  </div>
-
-                  <button
-                    onClick={handleExportPackagingExcel}
-                    className="px-3.5 py-1.5 bg-cyan-50 dark:bg-cyan-950/40 hover:bg-cyan-100 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>{isRtl ? 'تصدير التانكات Excel' : 'Export Tanks Excel'}</span>
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                  <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-                    <thead>
-                      <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-black border-b border-zinc-200 dark:border-zinc-700">
-                        <th className="py-3 px-4">#</th>
-                        <th className="py-3 px-4">{isRtl ? 'رقم التانك' : 'Tank No'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'الصنف المخزن' : 'Item Stored'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'الكمية (طن)' : 'Volume (Tons)'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'الكمية (كجم)' : 'Volume (KG)'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'عدد الإضافات' : 'Fill Count'}</th>
-                        <th className="py-3 px-4">{isRtl ? 'الموردين' : 'Suppliers'}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                      {packagingSummary.tanksList.map((t, idx) => (
-                        <tr key={t.tankNo} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                          <td className="py-3 px-4 font-mono text-zinc-400">{idx + 1}</td>
-                          <td className="py-3 px-4 font-mono font-black text-cyan-700 dark:text-cyan-400">
-                            <span className="px-2.5 py-1 rounded bg-cyan-100 dark:bg-cyan-950 border border-cyan-300 dark:border-cyan-800">
-                              تانك {t.tankNo}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-black text-zinc-900 dark:text-white">{t.itemName || '-'}</td>
-                          <td className="py-3 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">{t.totalTons.toFixed(2)} طن</td>
-                          <td className="py-3 px-4 font-mono font-bold text-zinc-700 dark:text-zinc-300">{t.totalKg.toLocaleString()} كجم</td>
-                          <td className="py-3 px-4 font-mono">{t.count}</td>
-                          <td className="py-3 px-4 text-zinc-500 max-w-xs truncate" title={Array.from(t.suppliers).join(', ')}>
-                            {Array.from(t.suppliers).join(', ')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* Sub-Report 4: Daily Intake & Velocity (المسار والتوريد اليومي التراكمي) */}
-          {activeReportTab === 'daily' && (
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-5 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4 text-amber-500" />
-                    <span>{isRtl ? 'تقرير المسار ومعدل التوريد اليومي والتراكمي' : 'Daily Velocity & Cumulative Intake'}</span>
-                  </h3>
-                  <p className="text-xs text-zinc-400">{isRtl ? 'متابعة كمية التوريد لكل يوم والصنف الأكثر توريداً والكمية التراكمية' : 'Daily intake volumes, leading item per day and running cumulative totals'}</p>
-                </div>
-
-                <button
-                  onClick={handleExportDailyExcel}
-                  className="px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'تصدير التوريد اليومي Excel' : 'Export Daily Excel'}</span>
-                </button>
-              </div>
-
-              <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-                  <thead>
-                    <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-black border-b border-zinc-200 dark:border-zinc-700">
-                      <th className="py-3 px-4">#</th>
-                      <th className="py-3 px-4">{isRtl ? 'التاريخ' : 'Date'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'توريد اليوم (طن)' : 'Day Intake (Tons)'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'التراكمي (طن)' : 'Cumulative (Tons)'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'عدد الحركات' : 'Movements'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'أعلى صنف توريداً' : 'Top Item'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'الموردين' : 'Suppliers'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'السيارات' : 'Trucks'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                    {dailyTimelineDetailed.map((d, idx) => (
-                      <tr key={d.date} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                        <td className="py-3 px-4 font-mono text-zinc-400">{idx + 1}</td>
-                        <td className="py-3 px-4 font-mono font-bold text-zinc-900 dark:text-white">{d.date}</td>
-                        <td className="py-3 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">
-                          {d.totalTons.toFixed(2)} طن
-                        </td>
-                        <td className="py-3 px-4 font-mono font-black text-teal-700 dark:text-teal-300">
-                          {d.cumulativeTons.toFixed(2)} طن
-                        </td>
-                        <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">{d.count}</td>
-                        <td className="py-3 px-4 font-bold text-zinc-800 dark:text-zinc-200">
-                          <span>{d.topItem}</span>
-                          <span className="text-[10px] text-zinc-400 font-mono ml-1 font-normal">({d.topItemTons.toFixed(2)} طن)</span>
-                        </td>
-                        <td className="py-3 px-4 font-mono">{d.suppliers.size}</td>
-                        <td className="py-3 px-4 font-mono">{d.trucks.size}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Sub-Report 5: PO & SAP Reconciliation (مطابقة أوامر الشراء PO وكود ساب) */}
-          {activeReportTab === 'poRecon' && (
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-5 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-                    <FileCheck2 className="w-4 h-4 text-purple-500" />
-                    <span>{isRtl ? 'مطابقة أوامر الشراء (Purchase Orders) وأكواد SAP' : 'PO & SAP Reconciliation'}</span>
-                  </h3>
-                  <p className="text-xs text-zinc-400">{isRtl ? 'تجميع الكميات الموردة والمطابقة تحت كل أمر شراء PO ومستندات الإضافة' : 'Consolidated intake quantities and documents per Purchase Order'}</p>
-                </div>
-
-                <button
-                  onClick={handleExportPOExcel}
-                  className="px-3.5 py-1.5 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'تصدير مطابقة PO Excel' : 'Export PO Excel'}</span>
-                </button>
-              </div>
-
-              <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-                  <thead>
-                    <tr className="bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-black border-b border-zinc-200 dark:border-zinc-700">
-                      <th className="py-3 px-4">#</th>
-                      <th className="py-3 px-4">{isRtl ? 'أمر الشراء PO' : 'PO Number'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'كود SAP' : 'SAP Code'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'الصنف' : 'Item'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'المورد / مركز التكلفة' : 'Supplier'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'الكمية (طن)' : 'Total Tons'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'الكمية (كجم)' : 'Total KG'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'عدد الحركات' : 'Movements'}</th>
-                      <th className="py-3 px-4">{isRtl ? 'POST DOCUMENT' : 'Post Docs'}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                    {poReconciliation.map((p, idx) => (
-                      <tr key={p.po} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                        <td className="py-3 px-4 font-mono text-zinc-400">{idx + 1}</td>
-                        <td className="py-3 px-4 font-mono font-black text-purple-700 dark:text-purple-300">
-                          <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-950 border border-purple-300 dark:border-purple-800">
-                            {p.po}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-zinc-600 dark:text-zinc-400">{Array.from(p.sapCodes).join(' / ') || '-'}</td>
-                        <td className="py-3 px-4 font-bold text-zinc-900 dark:text-white">{Array.from(p.items).join(', ')}</td>
-                        <td className="py-3 px-4 text-zinc-700 dark:text-zinc-300">{Array.from(p.suppliers).join(', ')}</td>
-                        <td className="py-3 px-4 font-mono font-black text-emerald-600 dark:text-emerald-400">{p.totalTons.toFixed(2)} طن</td>
-                        <td className="py-3 px-4 font-mono font-bold text-zinc-600 dark:text-zinc-400">{p.totalKg.toLocaleString()} كجم</td>
-                        <td className="py-3 px-4 font-mono">{p.count}</td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-zinc-500">{Array.from(p.postDocuments).join(' / ') || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-        </div>
       )}
 
       {/* 6. Interactive KPI Breakdown Modal (نافذة تفاعلية منبثقة عند النقر على بطاقات المؤشرات) */}
@@ -4376,51 +2997,85 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       .filter(i => modalSearchTerm ? i.itemName.toLowerCase().includes(modalSearchTerm.toLowerCase()) : true)
                       .map((item, idx) => {
                         const percent = stats.totalKg > 0 ? ((item.totalKg / stats.totalKg) * 100).toFixed(1) : '0';
+                        const isExpanded = expandedItem === item.itemName;
                         return (
                           <div
                             key={item.itemName}
-                            className="p-4 bg-zinc-50 dark:bg-zinc-800/60 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 rounded-2xl border border-zinc-200 dark:border-zinc-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                            className="bg-zinc-50 dark:bg-zinc-800/60 rounded-2xl border border-zinc-200 dark:border-zinc-700 transition-all overflow-hidden"
                           >
-                            <div className="flex items-start gap-3">
-                              <span className="w-7 h-7 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-black font-mono flex items-center justify-center text-xs shrink-0 mt-0.5">
-                                {idx + 1}
-                              </span>
-                              <div>
-                                <h4 className="font-black text-sm text-zinc-900 dark:text-white leading-tight">
-                                  {item.itemName}
-                                </h4>
-                                <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-zinc-500">
-                                  {item.sapCode && <span className="font-mono font-bold bg-zinc-200/70 dark:bg-zinc-700 px-1.5 py-0.2 rounded">SAP: {item.sapCode}</span>}
-                                  <span>• {item.count} حركات</span>
-                                  <span>• {item.suppliers.size} موردين</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-4 justify-between sm:justify-end">
-                              <div className="text-left sm:text-right">
-                                <div className="font-black font-mono text-base text-emerald-600 dark:text-emerald-400">
-                                  {item.totalTons.toFixed(2)} <span className="text-xs font-bold">طن</span>
-                                </div>
-                                <div className="text-[11px] font-mono text-zinc-400">
-                                  {item.totalKg.toLocaleString()} كجم ({percent}%)
+                            <div 
+                              onClick={() => setExpandedItem(isExpanded ? null : item.itemName)}
+                              className="p-4 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="w-7 h-7 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-black font-mono flex items-center justify-center text-xs shrink-0 mt-0.5">
+                                  {idx + 1}
+                                </span>
+                                <div>
+                                  <h4 className="font-black text-sm text-zinc-900 dark:text-white leading-tight flex items-center gap-2">
+                                    <span>{item.itemName}</span>
+                                    <span className="text-[10px] font-normal text-emerald-600 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded-full">
+                                      {isExpanded ? 'إخفاء الحصص ▲' : 'عرض حصص الموردين ▼'}
+                                    </span>
+                                  </h4>
+                                  <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-zinc-500">
+                                    {item.sapCode && <span className="font-mono font-bold bg-zinc-200/70 dark:bg-zinc-700 px-1.5 py-0.2 rounded">SAP: {item.sapCode}</span>}
+                                    <span>• {item.count} حركات</span>
+                                    <span>• {item.suppliers.size} موردين</span>
+                                  </div>
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => {
-                                  setSelectedItem(item.itemName);
-                                  setActiveView('table');
-                                  setKpiModal(null);
-                                  toast.success(isRtl ? `تمت تصفية الجدول لعرض حركات (${item.itemName})` : `Filtered by ${item.itemName}`);
-                                }}
-                                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs active:scale-95"
-                                title={isRtl ? 'تصفية الجدول بهذا الصنف' : 'Filter table by this item'}
-                              >
-                                <Filter className="w-3.5 h-3.5" />
-                                <span>{isRtl ? 'تصفية الجدول' : 'Filter'}</span>
-                              </button>
+                              <div className="flex items-center gap-4 justify-between sm:justify-end">
+                                <div className="text-left sm:text-right">
+                                  <div className="font-black font-mono text-base text-emerald-600 dark:text-emerald-400">
+                                    {item.totalTons.toFixed(2)} <span className="text-xs font-bold">طن</span>
+                                  </div>
+                                  <div className="text-[11px] font-mono text-zinc-400">
+                                    {item.totalKg.toLocaleString()} كجم ({percent}%)
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedItem(item.itemName);
+                                    setActiveView('table');
+                                    setKpiModal(null);
+                                    toast.success(isRtl ? `تمت تصفية الجدول لعرض حركات (${item.itemName})` : `Filtered by ${item.itemName}`);
+                                  }}
+                                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs active:scale-95"
+                                  title={isRtl ? 'تصفية الجدول بهذا الصنف' : 'Filter table by this item'}
+                                >
+                                  <Filter className="w-3.5 h-3.5" />
+                                  <span>{isRtl ? 'تصفية الجدول' : 'Filter'}</span>
+                                </button>
+                              </div>
                             </div>
+
+                            {/* Expanded Suppliers Share breakdown */}
+                            {isExpanded && (
+                              <div className="px-4 pb-4 pt-2 bg-white/70 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-700 space-y-2">
+                                <h5 className="font-bold text-xs text-zinc-700 dark:text-zinc-300">
+                                  {isRtl ? 'حصة كل مورد من هذا الصنف:' : 'Suppliers shares for this item:'}
+                                </h5>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {Array.from(item.suppliersMap.entries()).sort((a, b) => b[1] - a[1]).map(([supName, supKg]) => {
+                                    const supSharePercent = item.totalKg > 0 ? ((supKg / item.totalKg) * 100).toFixed(1) : '0';
+                                    const supTons = supKg / 1000;
+                                    return (
+                                      <div key={supName} className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between text-xs">
+                                        <span className="font-bold text-zinc-800 dark:text-zinc-200">{supName}</span>
+                                        <div className="text-left font-mono">
+                                          <span className="font-black text-emerald-600 dark:text-emerald-400">{supTons.toFixed(2)} طن</span>
+                                          <span className="text-[10px] text-zinc-400 ml-1.5">({supSharePercent}%)</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -4449,51 +3104,85 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       .filter(s => modalSearchTerm ? s.costCenter.toLowerCase().includes(modalSearchTerm.toLowerCase()) : true)
                       .map((sup, idx) => {
                         const percent = stats.totalKg > 0 ? ((sup.totalKg / stats.totalKg) * 100).toFixed(1) : '0';
+                        const isExpanded = expandedSupplier === sup.costCenter;
                         return (
                           <div
                             key={sup.costCenter}
-                            className="p-4 bg-zinc-50 dark:bg-zinc-800/60 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 rounded-2xl border border-zinc-200 dark:border-zinc-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                            className="bg-zinc-50 dark:bg-zinc-800/60 rounded-2xl border border-zinc-200 dark:border-zinc-700 transition-all overflow-hidden"
                           >
-                            <div className="flex items-start gap-3">
-                              <span className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-black font-mono flex items-center justify-center text-xs shrink-0 mt-0.5">
-                                {idx + 1}
-                              </span>
-                              <div>
-                                <h4 className="font-black text-sm text-zinc-900 dark:text-white leading-tight">
-                                  {sup.costCenter}
-                                </h4>
-                                <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-zinc-500">
-                                  {sup.costCenterCode && <span className="font-mono font-bold bg-zinc-200/70 dark:bg-zinc-700 px-1.5 py-0.2 rounded">كود: {sup.costCenterCode}</span>}
-                                  <span>• {sup.count} حركات</span>
-                                  <span>• أصناف: {Array.from(sup.items).join('، ')}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-4 justify-between sm:justify-end">
-                              <div className="text-left sm:text-right">
-                                <div className="font-black font-mono text-base text-purple-600 dark:text-purple-400">
-                                  {sup.totalTons.toFixed(2)} <span className="text-xs font-bold">طن</span>
-                                </div>
-                                <div className="text-[11px] font-mono text-zinc-400">
-                                  {sup.totalKg.toLocaleString()} كجم ({percent}%)
+                            <div 
+                              onClick={() => setExpandedSupplier(isExpanded ? null : sup.costCenter)}
+                              className="p-4 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-black font-mono flex items-center justify-center text-xs shrink-0 mt-0.5">
+                                  {idx + 1}
+                                </span>
+                                <div>
+                                  <h4 className="font-black text-sm text-zinc-900 dark:text-white leading-tight flex items-center gap-2">
+                                    <span>{sup.costCenter}</span>
+                                    <span className="text-[10px] font-normal text-purple-600 bg-purple-100 dark:bg-purple-950 px-2 py-0.5 rounded-full">
+                                      {isExpanded ? 'إخفاء الأصناف ▲' : 'عرض الأصناف والكميات ▼'}
+                                    </span>
+                                  </h4>
+                                  <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-zinc-500">
+                                    {sup.costCenterCode && <span className="font-mono font-bold bg-zinc-200/70 dark:bg-zinc-700 px-1.5 py-0.2 rounded">كود: {sup.costCenterCode}</span>}
+                                    <span>• {sup.count} حركات</span>
+                                    <span>• {sup.items.size} أصناف</span>
+                                  </div>
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => {
-                                  setSelectedSupplier(sup.costCenter);
-                                  setActiveView('table');
-                                  setKpiModal(null);
-                                  toast.success(isRtl ? `تمت تصفية الجدول لعرض حركات (${sup.costCenter})` : `Filtered by ${sup.costCenter}`);
-                                }}
-                                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs active:scale-95"
-                                title={isRtl ? 'تصفية الجدول بهذا المورد' : 'Filter table by this supplier'}
-                              >
-                                <Filter className="w-3.5 h-3.5" />
-                                <span>{isRtl ? 'تصفية الجدول' : 'Filter'}</span>
-                              </button>
+                              <div className="flex items-center gap-4 justify-between sm:justify-end">
+                                <div className="text-left sm:text-right">
+                                  <div className="font-black font-mono text-base text-purple-600 dark:text-purple-400">
+                                    {sup.totalTons.toFixed(2)} <span className="text-xs font-bold">طن</span>
+                                  </div>
+                                  <div className="text-[11px] font-mono text-zinc-400">
+                                    {sup.totalKg.toLocaleString()} كجم ({percent}%)
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedSupplier(sup.costCenter);
+                                    setActiveView('table');
+                                    setKpiModal(null);
+                                    toast.success(isRtl ? `تمت تصفية الجدول لعرض حركات (${sup.costCenter})` : `Filtered by ${sup.costCenter}`);
+                                  }}
+                                  className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs active:scale-95"
+                                  title={isRtl ? 'تصفية الجدول بهذا المورد' : 'Filter table by this supplier'}
+                                >
+                                  <Filter className="w-3.5 h-3.5" />
+                                  <span>{isRtl ? 'تصفية الجدول' : 'Filter'}</span>
+                                </button>
+                              </div>
                             </div>
+
+                            {/* Expanded Items & Quantities breakdown */}
+                            {isExpanded && (
+                              <div className="px-4 pb-4 pt-2 bg-white/70 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-700 space-y-2">
+                                <h5 className="font-bold text-xs text-zinc-700 dark:text-zinc-300">
+                                  {isRtl ? 'الأصناف والكميات الموردة من هذا المورد:' : 'Items & quantities supplied by this supplier:'}
+                                </h5>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {Array.from(sup.itemsMap.entries()).sort((a, b) => b[1] - a[1]).map(([itemName, itemKg]) => {
+                                    const itemSharePercent = sup.totalKg > 0 ? ((itemKg / sup.totalKg) * 100).toFixed(1) : '0';
+                                    const itemTons = itemKg / 1000;
+                                    return (
+                                      <div key={itemName} className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between text-xs">
+                                        <span className="font-bold text-zinc-800 dark:text-zinc-200">{itemName}</span>
+                                        <div className="text-left font-mono">
+                                          <span className="font-black text-purple-600 dark:text-purple-400">{itemTons.toFixed(2)} طن</span>
+                                          <span className="text-[10px] text-zinc-400 ml-1.5">({itemSharePercent}%)</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -4619,25 +3308,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
                       <button
                         onClick={() => {
-                          setActiveView('reports');
-                          setActiveReportTab('matrix');
-                          setKpiModal(null);
-                        }}
-                        className="px-4 py-2 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 text-zinc-800 dark:text-zinc-200 rounded-xl font-bold text-xs flex items-center gap-2 cursor-pointer"
-                      >
-                        <Grid3X3 className="w-3.5 h-3.5" />
-                        <span>عرض مصفوفة الأصناف والموردين</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
                           setActiveView('analytics');
                           setKpiModal(null);
                         }}
                         className="px-4 py-2 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 text-zinc-800 dark:text-zinc-200 rounded-xl font-bold text-xs flex items-center gap-2 cursor-pointer"
                       >
                         <BarChart3 className="w-3.5 h-3.5" />
-                        <span>عرض الرسوم البيانية</span>
+                        <span>عرض الرسوم البيانية والتحليلات</span>
                       </button>
                     </div>
                   </div>
