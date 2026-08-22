@@ -2183,10 +2183,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         
         {/* Total Weight in Tons */}
         <div 
-          onClick={() => setKpiModal('totals')}
+          onClick={() => setKpiModal('items')}
           role="button"
           tabIndex={0}
-          title={isRtl ? 'انقر لعرض التحليل الشامل لإجمالي الكميات والتعبئة' : 'Click for total intake & packaging overview'}
+          title={isRtl ? 'انقر لعرض تفاصيل الأصناف وكمياتها بشاشة كاملة' : 'Click to view full screen items breakdown'}
           className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white p-3 rounded-xl shadow-xs flex flex-col justify-between col-span-2 sm:col-span-1 lg:col-span-2 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all group active:scale-95 select-none relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 left-0 h-1 bg-white/30 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
@@ -2784,7 +2784,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       </td>
                     )}
                     <td colSpan={8} className="py-3.5 px-3 text-xs text-zinc-600 dark:text-zinc-300 font-bold">
-                      {isRtl ? `الموردين: ${stats.uniqueSuppliers} | السيارات: ${stats.uniqueTrucks} | براميل: ${stats.barrelTons.toFixed(2)} طن | تانكات: ${stats.tankTons.toFixed(2)} طن` : `Suppliers: ${stats.uniqueSuppliers} | Trucks: ${stats.uniqueTrucks} | Barrels: ${stats.barrelTons.toFixed(2)}t | Tanks: ${stats.tankTons.toFixed(2)}t`}
+                      {isRtl ? `الموردين: ${stats.uniqueSuppliers} | السيارات: ${stats.uniqueTrucks}` : `Suppliers: ${stats.uniqueSuppliers} | Trucks: ${stats.uniqueTrucks}`}
                     </td>
                   </tr>
                 </tfoot>
@@ -2857,10 +2857,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         />
       )}
 
-      {/* 6. Interactive KPI Breakdown Modal (نافذة تفاعلية منبثقة عند النقر على بطاقات المؤشرات) */}
+      {/* 6. Interactive KPI Breakdown Modal (نافذة تفاعلية بشاشة كاملة عند النقر على بطاقات المؤشرات) */}
       {kpiModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-4xl w-full border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-900 w-full h-full sm:h-[95vh] sm:max-w-[96vw] sm:rounded-3xl border-0 sm:border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-98 duration-200">
             
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-zinc-800 text-white p-5 flex items-center justify-between shrink-0">
@@ -2931,30 +2931,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   <span className="font-mono text-[10px] bg-black/20 px-1 rounded-full">{suppliersSummary.length}</span>
                 </button>
 
-                <button
-                  onClick={() => setKpiModal('trucks')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                    kpiModal === 'trucks'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700'
-                  }`}
-                >
-                  <Truck className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'السيارات' : 'Trucks'}</span>
-                  <span className="font-mono text-[10px] bg-black/20 px-1 rounded-full">{logisticsSummary.length}</span>
-                </button>
 
-                <button
-                  onClick={() => setKpiModal('totals')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
-                    kpiModal === 'totals'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700'
-                  }`}
-                >
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'الإجماليات' : 'Overview'}</span>
-                </button>
               </div>
 
               {/* Fast Search Input */}
@@ -3264,29 +3241,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               {/* TAB 4: TOTALS & GENERAL BREAKDOWN */}
               {(kpiModal === 'totals' || kpiModal === 'movements' || kpiModal === 'packaging') && (
                 <div className="space-y-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800">
+                  <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 max-w-md">
+                    <div className="p-5 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-800">
                       <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 block">إجمالي التوريد</span>
                       <span className="text-2xl font-black font-mono text-emerald-700 dark:text-emerald-400 mt-1 block">
                         {stats.totalTons.toFixed(2)} طن
                       </span>
                       <span className="text-[11px] font-mono text-emerald-600/80 mt-0.5 block">{stats.totalKg.toLocaleString()} كجم</span>
-                    </div>
-
-                    <div className="p-4 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-800">
-                      <span className="text-xs font-bold text-amber-800 dark:text-amber-300 block">تعبئة البراميل</span>
-                      <span className="text-2xl font-black font-mono text-amber-700 dark:text-amber-400 mt-1 block">
-                        {packagingSummary.barrels.totalTons.toFixed(2)} طن
-                      </span>
-                      <span className="text-[11px] text-amber-700 font-bold mt-0.5 block">{packagingSummary.barrels.count} حركة</span>
-                    </div>
-
-                    <div className="p-4 bg-cyan-50 dark:bg-cyan-950/40 rounded-2xl border border-cyan-200 dark:border-cyan-800">
-                      <span className="text-xs font-bold text-cyan-800 dark:text-cyan-300 block">تعبئة التانكات</span>
-                      <span className="text-2xl font-black font-mono text-cyan-700 dark:text-cyan-400 mt-1 block">
-                        {packagingSummary.tanks.totalTons.toFixed(2)} طن
-                      </span>
-                      <span className="text-[11px] text-cyan-700 font-bold mt-0.5 block">{packagingSummary.tanksList.length} تانك نشط</span>
                     </div>
                   </div>
 

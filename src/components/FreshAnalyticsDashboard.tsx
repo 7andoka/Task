@@ -192,7 +192,7 @@ export const FreshAnalyticsDashboard: React.FC<FreshAnalyticsDashboardProps> = (
       </div>
 
       {/* 2. Top Summary Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-zinc-900 rounded-3xl p-4 border border-zinc-200 dark:border-zinc-800 shadow-sm">
           <span className="text-[11px] font-bold text-zinc-400 block">{isRtl ? 'إجمالي الكمية المستلمة' : 'Total Intake'}</span>
           <strong className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
@@ -220,16 +220,6 @@ export const FreshAnalyticsDashboard: React.FC<FreshAnalyticsDashboardProps> = (
           </strong>
           <span className="text-[10px] text-zinc-500 font-bold mt-1 block">
             {uniqueDrivers} {isRtl ? 'سائق مشارك' : 'drivers'}
-          </span>
-        </div>
-
-        <div className="bg-white dark:bg-zinc-900 rounded-3xl p-4 border border-zinc-200 dark:border-zinc-800 shadow-sm">
-          <span className="text-[11px] font-bold text-zinc-400 block">{isRtl ? 'نسبة البراميل إلى التانك' : 'Barrels / Tanks'}</span>
-          <strong className="text-xl font-black font-mono text-cyan-600 dark:text-cyan-400 mt-1 block">
-            {barrelTons.toFixed(1)} / {tankTons.toFixed(1)} <span className="text-xs font-sans">طن</span>
-          </strong>
-          <span className="text-[10px] text-zinc-500 font-bold mt-1 block">
-            {totalTons > 0 ? ((barrelTons / totalTons) * 100).toFixed(0) : 0}% براميل • {totalTons > 0 ? ((tankTons / totalTons) * 100).toFixed(0) : 0}% تانكات
           </span>
         </div>
       </div>
@@ -403,101 +393,49 @@ export const FreshAnalyticsDashboard: React.FC<FreshAnalyticsDashboardProps> = (
         </div>
       </div>
 
-      {/* 5. Variety & Storage Donuts Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Variety Donut */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-3">
-          <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-            <PieChartIcon className="w-4 h-4 text-amber-500" />
-            <span>{isRtl ? 'توزيع الأصناف حسب نوع الزيتون' : 'Intake by Variety'}</span>
-          </h3>
+      {/* 5. Variety Donut */}
+      <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-3 max-w-xl mx-auto w-full">
+        <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
+          <PieChartIcon className="w-4 h-4 text-amber-500" />
+          <span>{isRtl ? 'توزيع الأصناف حسب نوع الزيتون' : 'Intake by Variety'}</span>
+        </h3>
 
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Tooltip
-                  formatter={(val: any, name: any) => [`${Number(val).toFixed(2)} طن`, name]}
-                  contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
-                />
-                <Pie
-                  data={varietyData}
-                  dataKey="tons"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
-                  paddingAngle={3}
-                >
-                  {varietyData.map((entry, idx) => (
-                    <Cell key={`var-cell-${idx}`} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-            {varietyData.map(v => (
-              <div key={v.name} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/40">
-                <div className="flex items-center gap-1.5 truncate">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: v.color }} />
-                  <span className="font-bold text-zinc-800 dark:text-zinc-200 truncate">{v.name}</span>
-                </div>
-                <span className="font-mono font-bold text-zinc-600 dark:text-zinc-400">{v.percent}%</span>
-              </div>
-            ))}
-          </div>
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Tooltip
+                formatter={(val: any, name: any) => [`${Number(val).toFixed(2)} طن`, name]}
+                contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
+              />
+              <Pie
+                data={varietyData}
+                dataKey="tons"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={90}
+                paddingAngle={3}
+              >
+                {varietyData.map((entry, idx) => (
+                  <Cell key={`var-cell-${idx}`} fill={entry.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* Storage Packaging Donut */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-3">
-          <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
-            <Container className="w-4 h-4 text-cyan-500" />
-            <span>{isRtl ? 'طريقة التخزين والتعبئة (براميل / تانكات)' : 'Storage Method'}</span>
-          </h3>
-
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Tooltip
-                  formatter={(val: any, name: any) => [`${Number(val).toFixed(2)} طن`, name]}
-                  contentStyle={{ backgroundColor: '#18181b', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px' }}
-                />
-                <Pie
-                  data={storageData}
-                  dataKey="tons"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
-                  paddingAngle={4}
-                >
-                  {storageData.map((entry, idx) => (
-                    <Cell key={`st-cell-${idx}`} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-            {storageData.map(s => (
-              <div key={s.name} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/40">
-                <div className="flex items-center gap-1.5 truncate">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                  <span className="font-bold text-zinc-800 dark:text-zinc-200 truncate">{s.name}</span>
-                </div>
-                <span className="font-mono font-bold text-zinc-600 dark:text-zinc-400">
-                  {totalTons > 0 ? ((s.tons / totalTons) * 100).toFixed(1) : 0}%
-                </span>
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+          {varietyData.map(v => (
+            <div key={v.name} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/40">
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: v.color }} />
+                <span className="font-bold text-zinc-800 dark:text-zinc-200 truncate">{v.name}</span>
               </div>
-            ))}
-          </div>
+              <span className="font-mono font-bold text-zinc-600 dark:text-zinc-400">{v.percent}%</span>
+            </div>
+          ))}
         </div>
-
       </div>
 
     </div>
