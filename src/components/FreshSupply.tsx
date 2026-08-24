@@ -109,6 +109,7 @@ export interface FreshSupplyRecord {
   itemName: string;          // اسم الصنف
   unit: string;              // الوحدة (e.g. كيلو)
   costCenter: string;        // مركز التكلفة / المورد (e.g. جمال سالم / الروقا)
+  originalCostCenter?: string;// الاسم الأصلي من الملف قبل توحيد الأسماء المقلوبة
   quantityKg: number;        // اضافة (الكمية بالكيلو)
   quantityTons: number;      // الكمية بالطن
   location: string;          // الموقع / التعبئة (e.g. برميل, تانك)
@@ -129,14 +130,98 @@ export const FRESH_VARIETIES = [
 export const detectFreshVariety = (descr: string): string => {
   const dLower = (descr || '').toLowerCase();
   if (dLower.includes('pepper') || dLower.includes('فلفل') || dLower.includes('شطة') || dLower.includes('jalapen')) return 'Pepper';
-  if (dLower.includes('manzanilla') || dLower.includes('manzanila') || dLower.includes('منزان') || dLower.includes('منزن')) return 'Manzanilla';
+  if (dLower.includes('manzanilla') || dLower.includes('manzanila') || dLower.includes('منزان') || dLower.includes('منزن') || dLower.includes('مانزنيلا') || dLower.includes('مانزنيلو')) return 'Manzanilla';
   if (dLower.includes('picual') || dLower.includes('pical') || dLower.includes('بيكوال') || dLower.includes('بكوال')) return 'Picual';
   if (dLower.includes('akas') || dLower.includes('akass') || dLower.includes('عقص') || dLower.includes('عقيص') || dLower.includes('اقيص')) return 'Akas';
-  if (dLower.includes('azizi') || dLower.includes('عزيز')) return 'Azizi';
-  if (dLower.includes('kobrosi') || dLower.includes('kobrosy') || dLower.includes('قبرص')) return 'Kobrosi';
-  if (dLower.includes('kalamata') || dLower.includes('kalama') || dLower.includes('كالمات') || dLower.includes('كلامات')) return 'Kalamata';
+  if (dLower.includes('azizi') || dLower.includes('عزيز') || dLower.includes('عجيزي') || dLower.includes('عجيز')) return 'Azizi';
+  if (dLower.includes('kobrosi') || dLower.includes('kobrosy') || dLower.includes('قبرص') || dLower.includes('قبرصي')) return 'Kobrosi';
+  if (dLower.includes('kalamata') || dLower.includes('kalama') || dLower.includes('كالمات') || dLower.includes('كلامات') || dLower.includes('كلاماته') || dLower.includes('كلاماتا')) return 'Kalamata';
   if (dLower.includes('dolsy') || dLower.includes('dolcy') || dLower.includes('dolce') || dLower.includes('تفاح') || dLower.includes('tofah') || dLower.includes('دولس')) return 'Dolsy';
+  if (dLower.includes('زيتون') || dLower.includes('olive')) return 'Azizi';
   return 'Other';
+};
+
+export const classifyItemCategory = (itemName: string, variety: string) => {
+  const dLower = (itemName || '').toLowerCase();
+  const isPepper = dLower.includes('pepper') || dLower.includes('فلفل') || dLower.includes('شطة') || dLower.includes('jalapen') || variety === 'Pepper';
+  const isOlive = 
+    dLower.includes('زيتون') || 
+    dLower.includes('olive') || 
+    dLower.includes('بيكوال') || 
+    dLower.includes('بكوال') || 
+    dLower.includes('picual') || 
+    dLower.includes('pical') || 
+    dLower.includes('عقص') || 
+    dLower.includes('عقيص') || 
+    dLower.includes('اقيص') || 
+    dLower.includes('akas') || 
+    dLower.includes('قبرصي') || 
+    dLower.includes('قبرص') || 
+    dLower.includes('kobrosi') || 
+    dLower.includes('مانزنيلا') || 
+    dLower.includes('مانزنيلو') || 
+    dLower.includes('manzanilla') || 
+    dLower.includes('منزان') || 
+    dLower.includes('منزن') || 
+    dLower.includes('عجيزي') || 
+    dLower.includes('عجيز') || 
+    dLower.includes('عزيز') || 
+    dLower.includes('azizi') || 
+    dLower.includes('كلاماته') || 
+    dLower.includes('كلاماتا') || 
+    dLower.includes('كلامات') || 
+    dLower.includes('كالمات') || 
+    dLower.includes('kalamata') || 
+    dLower.includes('تفاح') || 
+    dLower.includes('دولس') || 
+    dLower.includes('dolsy') ||
+    (variety !== 'Pepper' && variety !== 'Other');
+  
+  const isOther = !isPepper && !isOlive;
+  return { isPepper, isOlive, isOther };
+};
+
+/**
+ * Normalizes supplier name for group matching (ignores word order, parentheses, slashes, punctuation, and Arabic letter variances).
+ * e.g., "الروقا جمال سالم", "جمال سالم الروقا", "جمال سالم ( الروقا )", "جمال سالم / الروقا" => all map to the exact same normalized key!
+ */
+export const normalizeSupplierKey = (rawName: string): string => {
+  if (!rawName) return '';
+  
+  // 1. Remove diacritics / tashkeel and tatweel
+  let text = String(rawName)
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .toLowerCase();
+
+  // 2. Replace parentheses, brackets, slashes, dashes, quotes, and punctuation with spaces
+  text = text.replace(/[\(\)\[\]\{\}<>\/\\_\-.,:;؛،+&*~'"`«»!?=^#@%$|]/g, ' ');
+
+  // 3. Normalize Arabic letters (Alef, Taa Marbouta, Yaa)
+  text = text
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/[ة]/g, 'ه')
+    .replace(/[ى]/g, 'ي')
+    .replace(/[ؤئ]/g, 'ء');
+
+  // 4. Split into words, trim, filter out noise
+  const words = text
+    .split(/\s+/)
+    .map(w => w.trim())
+    .filter(w => w.length > 0)
+    .map(w => {
+      // Normalize leading 'ال' if word length >= 4 so 'الروقا' and 'روقا' match identically
+      if (w.startsWith('ال') && w.length >= 4) {
+        return w.slice(2);
+      }
+      return w;
+    });
+
+  if (words.length === 0) return '';
+
+  // 5. Sort words alphabetically so word order does not matter!
+  words.sort((a, b) => a.localeCompare(b, 'ar'));
+
+  return words.join(' ');
 };
 
 export const getFreshVarietyName = (v: string, isRtl: boolean) => {
@@ -402,17 +487,19 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   };
   
   // Interactive KPI Modal state
-  const [kpiModal, setKpiModal] = useState<'items' | 'suppliers' | 'totals' | 'movements' | 'trucks' | 'packaging' | null>(null);
+  const [kpiModal, setKpiModal] = useState<'items' | 'suppliers' | 'stores' | 'totals' | 'movements' | 'trucks' | 'packaging' | null>(null);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [expandedSupplier, setExpandedSupplier] = useState<string | null>(null);
+  const [expandedStore, setExpandedStore] = useState<string | null>(null);
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedItem, setSelectedItem] = useState('ALL');
-  const [selectedSupplier, setSelectedSupplier] = useState('ALL');
-  const [selectedStore, setSelectedStore] = useState('ALL');
-  const [selectedLocation, setSelectedLocation] = useState('ALL');
+  const [mainCategoryFilter, setMainCategoryFilter] = useState<'ALL' | 'OLIVES' | 'PEPPER' | 'OTHER'>('ALL');
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
+  const [selectedStores, setSelectedStores] = useState<string[]>([]);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ mode: 'all' });
   
   // Sorting state
@@ -445,43 +532,106 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
   // Parse raw rows into typed objects
   const processCsvData = (rows: any[]): FreshSupplyRecord[] => {
-    return rows
-      .filter(row => {
-        // filter out completely blank rows
-        return Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '');
-      })
-      .map((row, idx) => {
-        const dateStr = String(row['التاريخ'] || '').trim();
-        const rawKg = String(row['اضافة'] || row['الكمية'] || '0').replace(/,/g, '').trim();
-        const kg = parseFloat(rawKg) || 0;
-        const tons = kg / 1000;
+    const validRows = rows.filter(row => {
+      // filter out completely blank rows
+      return Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '');
+    });
 
-        return {
-          id: `fresh-${idx}-${row['رقم الحركة'] || Math.random().toString(36).substr(2, 9)}`,
-          date: dateStr,
-          parsedDate: parseFlexibleDate(dateStr),
-          store: String(row['المخزن'] || '').trim(),
-          movementType: String(row['نوع الحركة'] || '').trim(),
-          movementNo: String(row['رقم الحركة'] || '').trim(),
-          truckNo: String(row['رقم سيارة'] || '').trim(),
-          driver: String(row['السائق'] || '').trim(),
-          vendorDocNo: String(row['رقم مستند المورد'] || '').trim(),
-          costCenterCode: String(row['كود مركز التكلفة'] || '').trim(),
-          po: String(row['PO'] || '').trim(),
-          reservation: String(row['RESERVATION'] || '').trim(),
-          postDocument: String(row['POST DOCUMENT'] || '').trim(),
-          oldCode: String(row['كود قديم'] || '').trim(),
-          sapCode: String(row['كود ساب'] || '').trim(),
-          itemName: String(row['اسم الصنف'] || '').trim(),
-          unit: String(row['الوحدة'] || 'كيلو').trim(),
-          costCenter: String(row['مركز التكلفة'] || '').trim(),
-          quantityKg: kg,
-          quantityTons: tons,
-          location: String(row['الموقع'] || '').trim(),
-          tankNo: String(row['رقم التانك'] || '').trim(),
-          raw: row
-        };
+    // Pass 1: Build map of normalizedSupplierKey -> frequencies and costCenterCodes
+    const supplierVariantsMap = new Map<string, {
+      frequencies: Map<string, number>;
+      costCenterCodes: Set<string>;
+    }>();
+
+    validRows.forEach(row => {
+      const rawCostCenter = String(row['مركز التكلفة'] || '').trim();
+      const code = String(row['كود مركز التكلفة'] || '').trim();
+      if (!rawCostCenter) return;
+
+      const key = normalizeSupplierKey(rawCostCenter);
+      if (!key) return;
+
+      if (!supplierVariantsMap.has(key)) {
+        supplierVariantsMap.set(key, {
+          frequencies: new Map(),
+          costCenterCodes: new Set()
+        });
+      }
+      const entry = supplierVariantsMap.get(key)!;
+      const cleanRawName = rawCostCenter.replace(/\s+/g, ' ').trim();
+      entry.frequencies.set(cleanRawName, (entry.frequencies.get(cleanRawName) || 0) + 1);
+      if (code) {
+        entry.costCenterCodes.add(code);
+      }
+    });
+
+    // Determine canonical display name and code for each normalized supplier key
+    const canonicalNameMap = new Map<string, string>();
+    const canonicalCodeMap = new Map<string, string>();
+
+    supplierVariantsMap.forEach((entry, key) => {
+      let bestName = '';
+      let maxCount = -1;
+      entry.frequencies.forEach((count, nameVariant) => {
+        if (count > maxCount) {
+          maxCount = count;
+          bestName = nameVariant;
+        }
       });
+      canonicalNameMap.set(key, bestName);
+
+      if (entry.costCenterCodes.size > 0) {
+        canonicalCodeMap.set(key, Array.from(entry.costCenterCodes)[0]);
+      }
+    });
+
+    // Pass 2: Map into typed records with unified supplier identities
+    return validRows.map((row, idx) => {
+      const dateStr = String(row['التاريخ'] || '').trim();
+      const rawKg = String(row['اضافة'] || row['الكمية'] || '0').replace(/,/g, '').trim();
+      const kg = parseFloat(rawKg) || 0;
+      const tons = kg / 1000;
+      const rawCostCenter = String(row['مركز التكلفة'] || '').trim();
+      const rawCostCenterCode = String(row['كود مركز التكلفة'] || '').trim();
+
+      let finalCostCenter = rawCostCenter;
+      let finalCostCenterCode = rawCostCenterCode;
+
+      if (rawCostCenter) {
+        const normKey = normalizeSupplierKey(rawCostCenter);
+        if (normKey && canonicalNameMap.has(normKey)) {
+          finalCostCenter = canonicalNameMap.get(normKey)!;
+          finalCostCenterCode = finalCostCenterCode || canonicalCodeMap.get(normKey) || '';
+        }
+      }
+
+      return {
+        id: `fresh-${idx}-${row['رقم الحركة'] || Math.random().toString(36).substr(2, 9)}`,
+        date: dateStr,
+        parsedDate: parseFlexibleDate(dateStr),
+        store: String(row['المخزن'] || '').trim(),
+        movementType: String(row['نوع الحركة'] || '').trim(),
+        movementNo: String(row['رقم الحركة'] || '').trim(),
+        truckNo: String(row['رقم سيارة'] || '').trim(),
+        driver: String(row['السائق'] || '').trim(),
+        vendorDocNo: String(row['رقم مستند المورد'] || '').trim(),
+        costCenterCode: finalCostCenterCode,
+        po: String(row['PO'] || '').trim(),
+        reservation: String(row['RESERVATION'] || '').trim(),
+        postDocument: String(row['POST DOCUMENT'] || '').trim(),
+        oldCode: String(row['كود قديم'] || '').trim(),
+        sapCode: String(row['كود ساب'] || '').trim(),
+        itemName: String(row['اسم الصنف'] || '').trim(),
+        unit: String(row['الوحدة'] || 'كيلو').trim(),
+        costCenter: finalCostCenter,
+        originalCostCenter: rawCostCenter,
+        quantityKg: kg,
+        quantityTons: tons,
+        location: String(row['الموقع'] || '').trim(),
+        tankNo: String(row['رقم التانك'] || '').trim(),
+        raw: row
+      };
+    });
   };
 
   // Fetch from Google Sheet
@@ -571,35 +721,69 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     fetchData(false);
   }, []);
 
-  // Filter options
+  // Filter options (Smart & Dependent)
   const filterOptions = useMemo(() => {
-    const items = new Set<string>();
-    const varieties = new Set<string>();
-    const suppliers = new Set<string>();
-    const stores = new Set<string>();
-    const locations = new Set<string>();
-    const dates = new Set<string>();
+    const dependentFiltered = (excludeKey: string) => {
+      return data.filter(record => {
+        if (excludeKey !== 'category' && mainCategoryFilter !== 'ALL') {
+          const v = detectFreshVariety(record.itemName);
+          const { isOlive, isPepper, isOther } = classifyItemCategory(record.itemName, v);
+          if (mainCategoryFilter === 'OLIVES' && !isOlive) return false;
+          if (mainCategoryFilter === 'PEPPER' && !isPepper) return false;
+          if (mainCategoryFilter === 'OTHER' && !isOther) return false;
+        }
+        if (excludeKey !== 'item' && selectedItems.length > 0 && !selectedItems.includes(record.itemName)) {
+          return false;
+        }
+        if (excludeKey !== 'supplier' && selectedSuppliers.length > 0 && !selectedSuppliers.includes(record.costCenter)) {
+          return false;
+        }
+        if (excludeKey !== 'store' && selectedStores.length > 0 && !selectedStores.includes(record.store)) {
+          return false;
+        }
+        if (excludeKey !== 'location' && selectedLocations.length > 0 && !selectedLocations.includes(record.location)) {
+          return false;
+        }
+        return true;
+      });
+    };
 
-    data.forEach(r => {
+    const itemsSet = new Set<string>();
+    const varietiesSet = new Set<string>();
+    dependentFiltered('item').forEach(r => {
       if (r.itemName) {
-        items.add(r.itemName);
-        varieties.add(detectFreshVariety(r.itemName));
+        itemsSet.add(r.itemName);
+        varietiesSet.add(detectFreshVariety(r.itemName));
       }
-      if (r.costCenter) suppliers.add(r.costCenter);
-      if (r.store) stores.add(r.store);
-      if (r.location) locations.add(r.location);
-      if (r.date) dates.add(r.date);
     });
 
+    const suppliersSet = new Set<string>();
+    dependentFiltered('supplier').forEach(r => {
+      if (r.costCenter) suppliersSet.add(r.costCenter);
+    });
+
+    const storesSet = new Set<string>();
+    dependentFiltered('store').forEach(r => {
+      if (r.store) storesSet.add(r.store);
+    });
+
+    const locationsSet = new Set<string>();
+    dependentFiltered('location').forEach(r => {
+      if (r.location) locationsSet.add(r.location);
+    });
+
+    const datesSet = new Set<string>();
+    data.forEach(r => { if (r.date) datesSet.add(r.date); });
+
     return {
-      items: Array.from(items).sort(),
-      varieties: Array.from(varieties).map(v => ({ id: v, label: getFreshVarietyName(v, isRtl) })),
-      suppliers: Array.from(suppliers).sort(),
-      stores: Array.from(stores).sort(),
-      locations: Array.from(locations).sort(),
-      dates: Array.from(dates)
+      items: Array.from(itemsSet).sort(),
+      varieties: Array.from(varietiesSet).map(v => ({ id: v, label: getFreshVarietyName(v, isRtl) })),
+      suppliers: Array.from(suppliersSet).sort(),
+      stores: Array.from(storesSet).sort(),
+      locations: Array.from(locationsSet).sort(),
+      dates: Array.from(datesSet)
     };
-  }, [data, isRtl]);
+  }, [data, mainCategoryFilter, selectedItems, selectedSuppliers, selectedStores, selectedLocations, isRtl]);
 
   // Filtered & Sorted Records
   const filteredData = useMemo(() => {
@@ -610,6 +794,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         const match = 
           record.itemName.toLowerCase().includes(term) ||
           record.costCenter.toLowerCase().includes(term) ||
+          (record.originalCostCenter && record.originalCostCenter.toLowerCase().includes(term)) ||
+          record.costCenterCode.toLowerCase().includes(term) ||
           record.truckNo.toLowerCase().includes(term) ||
           record.driver.toLowerCase().includes(term) ||
           record.movementNo.toLowerCase().includes(term) ||
@@ -623,45 +809,40 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         if (!match) return false;
       }
 
-      // 2. Item Filter
-      if (selectedItem !== 'ALL' && record.itemName !== selectedItem) {
+      // 2. Main Category Filter (Olives, Pepper, Other)
+      if (mainCategoryFilter !== 'ALL') {
+        const v = detectFreshVariety(record.itemName);
+        const { isOlive, isPepper, isOther } = classifyItemCategory(record.itemName, v);
+
+        if (mainCategoryFilter === 'OLIVES' && !isOlive) return false;
+        if (mainCategoryFilter === 'PEPPER' && !isPepper) return false;
+        if (mainCategoryFilter === 'OTHER' && !isOther) return false;
+      }
+
+      // 3. Item Filter
+      if (selectedItems.length > 0 && !selectedItems.includes(record.itemName)) {
         return false;
       }
 
-      // 3. Supplier / Cost Center Filter
-      if (selectedSupplier !== 'ALL' && record.costCenter !== selectedSupplier) {
+      // 4. Supplier / Cost Center Filter
+      if (selectedSuppliers.length > 0 && !selectedSuppliers.includes(record.costCenter)) {
         return false;
       }
 
-      // 4. Store Filter
-      if (selectedStore !== 'ALL' && record.store !== selectedStore) {
+      // 5. Store Filter
+      if (selectedStores.length > 0 && !selectedStores.includes(record.store)) {
         return false;
       }
 
-      // 5. Location / Package Filter
-      if (selectedLocation !== 'ALL' && record.location !== selectedLocation) {
+      // 6. Location / Package Filter
+      if (selectedLocations.length > 0 && !selectedLocations.includes(record.location)) {
         return false;
       }
 
-      // 6. Multi-Select Variety Filter
+      // 7. Multi-Select Variety Filter
       if (selectedVarieties.length > 0) {
         const v = detectFreshVariety(record.itemName);
         if (!selectedVarieties.includes(v)) return false;
-      }
-
-      // 7. Multi-Select Supplier Filter
-      if (selectedMultiSuppliers.length > 0) {
-        if (!selectedMultiSuppliers.includes(record.costCenter)) return false;
-      }
-
-      // 8. Multi-Select Store Filter
-      if (selectedMultiStores.length > 0) {
-        if (!selectedMultiStores.includes(record.store)) return false;
-      }
-
-      // 9. Multi-Select Location Filter
-      if (selectedMultiLocations.length > 0) {
-        if (!selectedMultiLocations.includes(record.location)) return false;
       }
 
       // 10. Date Filter
@@ -731,14 +912,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   }, [
     data, 
     searchTerm, 
-    selectedItem, 
-    selectedSupplier, 
-    selectedStore, 
-    selectedLocation, 
+    mainCategoryFilter,
+    selectedItems, 
+    selectedSuppliers, 
+    selectedStores, 
+    selectedLocations, 
     selectedVarieties, 
-    selectedMultiSuppliers, 
-    selectedMultiStores, 
-    selectedMultiLocations, 
     dateFilter, 
     sortField, 
     sortOrder
@@ -1218,6 +1397,67 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     }).sort((a, b) => b.totalKg - a.totalKg);
   }, [filteredData]);
 
+  // Enhanced Grouping by Store / Warehouse
+  const storesSummary = useMemo(() => {
+    const map = new Map<string, {
+      storeName: string;
+      totalKg: number;
+      totalTons: number;
+      count: number;
+      items: Set<string>;
+      itemsMap: Map<string, number>;
+      suppliers: Set<string>;
+      tankKg: number;
+      tankTons: number;
+      barrelKg: number;
+      barrelTons: number;
+    }>();
+
+    filteredData.forEach(r => {
+      const key = r.store || (isRtl ? 'مخزن غير محدد' : 'Unspecified Store');
+      if (!map.has(key)) {
+        map.set(key, {
+          storeName: key,
+          totalKg: 0,
+          totalTons: 0,
+          count: 0,
+          items: new Set(),
+          itemsMap: new Map(),
+          suppliers: new Set(),
+          tankKg: 0,
+          tankTons: 0,
+          barrelKg: 0,
+          barrelTons: 0
+        });
+      }
+      const st = map.get(key)!;
+      st.totalKg += r.quantityKg;
+      st.totalTons += r.quantityTons;
+      st.count += 1;
+      if (r.itemName) {
+        st.items.add(r.itemName);
+        st.itemsMap.set(r.itemName, (st.itemsMap.get(r.itemName) || 0) + r.quantityKg);
+      }
+      if (r.costCenter) st.suppliers.add(r.costCenter);
+
+      const locStr = (r.location || '').toLowerCase();
+      const isTank = locStr.includes('تانك') || locStr.includes('tank') || Boolean(r.tankNo);
+      if (isTank) {
+        st.tankKg += r.quantityKg;
+        st.tankTons += r.quantityTons;
+      } else {
+        st.barrelKg += r.quantityKg;
+        st.barrelTons += r.quantityTons;
+      }
+    });
+
+    return Array.from(map.values()).map(st => ({
+      ...st,
+      itemsCount: st.items.size,
+      suppliersCount: st.suppliers.size
+    })).sort((a, b) => b.totalKg - a.totalKg);
+  }, [filteredData, isRtl]);
+
   // 1. Items Pie / Donut Chart Data (Top 6 + Others)
   const itemsPieChartData = useMemo(() => {
     if (!itemsSummary.length) return [];
@@ -1653,10 +1893,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Clear all filters
   const handleClearFilters = () => {
     setSearchTerm('');
-    setSelectedItem('ALL');
-    setSelectedSupplier('ALL');
-    setSelectedStore('ALL');
-    setSelectedLocation('ALL');
+    setMainCategoryFilter('ALL');
+    setSelectedItems([]);
+    setSelectedSuppliers([]);
+    setSelectedStores([]);
+    setSelectedLocations([]);
+    setSelectedVarieties([]);
     setDateFilter({ mode: 'all' });
     toast.info(isRtl ? 'تمت إعادة ضبط جميع الفلاتر' : 'All filters reset');
   };
@@ -2059,6 +2301,31 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     }
   };
 
+  // Export Stores Summary to Excel
+  const handleExportStoresExcel = () => {
+    try {
+      const rows = storesSummary.map((st, idx) => ({
+        'م': idx + 1,
+        'المخزن': st.storeName,
+        'إجمالي الكمية (كجم)': st.totalKg,
+        'إجمالي الكمية (طن)': parseFloat(st.totalTons.toFixed(3)),
+        'النسبة المئوية (%)': stats.totalKg > 0 ? parseFloat(((st.totalKg / stats.totalKg) * 100).toFixed(2)) : 0,
+        'عدد الحركات': st.count,
+        'عدد الأصناف': st.itemsCount,
+        'عدد الموردين': st.suppliersCount
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'ملخص المخازن');
+      XLSX.writeFile(wb, `ملخص_المخازن_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success(isRtl ? 'تم تصدير ملخص المخازن بنجاح' : 'Stores summary exported');
+    } catch (e) {
+      console.error('Stores Export Error:', e);
+      toast.error(isRtl ? 'فشل التصدير' : 'Export failed');
+    }
+  };
+
   // Copy row summary
   const handleCopyRecord = (r: FreshSupplyRecord) => {
     const text = `تاريخ: ${r.date} | حركة: ${r.movementNo} | صنف: ${r.itemName} | كمية: ${r.quantityKg.toLocaleString()} كجم (${r.quantityTons.toFixed(2)} طن) | مورد: ${r.costCenter} | سيارة: ${r.truckNo} | سائق: ${r.driver} | ساب: ${r.sapCode} | PO: ${r.po}`;
@@ -2343,10 +2610,60 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       {/* 3. Search & Filter Bar */}
       <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
         
+        {/* Main Category Filter (Olives, Pepper, Other) */}
+        <div className="flex items-center gap-2 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-wrap">
+          <span className="text-xs font-black text-zinc-500 dark:text-zinc-400">
+            {isRtl ? 'التصنيف الرئيسي:' : 'Main Category:'}
+          </span>
+          <button
+            onClick={() => setMainCategoryFilter('ALL')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+              mainCategoryFilter === 'ALL'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+            }`}
+          >
+            {isRtl ? 'جميع الأصناف' : 'All Items'}
+          </button>
+          <button
+            onClick={() => setMainCategoryFilter('OLIVES')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+              mainCategoryFilter === 'OLIVES'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            <span>{isRtl ? 'الزيتون (Olives)' : 'Olives'}</span>
+          </button>
+          <button
+            onClick={() => setMainCategoryFilter('PEPPER')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+              mainCategoryFilter === 'PEPPER'
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-red-500" />
+            <span>{isRtl ? 'الفلفل (Pepper)' : 'Pepper'}</span>
+          </button>
+          <button
+            onClick={() => setMainCategoryFilter('OTHER')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+              mainCategoryFilter === 'OTHER'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-purple-500" />
+            <span>{isRtl ? 'أصناف أخري (Other)' : 'Other Items'}</span>
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
           
           {/* Universal Search Input */}
-          <div className="md:col-span-4 relative">
+          <div className="md:col-span-3 relative">
             <Search className="w-4 h-4 absolute top-1/2 -translate-y-1/2 right-3.5 text-zinc-400" />
             <input
               type="text"
@@ -2365,46 +2682,40 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             )}
           </div>
 
-          {/* Item Filter Dropdown */}
+          {/* Item Filter MultiSelect */}
           <div className="md:col-span-3">
-            <select
-              value={selectedItem}
-              onChange={(e) => setSelectedItem(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="ALL">{isRtl ? 'جميع الأصناف الطازجة' : 'All Fresh Items'}</option>
-              {filterOptions.items.map(item => (
-                <option key={item} value={item}>{item}</option>
-              ))}
-            </select>
+            <MultiSelect
+              label={isRtl ? 'جميع الأصناف' : 'All Items'}
+              options={filterOptions.items.map(i => ({ id: i, label: i }))}
+              selected={selectedItems}
+              onChange={setSelectedItems}
+              icon={<Sprout size={14} className="text-emerald-500" />}
+              lang={lang}
+            />
           </div>
 
-          {/* Supplier / Cost Center Filter Dropdown */}
+          {/* Supplier Filter MultiSelect */}
           <div className="md:col-span-3">
-            <select
-              value={selectedSupplier}
-              onChange={(e) => setSelectedSupplier(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="ALL">{isRtl ? 'جميع الموردين / مراكز التكلفة' : 'All Suppliers'}</option>
-              {filterOptions.suppliers.map(sup => (
-                <option key={sup} value={sup}>{sup}</option>
-              ))}
-            </select>
+            <MultiSelect
+              label={isRtl ? 'جميع الموردين' : 'All Suppliers'}
+              options={filterOptions.suppliers.map(s => ({ id: s, label: s }))}
+              selected={selectedSuppliers}
+              onChange={setSelectedSuppliers}
+              icon={<Building2 size={14} className="text-purple-500" />}
+              lang={lang}
+            />
           </div>
 
-          {/* Store / Warehouse Filter */}
-          <div className="md:col-span-2">
-            <select
-              value={selectedStore}
-              onChange={(e) => setSelectedStore(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="ALL">{isRtl ? 'كل المخازن' : 'All Stores'}</option>
-              {filterOptions.stores.map(st => (
-                <option key={st} value={st}>{st}</option>
-              ))}
-            </select>
+          {/* Store Filter MultiSelect */}
+          <div className="md:col-span-3">
+            <MultiSelect
+              label={isRtl ? 'كل المخازن' : 'All Stores'}
+              options={filterOptions.stores.map(st => ({ id: st, label: st }))}
+              selected={selectedStores}
+              onChange={setSelectedStores}
+              icon={<Container size={14} className="text-blue-500" />}
+              lang={lang}
+            />
           </div>
 
         </div>
@@ -2423,7 +2734,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
           {/* Clear Filters & Column Visibility */}
           <div className="flex items-center gap-2 shrink-0">
-            {(searchTerm || selectedItem !== 'ALL' || selectedSupplier !== 'ALL' || selectedStore !== 'ALL' || selectedLocation !== 'ALL' || dateFilter.mode !== 'all') && (
+            {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL') && (
               <button
                 onClick={handleClearFilters}
                 className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
@@ -2847,11 +3158,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           uniqueDrivers={stats.uniqueDrivers}
           isRtl={isRtl}
           onFilterByItem={(item) => {
-            setSelectedItem(item || 'ALL');
+            setSelectedItems(item ? [item] : []);
             setActiveView('table');
           }}
           onFilterBySupplier={(sup) => {
-            setSelectedSupplier(sup || 'ALL');
+            setSelectedSuppliers(sup ? [sup] : []);
             setActiveView('table');
           }}
         />
@@ -2868,6 +3179,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 <div className="w-10 h-10 rounded-2xl bg-white/15 flex items-center justify-center">
                   {kpiModal === 'items' && <PackageCheck className="w-5 h-5 text-amber-300" />}
                   {kpiModal === 'suppliers' && <Building2 className="w-5 h-5 text-purple-300" />}
+                  {kpiModal === 'stores' && <Container className="w-5 h-5 text-blue-300" />}
                   {kpiModal === 'totals' && <TrendingUp className="w-5 h-5 text-emerald-300" />}
                   {kpiModal === 'movements' && <FileCheck2 className="w-5 h-5 text-blue-300" />}
                   {kpiModal === 'trucks' && <Truck className="w-5 h-5 text-teal-300" />}
@@ -2929,6 +3241,19 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   <Building2 className="w-3.5 h-3.5" />
                   <span>{isRtl ? 'الموردين' : 'Suppliers'}</span>
                   <span className="font-mono text-[10px] bg-black/20 px-1 rounded-full">{suppliersSummary.length}</span>
+                </button>
+
+                <button
+                  onClick={() => setKpiModal('stores')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    kpiModal === 'stores'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700'
+                  }`}
+                >
+                  <Container className="w-3.5 h-3.5" />
+                  <span>{isRtl ? 'المخزن' : 'Store'}</span>
+                  <span className="font-mono text-[10px] bg-black/20 px-1 rounded-full">{storesSummary.length}</span>
                 </button>
 
 
@@ -2997,6 +3322,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                                     {item.sapCode && <span className="font-mono font-bold bg-zinc-200/70 dark:bg-zinc-700 px-1.5 py-0.2 rounded">SAP: {item.sapCode}</span>}
                                     <span>• {item.count} حركات</span>
                                     <span>• {item.suppliers.size} موردين</span>
+                                     {item.stores.size > 0 && (
+                                       <span className="font-bold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+                                         {isRtl ? 'المخزن: ' : 'Store: '}{Array.from(item.stores).join(', ')}
+                                       </span>
+                                     )}
                                   </div>
                                 </div>
                               </div>
@@ -3014,7 +3344,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedItem(item.itemName);
+                                    setSelectedItems([item.itemName]);
                                     setActiveView('table');
                                     setKpiModal(null);
                                     toast.success(isRtl ? `تمت تصفية الجدول لعرض حركات (${item.itemName})` : `Filtered by ${item.itemName}`);
@@ -3121,7 +3451,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedSupplier(sup.costCenter);
+                                    setSelectedSuppliers([sup.costCenter]);
                                     setActiveView('table');
                                     setKpiModal(null);
                                     toast.success(isRtl ? `تمت تصفية الجدول لعرض حركات (${sup.costCenter})` : `Filtered by ${sup.costCenter}`);
@@ -3155,6 +3485,96 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                                       </div>
                                     );
                                   })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: STORES BREAKDOWN */}
+              {kpiModal === 'stores' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 font-bold">
+                      {isRtl ? `إجمالي المخازن: ${storesSummary.length} مخزن` : `Total stores: ${storesSummary.length}`}
+                    </span>
+                    <button
+                      onClick={handleExportStoresExcel}
+                      className="px-3 py-1 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold rounded-lg border border-blue-200 dark:border-blue-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>{isRtl ? 'تصدير المخازن Excel' : 'Export Stores'}</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {storesSummary
+                      .filter(st => modalSearchTerm ? st.storeName.toLowerCase().includes(modalSearchTerm.toLowerCase()) : true)
+                      .map((st, idx) => {
+                        const percent = stats.totalKg > 0 ? ((st.totalKg / stats.totalKg) * 100).toFixed(1) : '0';
+                        const isExpanded = expandedStore === st.storeName;
+                        return (
+                          <div
+                            key={st.storeName}
+                            className="bg-zinc-50 dark:bg-zinc-800/60 rounded-2xl border border-zinc-200 dark:border-zinc-700 transition-all overflow-hidden"
+                          >
+                            <div 
+                              onClick={() => setExpandedStore(isExpanded ? null : st.storeName)}
+                              className="p-4 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="w-7 h-7 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-black font-mono flex items-center justify-center text-xs shrink-0 mt-0.5">
+                                  {idx + 1}
+                                </span>
+                                <div>
+                                  <h4 className="font-black text-sm text-zinc-900 dark:text-white leading-tight flex items-center gap-2">
+                                    <span>{st.storeName}</span>
+                                    <span className="text-[10px] font-normal text-blue-600 bg-blue-100 dark:bg-blue-950 px-2 py-0.5 rounded-full">
+                                      {isExpanded ? 'إخفاء التفاصيل ▲' : 'عرض التفاصيل والكميات ▼'}
+                                    </span>
+                                  </h4>
+                                  <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-zinc-500">
+                                    <span>• {st.count} حركات</span>
+                                    <span>• {st.itemsCount} أصناف</span>
+                                    <span>• {st.suppliersCount} موردين</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-4 justify-between sm:justify-end">
+                                <div className="text-left sm:text-right">
+                                  <div className="font-black font-mono text-base text-blue-600 dark:text-blue-400">
+                                    {st.totalTons.toFixed(2)} <span className="text-xs font-bold">طن</span>
+                                  </div>
+                                  <div className="text-[11px] font-mono text-zinc-400">
+                                    {st.totalKg.toLocaleString()} كجم ({percent}%)
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Expanded Store details (Items breakdown) */}
+                            {isExpanded && (
+                              <div className="px-4 pb-4 pt-2 bg-white/70 dark:bg-zinc-900/50 border-t border-zinc-200 dark:border-zinc-700 space-y-3">
+                                <div>
+                                  <h5 className="font-bold text-xs text-zinc-700 dark:text-zinc-300 mb-1.5">
+                                    {isRtl ? 'الأصناف داخل هذا المخزن:' : 'Items in this store:'}
+                                  </h5>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {Array.from(st.itemsMap.entries()).sort((a, b) => b[1] - a[1]).map(([itemName, itemKg]) => {
+                                      const itemTons = itemKg / 1000;
+                                      return (
+                                        <div key={itemName} className="p-2.5 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between text-xs">
+                                          <span className="font-bold text-zinc-800 dark:text-zinc-200">{itemName}</span>
+                                          <span className="font-mono font-black text-blue-600 dark:text-blue-400">{itemTons.toFixed(2)} طن</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               </div>
                             )}
