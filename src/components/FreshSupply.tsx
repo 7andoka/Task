@@ -496,6 +496,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [mainCategoryFilter, setMainCategoryFilter] = useState<'ALL' | 'OLIVES' | 'PEPPER' | 'OTHER'>('ALL');
+  const [poFilter, setPoFilter] = useState<'ALL' | 'EXISTS' | 'MISSING'>('ALL');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
@@ -819,6 +820,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         if (mainCategoryFilter === 'OTHER' && !isOther) return false;
       }
 
+      // PO Filter
+      if (poFilter !== 'ALL') {
+        const hasPO = record.po && record.po.trim() !== '';
+        if (poFilter === 'EXISTS' && !hasPO) return false;
+        if (poFilter === 'MISSING' && hasPO) return false;
+      }
+
       // 3. Item Filter
       if (selectedItems.length > 0 && !selectedItems.includes(record.itemName)) {
         return false;
@@ -913,6 +921,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     data, 
     searchTerm, 
     mainCategoryFilter,
+    poFilter,
     selectedItems, 
     selectedSuppliers, 
     selectedStores, 
@@ -1894,6 +1903,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const handleClearFilters = () => {
     setSearchTerm('');
     setMainCategoryFilter('ALL');
+    setPoFilter('ALL');
     setSelectedItems([]);
     setSelectedSuppliers([]);
     setSelectedStores([]);
@@ -2610,54 +2620,100 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       {/* 3. Search & Filter Bar */}
       <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-4">
         
-        {/* Main Category Filter (Olives, Pepper, Other) */}
-        <div className="flex items-center gap-2 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-wrap">
-          <span className="text-xs font-black text-zinc-500 dark:text-zinc-400">
-            {isRtl ? 'التصنيف الرئيسي:' : 'Main Category:'}
-          </span>
-          <button
-            onClick={() => setMainCategoryFilter('ALL')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-              mainCategoryFilter === 'ALL'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-            }`}
-          >
-            {isRtl ? 'جميع الأصناف' : 'All Items'}
-          </button>
-          <button
-            onClick={() => setMainCategoryFilter('OLIVES')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-              mainCategoryFilter === 'OLIVES'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
-            <span>{isRtl ? 'الزيتون (Olives)' : 'Olives'}</span>
-          </button>
-          <button
-            onClick={() => setMainCategoryFilter('PEPPER')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-              mainCategoryFilter === 'PEPPER'
-                ? 'bg-red-600 text-white shadow-sm'
-                : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-red-500" />
-            <span>{isRtl ? 'الفلفل (Pepper)' : 'Pepper'}</span>
-          </button>
-          <button
-            onClick={() => setMainCategoryFilter('OTHER')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-              mainCategoryFilter === 'OTHER'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100'
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-purple-500" />
-            <span>{isRtl ? 'أصناف أخري (Other)' : 'Other Items'}</span>
-          </button>
+        {/* Main Category & PO Filter - Single Row */}
+        <div className="flex items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800 flex-wrap">
+          
+          {/* Main Category Filter (Olives, Pepper, Other) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-black text-zinc-500 dark:text-zinc-400">
+              {isRtl ? 'التصنيف الرئيسي:' : 'Main Category:'}
+            </span>
+            <button
+              onClick={() => setMainCategoryFilter('ALL')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                mainCategoryFilter === 'ALL'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {isRtl ? 'جميع الأصناف' : 'All Items'}
+            </button>
+            <button
+              onClick={() => setMainCategoryFilter('OLIVES')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                mainCategoryFilter === 'OLIVES'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span>{isRtl ? 'الزيتون (Olives)' : 'Olives'}</span>
+            </button>
+            <button
+              onClick={() => setMainCategoryFilter('PEPPER')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                mainCategoryFilter === 'PEPPER'
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-100'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              <span>{isRtl ? 'الفلفل (Pepper)' : 'Pepper'}</span>
+            </button>
+            <button
+              onClick={() => setMainCategoryFilter('OTHER')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                mainCategoryFilter === 'OTHER'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-purple-500" />
+              <span>{isRtl ? 'أصناف أخري (Other)' : 'Other Items'}</span>
+            </button>
+          </div>
+
+          {/* Vertical Divider on wide screens */}
+          <div className="hidden xl:block h-6 w-px bg-zinc-200 dark:bg-zinc-800" />
+
+          {/* PO Filter (يوجد / لا يوجد) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-black text-zinc-500 dark:text-zinc-400">
+              {isRtl ? 'أمر التوريد (PO):' : 'PO Filter:'}
+            </span>
+            <button
+              onClick={() => setPoFilter('ALL')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                poFilter === 'ALL'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {isRtl ? 'الكل' : 'All'}
+            </button>
+            <button
+              onClick={() => setPoFilter('EXISTS')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                poFilter === 'EXISTS'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>{isRtl ? 'يوجد' : 'Has PO'}</span>
+            </button>
+            <button
+              onClick={() => setPoFilter('MISSING')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                poFilter === 'MISSING'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              <span>{isRtl ? 'لا يوجد' : 'Missing PO'}</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
@@ -2734,7 +2790,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
           {/* Clear Filters & Column Visibility */}
           <div className="flex items-center gap-2 shrink-0">
-            {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL') && (
+            {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || poFilter !== 'ALL') && (
               <button
                 onClick={handleClearFilters}
                 className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"

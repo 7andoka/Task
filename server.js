@@ -8,7 +8,6 @@ async function startServer() {
   const app = express();
   const PORT = 3e3;
   app.use(express.json());
-  // CORS and pre-flight options middleware
   app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
