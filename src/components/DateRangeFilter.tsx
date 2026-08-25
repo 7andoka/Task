@@ -15,6 +15,11 @@ interface DateRangeFilterProps {
   availableDates?: string[]; // Optional list of existing dates in dataset
   isRtl?: boolean;
   className?: string;
+  hideLabel?: boolean;
+  hideQuickChips?: boolean;
+  compact?: boolean;
+  buttonClassName?: string;
+  placeholder?: string;
 }
 
 // Helpers to compute ISO dates (YYYY-MM-DD)
@@ -74,7 +79,12 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   onChange,
   availableDates = [],
   isRtl = true,
-  className = ''
+  className = '',
+  hideLabel = false,
+  hideQuickChips = false,
+  compact = false,
+  buttonClassName = '',
+  placeholder = ''
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'presets' | 'range' | 'single'>(
@@ -192,7 +202,8 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
     if (value.startDate || value.endDate || value.singleDate) {
       return value.singleDate || `${value.startDate || '...'} → ${value.endDate || '...'}`;
     }
-    return isRtl ? 'جميع التواريخ (الكل)' : 'All Dates';
+    if (placeholder) return placeholder;
+    return isRtl ? 'تصفية بالتاريخ / الفترة' : 'Filter Date / Period';
   };
 
   const isFiltered = value.mode !== 'all' && (value.startDate || value.endDate || value.singleDate || value.presetKey);
@@ -205,37 +216,39 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   return (
     <div ref={containerRef} className={`relative inline-block text-right ${className}`} dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Label and Main Trigger */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-1.5">
-          <label className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-            <CalendarIcon size={14} className="text-emerald-500" />
-            <span>{isRtl ? 'تصفية بالتاريخ / الفترة' : 'Filter Date / Period'}</span>
-          </label>
-          {isFiltered && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="text-[10px] text-red-500 hover:text-red-600 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
-            >
-              <X size={12} />
-              <span>{isRtl ? 'مسح الفلتر' : 'Clear'}</span>
-            </button>
-          )}
-        </div>
+      <div className={hideLabel ? '' : 'space-y-1.5'}>
+        {!hideLabel && (
+          <div className="flex items-center justify-between gap-1.5">
+            <label className="text-xs font-extrabold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+              <CalendarIcon size={14} className="text-emerald-500" />
+              <span>{isRtl ? 'تصفية بالتاريخ / الفترة' : 'Filter Date / Period'}</span>
+            </label>
+            {isFiltered && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="text-[10px] text-red-500 hover:text-red-600 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
+              >
+                <X size={12} />
+                <span>{isRtl ? 'مسح الفلتر' : 'Clear'}</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Trigger Button */}
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between gap-2 px-3 py-2 bg-white dark:bg-zinc-900 border rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer select-none ${
+          className={`w-full flex items-center justify-between gap-2 px-3.5 py-2 border rounded-2xl text-xs font-bold transition-all shadow-xs cursor-pointer select-none whitespace-nowrap ${
             isFiltered
-              ? 'border-emerald-500 text-emerald-700 dark:text-emerald-400 ring-2 ring-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-950/20'
-              : 'border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-600'
-          }`}
+              ? 'border-emerald-500 text-emerald-700 dark:text-emerald-400 ring-2 ring-emerald-500/20 bg-emerald-500/10'
+              : 'border-zinc-200 dark:border-zinc-700/50 bg-zinc-50 dark:bg-zinc-800/30 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          } ${buttonClassName}`}
         >
           <div className="flex items-center gap-2 truncate">
             <CalendarIcon size={14} className={isFiltered ? 'text-emerald-500' : 'text-zinc-400'} />
-            <span className="truncate font-mono">{getDisplayText()}</span>
+            <span className="truncate">{getDisplayText()}</span>
           </div>
 
           <div className="flex items-center gap-1 shrink-0 text-zinc-400">
@@ -253,37 +266,39 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
         </button>
       </div>
 
-      {/* Quick Chips Bar below trigger for super-fast one-click filtering */}
-      <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto scrollbar-none pb-0.5 max-w-full">
-        <button
-          type="button"
-          onClick={() => onChange({ mode: 'all' })}
-          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer ${
-            !isFiltered
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-          }`}
-        >
-          {isRtl ? 'الكل' : 'All'}
-        </button>
-        {presets.slice(0, 4).map(p => {
-          const isActive = value.mode === 'preset' && value.presetKey === p.key;
-          return (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => handleApplyPreset(p.key)}
-              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-              }`}
-            >
-              {isRtl ? p.labelAr : p.labelEn}
-            </button>
-          );
-        })}
-      </div>
+      {/* Quick Chips Bar below trigger */}
+      {!hideQuickChips && (
+        <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto scrollbar-none pb-0.5 max-w-full">
+          <button
+            type="button"
+            onClick={() => onChange({ mode: 'all' })}
+            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer ${
+              !isFiltered
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+            }`}
+          >
+            {isRtl ? 'الكل' : 'All'}
+          </button>
+          {presets.slice(0, 4).map(p => {
+            const isActive = value.mode === 'preset' && value.presetKey === p.key;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => handleApplyPreset(p.key)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                {isRtl ? p.labelAr : p.labelEn}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Popover Dropdown Panel */}
       {isOpen && (
