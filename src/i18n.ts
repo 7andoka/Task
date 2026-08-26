@@ -161,7 +161,11 @@ export const translations = {
     finishedProduct: "منتج تام",
     rawMaterialsInventory: "الخامات",
     scaleReports: "تقارير الميزان البسكول",
-    freshSupply: "توريد الفريش"
+    freshSupply: "توريد الفريش",
+    purchaseOrders: "أوامر التوريد",
+    registrationOfficer: "مسئول التسجيل",
+    approvalOfficer: "مسئول الاعتماد",
+    executionOfficer: "مسئول التنفيذ"
   },
   en: {
     warehouseManager: "Warehouse Manager",
@@ -325,6 +329,10 @@ export const translations = {
     finishedProduct: "Finished Product",
     rawMaterialsInventory: "Raw Materials",
     scaleReports: "Scale Reports",
-    freshSupply: "Fresh Supply"
+    freshSupply: "Fresh Supply",
+    purchaseOrders: "Purchase Orders",
+    registrationOfficer: "Registration Officer",
+    approvalOfficer: "Approval Officer",
+    executionOfficer: "Execution Officer"
   }
 };

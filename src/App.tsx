@@ -18,6 +18,7 @@ import CsvDataView from './components/CsvDataView';
 import RawMaterialsInventory from './components/RawMaterialsInventory';
 import ScaleReports from './components/ScaleReports';
 import FreshSupply from './components/FreshSupply';
+import PurchaseOrders from './components/PurchaseOrders';
 import OfflineScreen from './components/OfflineScreen';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
@@ -43,50 +44,45 @@ export default function App() {
     if (!u) return [];
     
     const menuItems = [
-      { id: 'scaleReports', roles: undefined },
-      { id: 'supplyTracking', roles: undefined },
-      { id: 'freshSupply', roles: undefined },
-      { id: 'rawMaterialsInventory', roles: undefined },
-      { id: 'coldStorage', roles: undefined },
-      { id: 'rawMaterial', roles: undefined },
-      { id: 'thirdPartyProcessing', roles: undefined },
-      { id: 'oliveStock', roles: undefined },
-      { id: 'finishedProduct', roles: undefined },
-      { id: 'tasks', roles: undefined },
-      { id: 'team', roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
-      { id: 'users', roles: ['Warehouse Manager', 'Admin'] },
-      { id: 'settings', roles: undefined },
+      { id: 'scaleReports' },
+      { id: 'supplyTracking' },
+      { id: 'freshSupply' },
+      { id: 'purchaseOrders' },
+      { id: 'rawMaterialsInventory' },
+      { id: 'coldStorage' },
+      { id: 'rawMaterial' },
+      { id: 'thirdPartyProcessing' },
+      { id: 'oliveStock' },
+      { id: 'finishedProduct' },
+      { id: 'tasks' },
+      { id: 'team' },
+      { id: 'users' },
+      { id: 'settings' },
     ];
 
     const userRoles = u.roles || (u.role ? [u.role] : []);
     const isAdminOrWHManager = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
 
-    if (u.permissions && u.permissions.length > 0) {
-      return menuItems
-        .filter(item => {
-          if (item.id === 'scaleReports' && isAdminOrWHManager) return true;
-          if (item.id === 'freshSupply' && isAdminOrWHManager) return true;
-          if (item.id === 'rawMaterialsInventory' && isAdminOrWHManager) return true;
-          if (item.id === 'finishedProduct') {
-            return u.permissions!.includes('finishedProduct') || u.permissions!.includes('oliveStock') || isAdminOrWHManager;
-          }
-          return u.permissions!.includes(item.id);
-        })
-        .map(item => item.id);
+    // 1. Admin and Warehouse Manager have access to all pages (new and existing)
+    if (isAdminOrWHManager) {
+      return menuItems.map(item => item.id);
     }
 
+    // 2. Non-admin users ONLY have access to the pages explicitly granted in their permissions array
+    const permissions = u.permissions || [];
     return menuItems
-      .filter(item => !item.roles || item.roles.some(r => userRoles.includes(r as any)))
+      .filter(item => permissions.includes(item.id))
       .map(item => item.id);
   };
 
   const getDefaultTab = (u: UserProfile | null): string => {
     if (!u) return 'supplyTracking';
     const allowed = getAllowedTabs(u);
-    if (allowed.includes('oliveStock')) {
-      return 'oliveStock';
-    }
-    return allowed.length > 0 ? allowed[0] : 'settings';
+    if (allowed.length === 0) return 'settings';
+    if (allowed.includes('scaleReports')) return 'scaleReports';
+    if (allowed.includes('supplyTracking')) return 'supplyTracking';
+    if (allowed.includes('oliveStock')) return 'oliveStock';
+    return allowed[0];
   };
 
   const [loading, setLoading] = useState(true);
@@ -212,6 +208,18 @@ export default function App() {
         // Deduplicate by UID to prevent duplicate key errors
         const uniqueUsers = Array.from(new Map(usersData.map(u => [u.uid, u])).values());
         setAllUsers(uniqueUsers);
+
+        // Synchronize current user profile and permissions in real-time
+        if (user) {
+          const updatedCurrentUser = uniqueUsers.find(u => u.uid === user.uid || (u.username && u.username === user.username));
+          if (updatedCurrentUser) {
+            const hasPermissionsChanged = JSON.stringify(user.permissions || []) !== JSON.stringify(updatedCurrentUser.permissions || []);
+            const hasRolesChanged = JSON.stringify(user.roles || [user.role]) !== JSON.stringify(updatedCurrentUser.roles || [updatedCurrentUser.role]);
+            if (hasPermissionsChanged || hasRolesChanged) {
+              setUser(updatedCurrentUser);
+            }
+          }
+        }
       },
       (error) => {
         console.error("Users Snapshot Error:", error);
@@ -249,6 +257,15 @@ export default function App() {
       unsubUsers();
     };
   }, [user]);
+
+  // Ensure activeTab is always permitted for the logged-in user
+  useEffect(() => {
+    if (!user) return;
+    const allowed = getAllowedTabs(user);
+    if (allowed.length > 0 && !allowed.includes(activeTab)) {
+      setActiveTab(getDefaultTab(user));
+    }
+  }, [user, activeTab]);
 
   // Derive subordinates and filtered tasks
   const subordinates = React.useMemo(() => {
@@ -481,6 +498,8 @@ export default function App() {
         return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
       case 'freshSupply':
         return <FreshSupply lang={lang} user={user} />;
+      case 'purchaseOrders':
+        return <PurchaseOrders lang={lang} user={user} />;
       case 'rawMaterialsInventory':
         return <RawMaterialsInventory lang={lang} />;
       case 'coldStorage':

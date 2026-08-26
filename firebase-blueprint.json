@@ -164,6 +164,43 @@
         "lastUpdatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "date", "movementType", "movementNumber", "supplier", "materialCode", "itemName", "quantity", "unit", "createdAt", "lastUpdatedAt"]
+    },
+    "PurchaseOrder": {
+      "title": "PurchaseOrder",
+      "description": "Purchase order workflow request and fulfillment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "pricingDate": { "type": "string", "format": "date" },
+        "region": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "supplierCode": { "type": "string" },
+        "itemType": { "type": "string" },
+        "itemCategory": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "price": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending Approval", "Approved", "Rejected", "Modification Requested", "Completed"] },
+        "createdBy": { "type": "string" },
+        "createdByName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "approvedBy": { "type": "string" },
+        "approvedByName": { "type": "string" },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "approvalNotes": { "type": "string" },
+        "rejectionReason": { "type": "string" },
+        "poNumber": { "type": "string" },
+        "executedBy": { "type": "string" },
+        "executedByName": { "type": "string" },
+        "executedAt": { "type": "string", "format": "date-time" },
+        "executionNotes": { "type": "string" },
+        "sapDocNumber": { "type": "string" },
+        "lastUpdatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "pricingDate", "region", "supplierName", "itemType", "quantity", "price", "totalAmount", "status", "createdBy", "createdAt"]
     }
   },
   "firestore": {
@@ -175,6 +212,7 @@
     "audit_logs": { "schema": "AuditLog", "description": "Audit logs collection" },
     "barrel_movements": { "schema": "BarrelMovement", "description": "Barrel movements collection" },
     "third_party_processing": { "schema": "ProcessingJob", "description": "Third-party processing jobs collection" },
-    "agri_raw_material": { "schema": "AgriRawMaterial", "description": "Agricultural raw materials movements collection" }
+    "agri_raw_material": { "schema": "AgriRawMaterial", "description": "Agricultural raw materials movements collection" },
+    "purchase_orders": { "schema": "PurchaseOrder", "description": "Purchase orders workflow collection" }
   }
 }

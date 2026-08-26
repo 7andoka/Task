@@ -65,13 +65,17 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     'Customer Operations',
     'Warehouse Operations',
     'Quality Operations',
-    'Purchasing Operations'
+    'Purchasing Operations',
+    'Registration Officer',
+    'Approval Officer',
+    'Execution Officer'
   ];
 
   const availablePages = [
     { id: 'scaleReports', label: t.scaleReports },
     { id: 'supplyTracking', label: t.supplyTracking },
     { id: 'freshSupply', label: t.freshSupply },
+    { id: 'purchaseOrders', label: t.purchaseOrders },
     { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory },
     { id: 'coldStorage', label: t.coldStorage },
     { id: 'rawMaterial', label: t.rawMaterial },
@@ -152,6 +156,23 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
         ? currentPermissions.filter(p => p !== pageId)
         : [...currentPermissions, pageId];
       setEditForm({ ...editForm, permissions: newPermissions });
+    }
+  };
+
+  const selectAllPermissions = (formType: 'create' | 'edit') => {
+    const allPageIds = availablePages.map(p => p.id);
+    if (formType === 'create') {
+      setCreateForm({ ...createForm, permissions: allPageIds });
+    } else if (formType === 'edit' && editForm) {
+      setEditForm({ ...editForm, permissions: allPageIds });
+    }
+  };
+
+  const clearAllPermissions = (formType: 'create' | 'edit') => {
+    if (formType === 'create') {
+      setCreateForm({ ...createForm, permissions: [] });
+    } else if (formType === 'edit' && editForm) {
+      setEditForm({ ...editForm, permissions: [] });
     }
   };
 
@@ -324,29 +345,65 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
               </div>
 
               {/* Permissions Section */}
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
-                  <Shield size={16} className="text-emerald-500" />
-                  {t.accessControl}
-                </label>
-                <p className="text-[10px] text-zinc-400">{t.selectPages}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {availablePages.map(page => (
+              <div className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <Shield size={16} className="text-emerald-500" />
+                    {t.accessControl}
+                  </label>
+                  <div className="flex items-center gap-2">
                     <button
-                      key={page.id}
                       type="button"
-                      onClick={() => togglePermission('create', page.id)}
-                      className={cn(
-                        "flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-all",
-                        createForm.permissions.includes(page.id)
-                          ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400"
-                          : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 text-zinc-500"
-                      )}
+                      onClick={() => selectAllPermissions('create')}
+                      className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
                     >
-                      <span>{page.label}</span>
-                      {createForm.permissions.includes(page.id) ? <Check size={12} /> : <div className="w-3 h-3 rounded-full border border-zinc-300 dark:border-zinc-600" />}
+                      {lang === 'ar' ? 'تحديد الكل' : 'Select All'}
                     </button>
-                  ))}
+                    <span className="text-zinc-300 dark:text-zinc-700">|</span>
+                    <button
+                      type="button"
+                      onClick={() => clearAllPermissions('create')}
+                      className="text-xs text-zinc-500 hover:text-red-500 hover:underline font-medium"
+                    >
+                      {lang === 'ar' ? 'إلغاء التحديد' : 'Deselect All'}
+                    </button>
+                  </div>
+                </div>
+
+                {(createForm.roles || [createForm.role]).some(r => r === 'Admin' || r === 'Warehouse Manager') && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
+                    <Shield size={14} className="shrink-0" />
+                    <span>{lang === 'ar' ? 'هذا المستخدم يمتلك دور مدير النظام، وسيحصل تلقائياً على حق الوصول لجميع الصفحات.' : 'This user is an Admin/Manager and will automatically have access to all pages.'}</span>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-zinc-400">{t.selectPages}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
+                  {availablePages.map(page => {
+                    const isChecked = createForm.permissions.includes(page.id);
+                    return (
+                      <button
+                        key={page.id}
+                        type="button"
+                        onClick={() => togglePermission('create', page.id)}
+                        className={cn(
+                          "flex items-center justify-between p-2.5 rounded-xl border text-xs font-medium transition-all text-right",
+                          isChecked
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold"
+                            : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-zinc-300 dark:hover:border-zinc-700"
+                        )}
+                      >
+                        <span className="truncate">{page.label}</span>
+                        {isChecked ? (
+                          <div className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                            <Check size={10} strokeWidth={3} />
+                          </div>
+                        ) : (
+                          <div className="w-4 h-4 rounded-full border border-zinc-300 dark:border-zinc-600 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -465,29 +522,65 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
               </div>
 
               {/* Permissions Section */}
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-2">
-                  <Shield size={16} className="text-emerald-500" />
-                  {t.accessControl}
-                </label>
-                <p className="text-[10px] text-zinc-400">{t.selectPages}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {availablePages.map(page => (
+              <div className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                    <Shield size={16} className="text-emerald-500" />
+                    {t.accessControl}
+                  </label>
+                  <div className="flex items-center gap-2">
                     <button
-                      key={page.id}
                       type="button"
-                      onClick={() => togglePermission('edit', page.id)}
-                      className={cn(
-                        "flex items-center justify-between p-2 rounded-xl border text-xs font-medium transition-all",
-                        (editForm.permissions || []).includes(page.id)
-                          ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400"
-                          : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 text-zinc-500"
-                      )}
+                      onClick={() => selectAllPermissions('edit')}
+                      className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-semibold"
                     >
-                      <span>{page.label}</span>
-                      {(editForm.permissions || []).includes(page.id) ? <Check size={12} /> : <div className="w-3 h-3 rounded-full border border-zinc-300 dark:border-zinc-600" />}
+                      {lang === 'ar' ? 'تحديد الكل' : 'Select All'}
                     </button>
-                  ))}
+                    <span className="text-zinc-300 dark:text-zinc-700">|</span>
+                    <button
+                      type="button"
+                      onClick={() => clearAllPermissions('edit')}
+                      className="text-xs text-zinc-500 hover:text-red-500 hover:underline font-medium"
+                    >
+                      {lang === 'ar' ? 'إلغاء التحديد' : 'Deselect All'}
+                    </button>
+                  </div>
+                </div>
+
+                {(editForm.roles || [editForm.role]).some(r => r === 'Admin' || r === 'Warehouse Manager') && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
+                    <Shield size={14} className="shrink-0" />
+                    <span>{lang === 'ar' ? 'هذا المستخدم يمتلك دور مدير النظام، وسيحصل تلقائياً على حق الوصول لجميع الصفحات.' : 'This user is an Admin/Manager and will automatically have access to all pages.'}</span>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-zinc-400">{t.selectPages}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
+                  {availablePages.map(page => {
+                    const isChecked = (editForm.permissions || []).includes(page.id);
+                    return (
+                      <button
+                        key={page.id}
+                        type="button"
+                        onClick={() => togglePermission('edit', page.id)}
+                        className={cn(
+                          "flex items-center justify-between p-2.5 rounded-xl border text-xs font-medium transition-all text-right",
+                          isChecked
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold"
+                            : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-zinc-300 dark:hover:border-zinc-700"
+                        )}
+                      >
+                        <span className="truncate">{page.label}</span>
+                        {isChecked ? (
+                          <div className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                            <Check size={10} strokeWidth={3} />
+                          </div>
+                        ) : (
+                          <div className="w-4 h-4 rounded-full border border-zinc-300 dark:border-zinc-600 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -509,63 +602,108 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
               {lang === 'ar' ? 'لم يتم العثور على مستخدمين' : 'No users found'}
             </div>
           ) : (
-            filteredUsers.map(u => (
-              <motion.div 
-                key={u.uid}
-                whileHover={{ scale: 1.005 }}
-                className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-              >
-                <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-xl shrink-0">
-                    {u.displayName.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="font-bold text-base truncate">{u.displayName}</h3>
-                      <div className="flex flex-wrap gap-1">
-                        {(u.roles || [u.role]).map((r, idx) => {
-                          const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
-                          const label = t[translationKey as keyof typeof t] || r;
-                          return (
-                            <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-tighter">
-                              {label}
+            filteredUsers.map(u => {
+              const uRoles = u.roles || [u.role];
+              const isUserAdmin = uRoles.includes('Admin') || uRoles.includes('Warehouse Manager');
+              
+              return (
+                <motion.div 
+                  key={u.uid}
+                  whileHover={{ scale: 1.005 }}
+                  className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-all flex flex-col gap-3"
+                >
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-xl shrink-0">
+                        {u.displayName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h3 className="font-bold text-base truncate">{u.displayName}</h3>
+                          <div className="flex flex-wrap gap-1">
+                            {uRoles.map((r, idx) => {
+                              const translationKey = r.charAt(0).toLowerCase() + r.slice(1).replace(/\s+/g, '');
+                              const label = t[translationKey as keyof typeof t] || r;
+                              return (
+                                <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-tighter">
+                                  {label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-zinc-500 text-xs font-medium">
+                          <span className="flex items-center gap-1">@{u.username}</span>
+                          {u.phone && <span className="flex items-center gap-1">• {u.phone}</span>}
+                          {u.managerId && (
+                            <span className="px-2 py-0.5 rounded-md bg-zinc-50 dark:bg-zinc-800 text-[10px]">
+                              {t.manager}: {users.find(m => m.uid === u.managerId)?.displayName || '-'}
                             </span>
-                          );
-                        })}
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-zinc-500 text-xs font-medium">
-                      <span className="flex items-center gap-1">@{u.username}</span>
-                      {u.phone && <span className="flex items-center gap-1">• {u.phone}</span>}
-                      {u.managerId && (
-                        <span className="px-2 py-0.5 rounded-md bg-zinc-50 dark:bg-zinc-800 text-[10px]">
-                          {t.manager}: {users.find(m => m.uid === u.managerId)?.displayName || '-'}
-                        </span>
-                      )}
+                    
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                      <button 
+                        onClick={() => {
+                          setEditForm(u);
+                          setAdminNewPassword("");
+                          setIsEditModalOpen(true);
+                        }}
+                        className="p-2 rounded-lg text-zinc-400 hover:text-emerald-500 hover:bg-emerald-500/10 transition-all bg-zinc-50 dark:bg-zinc-800/50"
+                        title={lang === 'ar' ? 'تعديل المستخدم والصلاحيات' : 'Edit User & Permissions'}
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteUser(u.uid)}
+                        className="p-2 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all bg-zinc-50 dark:bg-zinc-800/50"
+                        title={lang === 'ar' ? 'حذف المستخدم' : 'Delete User'}
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
-                </div>
-                
-                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                  <button 
-                    onClick={() => {
-                    setEditForm(u);
-                    setAdminNewPassword("");
-                    setIsEditModalOpen(true);
-                  }}
-                  className="p-2 rounded-lg text-zinc-400 hover:text-emerald-500 hover:bg-emerald-500/10 transition-all bg-zinc-50 dark:bg-zinc-800/50"
-                >
-                  <Edit2 size={16} />
-                </button>
-                <button 
-                  onClick={() => handleDeleteUser(u.uid)}
-                  className="p-2 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition-all bg-zinc-50 dark:bg-zinc-800/50"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </motion.div>
-          )))}
+
+                  {/* Permissions Badges Row */}
+                  <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex flex-wrap items-center gap-1.5">
+                    {isUserAdmin ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        <Shield size={12} />
+                        {lang === 'ar' ? '👑 مدير النظام: صلاحية كاملة لجميع الصفحات الحالية والجديدة' : '👑 System Admin: Full access to all current and new pages'}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-[11px] text-zinc-500 font-medium">
+                          {lang === 'ar' 
+                            ? `الصفحات المصرح بها (${(u.permissions || []).length}):` 
+                            : `Authorized Pages (${(u.permissions || []).length}):`}
+                        </span>
+                        {u.permissions && u.permissions.length > 0 ? (
+                          u.permissions.map(pid => {
+                            const pageObj = availablePages.find(p => p.id === pid);
+                            return (
+                              <span 
+                                key={pid} 
+                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+                              >
+                                {pageObj?.label || pid}
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <span className="text-[10px] text-amber-500 italic bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded">
+                            {lang === 'ar' ? 'لا توجد صفحات مخصصة (يجب على الآدمن تحديد الصلاحيات)' : 'No pages granted (Admin must assign permissions)'}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

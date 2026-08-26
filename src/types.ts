@@ -1,4 +1,25 @@
-export type UserRole = 'Admin' | 'Warehouse Manager' | 'Department Head' | 'Supervisor' | 'Warehouse Specialist' | 'Warehouse Keeper' | 'Assistant Warehouse Keeper' | 'Worker' | 'Security' | 'Quality' | 'Warehouse' | 'Customer Operations' | 'Warehouse Operations' | 'Quality Operations' | 'Purchasing Operations';
+export type UserRole = 
+  | 'Admin' 
+  | 'Warehouse Manager' 
+  | 'Department Head' 
+  | 'Supervisor' 
+  | 'Warehouse Specialist' 
+  | 'Warehouse Keeper' 
+  | 'Assistant Warehouse Keeper' 
+  | 'Worker' 
+  | 'Security' 
+  | 'Quality' 
+  | 'Warehouse' 
+  | 'Customer Operations' 
+  | 'Warehouse Operations' 
+  | 'Quality Operations' 
+  | 'Purchasing Operations'
+  | 'Registration Officer'
+  | 'Approval Officer'
+  | 'Execution Officer'
+  | 'مسئول التسجيل'
+  | 'مسئول الاعتماد'
+  | 'مسئول التنفيذ';
 
 export type SupplyStatus = 'Security Entry' | 'Quality Inspection' | 'Warehouse Unloading' | 'Security Exit' | 'Completed';
 export type QualityDecision = 'Accepted' | 'Rejected' | 'Under Inspection' | 'Not Unloaded';
@@ -326,4 +347,52 @@ export interface Operation {
 }
 
 export type Language = 'ar' | 'en';
+
+export type PurchaseOrderStatus = 
+  | 'Pending Approval'     // في انتظار الاعتماد (المسجل أنشأ الطلب)
+  | 'Approved'             // معتمد (مسئول الاعتماد وافق عليه)
+  | 'Rejected'             // مرفوض من مسئول الاعتماد
+  | 'Modification Requested' // طلب تعديل
+  | 'Completed';           // منتهي (مسئول التنفيذ أنشأ أمر التوريد وأدخل رقم الـ PO)
+
+export interface PurchaseOrder {
+  id: string;
+  orderNumber?: string;        // رقم تسلسلي داخلي للطلب
+  pricingDate: string;         // تاريخ التسعير
+  region: string;              // اسم المنطقة
+  supplierName: string;        // اسم المورد
+  supplierCode?: string;       // كود المورد
+  itemType: string;            // نوع الصنف
+  itemCategory?: string;       // التصنيف (زيتون / فلفل / خام زراعي / إلخ)
+  quantity: number;            // الكمية
+  unit: string;                // الوحدة (كجم / طن / عدد)
+  price: number;               // السعر للوحدة
+  totalAmount: number;         // إجمالي القيمة (الكمية × السعر)
+  currency?: string;           // العملة (ج.م)
+  notes?: string;              // ملاحظات التسجيل
+
+  // Stage 1: Registration info
+  createdBy: string;           // اسم / معرف مسجل الطلب
+  createdByName?: string;      // اسم مسجل الطلب المعروض
+  createdAt: string;           // تاريخ ووقت التسجيل
+
+  // Stage 2: Approval info
+  status: PurchaseOrderStatus;
+  approvedBy?: string;         // معرف مسئول الاعتماد
+  approvedByName?: string;     // اسم مسئول الاعتماد
+  approvedAt?: string;         // تاريخ ووقت الاعتماد
+  approvalNotes?: string;      // ملاحظات الاعتماد / سبب الرفض
+  rejectionReason?: string;    // سبب الرفض
+
+  // Stage 3: Execution / PO Generation info
+  poNumber?: string;           // رقم أمر التوريد (الـ PO)
+  executedBy?: string;         // معرف مسئول التنفيذ
+  executedByName?: string;     // اسم مسئول التنفيذ
+  executedAt?: string;         // تاريخ ووقت إصدار أمر التوريد
+  executionNotes?: string;     // ملاحظات التنفيذ
+  sapDocNumber?: string;       // رقم مستند ساب إن وجد
+
+  lastUpdatedAt: string;
+}
+
 

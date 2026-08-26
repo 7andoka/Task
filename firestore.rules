@@ -48,5 +48,9 @@ service cloud.firestore {
     match /agri_raw_material/{movementId} {
       allow read, write: if true;
     }
+
+    match /purchase_orders/{orderId} {
+      allow read, write: if true;
+    }
   }
 }

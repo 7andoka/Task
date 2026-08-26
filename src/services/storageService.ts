@@ -1,4 +1,4 @@
-import { UserProfile, Task, Subtask, Comment, Notification, AuditLog, SupplyMovement, AgriRawMaterial } from '../types';
+import { UserProfile, Task, Subtask, Comment, Notification, AuditLog, SupplyMovement, AgriRawMaterial, PurchaseOrder } from '../types';
 import { auth, db } from '../firebase';
 import { collection, doc, getDocs, getDoc, setDoc, getDocFromServer, query, where, deleteDoc, orderBy } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
@@ -356,6 +356,37 @@ export const storageService = {
       await deleteDoc(doc(db, COLLECTIONS.AGRI_RAW_MATERIAL, id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.AGRI_RAW_MATERIAL}/${id}`);
+    }
+  },
+
+  // Purchase Order (أوامر التوريد) Methods
+  getPurchaseOrders: async (): Promise<PurchaseOrder[]> => {
+    try {
+      const snapshot = await getDocs(query(collection(db, COLLECTIONS.PURCHASE_ORDERS), orderBy('createdAt', 'desc')));
+      return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PurchaseOrder));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, COLLECTIONS.PURCHASE_ORDERS);
+    }
+  },
+  savePurchaseOrder: async (po: PurchaseOrder) => {
+    try {
+      const cleanData = { ...po };
+      // Remove undefined values
+      Object.keys(cleanData).forEach(key => {
+        if ((cleanData as any)[key] === undefined) {
+          delete (cleanData as any)[key];
+        }
+      });
+      await setDoc(doc(db, COLLECTIONS.PURCHASE_ORDERS, po.id), cleanData);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `${COLLECTIONS.PURCHASE_ORDERS}/${po.id}`);
+    }
+  },
+  deletePurchaseOrder: async (id: string) => {
+    try {
+      await deleteDoc(doc(db, COLLECTIONS.PURCHASE_ORDERS, id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${COLLECTIONS.PURCHASE_ORDERS}/${id}`);
     }
   },
 };
