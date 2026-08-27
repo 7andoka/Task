@@ -239,6 +239,13 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       .filter(o => o.status !== 'Rejected')
       .reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
 
+    const validPricedOrders = orders.filter(o => o.status !== 'Rejected' && Number(o.price) > 0);
+    const averagePrice = totalQuantity > 0 
+      ? totalValue / totalQuantity 
+      : (validPricedOrders.length > 0 
+          ? validPricedOrders.reduce((sum, o) => sum + (Number(o.price) || 0), 0) / validPricedOrders.length 
+          : 0);
+
     return {
       totalCount,
       pendingApproval,
@@ -246,7 +253,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       completed,
       rejected,
       totalQuantity,
-      totalValue
+      totalValue,
+      averagePrice
     };
   }, [orders]);
 
@@ -601,27 +609,22 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
     <div className="space-y-6 pb-16" dir={isRtl ? 'rtl' : 'ltr'}>
       
       {/* Header Banner with Workflow Steps and New Request Button */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-teal-800 to-zinc-900 p-6 sm:p-8 text-white shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-800 via-teal-800 to-zinc-900 p-4 sm:p-5 text-white shadow-lg">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold text-emerald-200">
-              <ShoppingBag size={14} />
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4">
+          <div className="space-y-1 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[11px] font-semibold text-emerald-200">
+              <ShoppingBag size={13} />
               <span>{isRtl ? 'دورة عمل أوامر التوريد والتسعير' : 'Purchase Orders & Pricing Lifecycle'}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
               {isRtl ? 'إدارة واعتماد أوامر التوريد' : 'Purchase Orders Workflow'}
             </h1>
-            <p className="text-zinc-300 text-sm sm:text-base leading-relaxed">
-              {isRtl 
-                ? 'مسار إلكتروني ثلاثي المراحل: يبدأ بتسجيل وتسعير الطلبات، يليه اعتماد ومراجعة الإدارة، ثم إصدار أمر التوريد والـ PO الفعلي.'
-                : 'A 3-stage automated lifecycle: Registration & Pricing, Management Approval, and PO Generation & Execution.'}
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto shrink-0">
             {isRegistrationOfficer && (
               <button
                 id="btn-new-purchase-order"
@@ -642,156 +645,193 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                   });
                   setIsCreateModalOpen(true);
                 }}
-                className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-sm shadow-lg shadow-emerald-500/30 transition-all hover:scale-105 active:scale-95"
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs shadow-md shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95"
               >
-                <Plus size={18} />
+                <Plus size={16} />
                 <span>{isRtl ? 'تسجيل طلب تسعير جديد' : 'New Pricing Request'}</span>
               </button>
             )}
 
             <button
               onClick={handleExportCSV}
-              className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-semibold text-sm backdrop-blur-md transition-all active:scale-95"
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-semibold text-xs backdrop-blur-md transition-all active:scale-95"
               title={isRtl ? 'تصدير إكسل' : 'Export Excel'}
             >
-              <FileSpreadsheet size={18} />
+              <FileSpreadsheet size={16} />
               <span className="hidden sm:inline">{isRtl ? 'تصدير Excel' : 'Export'}</span>
             </button>
           </div>
         </div>
 
         {/* 3-Step Lifecycle Visual Indicator */}
-        <div className="relative mt-8 pt-6 border-t border-white/10 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold text-base shrink-0">
+        <div className="relative mt-3.5 pt-3.5 border-t border-white/10 grid grid-cols-1 md:grid-cols-3 gap-2.5">
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/10">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">
               1
             </div>
-            <div>
-              <p className="text-xs text-zinc-400 font-medium">{isRtl ? 'المرحلة الأولى' : 'Stage 1'}</p>
-              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <span>{isRtl ? 'مسئول التسجيل' : 'Registration'}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-normal">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-white truncate">{isRtl ? 'مسئول التسجيل' : 'Registration'}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-semibold">
                   {stats.pendingApproval} {isRtl ? 'طلب' : 'reqs'}
                 </span>
-              </h4>
-              <p className="text-[11px] text-zinc-300 truncate">{isRtl ? 'التسعير، المنطقة، المورد، الصنف' : 'Pricing, Region, Supplier, Qty'}</p>
+              </div>
+              <p className="text-[10px] text-zinc-300 truncate">{isRtl ? 'التسعير والبيانات' : 'Pricing & Details'}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold text-base shrink-0">
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/10">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold text-sm shrink-0">
               2
             </div>
-            <div>
-              <p className="text-xs text-zinc-400 font-medium">{isRtl ? 'المرحلة الثانية' : 'Stage 2'}</p>
-              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <span>{isRtl ? 'مسئول الاعتماد' : 'Approval'}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-normal">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-white truncate">{isRtl ? 'مسئول الاعتماد' : 'Approval'}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-semibold">
                   {stats.pendingExecution} {isRtl ? 'طلب' : 'reqs'}
                 </span>
-              </h4>
-              <p className="text-[11px] text-zinc-300 truncate">{isRtl ? 'مراجعة واعتماد الأسعار والبيانات' : 'Data & Price Verification'}</p>
+              </div>
+              <p className="text-[10px] text-zinc-300 truncate">{isRtl ? 'المراجعة والاعتماد' : 'Review & Approval'}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold text-base shrink-0">
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/5 border border-white/10">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0">
               3
             </div>
-            <div>
-              <p className="text-xs text-zinc-400 font-medium">{isRtl ? 'المرحلة الثالثة' : 'Stage 3'}</p>
-              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <span>{isRtl ? 'مسئول التنفيذ' : 'PO Execution'}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-normal">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-white truncate">{isRtl ? 'مسئول التنفيذ' : 'PO Execution'}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-semibold">
                   {stats.completed} {isRtl ? 'أمر PO' : 'POs'}
                 </span>
-              </h4>
-              <p className="text-[11px] text-zinc-300 truncate">{isRtl ? 'إصدار أمر التوريد والـ PO والانتهاء' : 'PO Creation & Completion'}</p>
+              </div>
+              <p className="text-[10px] text-zinc-300 truncate">{isRtl ? 'إصدار أمر PO' : 'PO Creation'}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-500 text-xs font-semibold">
-            <span>{isRtl ? 'إجمالي الطلبات' : 'Total Orders'}</span>
-            <FileText size={16} className="text-zinc-400" />
+      {/* Compact KPI Cards Grid (8 Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-2.5">
+        
+        {/* 1. Total Requests */}
+        <div 
+          onClick={() => setActiveStageTab('all')}
+          className={`bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer shadow-xs flex flex-col justify-between ${activeStageTab === 'all' ? 'ring-2 ring-zinc-400 dark:ring-zinc-600 border-zinc-400' : 'border-zinc-200/80 dark:border-zinc-800 hover:border-zinc-300'}`}
+        >
+          <div className="flex items-center justify-between text-zinc-500 text-[11px] font-bold">
+            <span className="truncate">{isRtl ? 'إجمالي الطلبات' : 'Total Orders'}</span>
+            <FileText size={13} className="text-zinc-400 shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-zinc-900 dark:text-white">{stats.totalCount}</div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">{isRtl ? 'طلب مسجل بالنظام' : 'total registered'}</p>
+          <div className="mt-1.5">
+            <div className="text-lg sm:text-xl font-black text-zinc-900 dark:text-white leading-tight">{stats.totalCount}</div>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{isRtl ? 'طلب مسجل' : 'registered'}</p>
           </div>
         </div>
 
+        {/* 2. Pending Approval */}
         <div 
           onClick={() => setActiveStageTab('pending_approval')}
-          className={`bg-white dark:bg-zinc-900 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm ${activeStageTab === 'pending_approval' ? 'ring-2 ring-amber-500 border-amber-500' : 'border-zinc-200 dark:border-zinc-800 hover:border-amber-400'}`}
+          className={`bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer shadow-xs flex flex-col justify-between ${activeStageTab === 'pending_approval' ? 'ring-2 ring-amber-500 border-amber-500 bg-amber-500/5' : 'border-zinc-200/80 dark:border-zinc-800 hover:border-amber-400'}`}
         >
-          <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 text-xs font-semibold">
-            <span>{isRtl ? 'في انتظار الاعتماد' : 'Pending Approval'}</span>
-            <Clock size={16} />
+          <div className="flex items-center justify-between text-amber-600 dark:text-amber-400 text-[11px] font-bold">
+            <span className="truncate">{isRtl ? 'قيد الاعتماد' : 'Pending'}</span>
+            <Clock size={13} className="shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-amber-600 dark:text-amber-400">{stats.pendingApproval}</div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">{isRtl ? 'تنتظر مراجعة المدير' : 'awaiting approval'}</p>
+          <div className="mt-1.5">
+            <div className="text-lg sm:text-xl font-black text-amber-600 dark:text-amber-400 leading-tight">{stats.pendingApproval}</div>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{isRtl ? 'تنتظر المدير' : 'needs approval'}</p>
           </div>
         </div>
 
+        {/* 3. Pending Execution */}
         <div 
           onClick={() => setActiveStageTab('pending_execution')}
-          className={`bg-white dark:bg-zinc-900 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm ${activeStageTab === 'pending_execution' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-zinc-200 dark:border-zinc-800 hover:border-blue-400'}`}
+          className={`bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer shadow-xs flex flex-col justify-between ${activeStageTab === 'pending_execution' ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-500/5' : 'border-zinc-200/80 dark:border-zinc-800 hover:border-blue-400'}`}
         >
-          <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 text-xs font-semibold">
-            <span>{isRtl ? 'في انتظار التنفيذ' : 'Pending Execution'}</span>
-            <UserCheck size={16} />
+          <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 text-[11px] font-bold">
+            <span className="truncate">{isRtl ? 'قيد التنفيذ' : 'Execution'}</span>
+            <UserCheck size={13} className="shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{stats.pendingExecution}</div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">{isRtl ? 'معتمدة - بإصدار PO' : 'approved for PO'}</p>
+          <div className="mt-1.5">
+            <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400 leading-tight">{stats.pendingExecution}</div>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{isRtl ? 'بإصدار PO' : 'ready for PO'}</p>
           </div>
         </div>
 
+        {/* 4. Completed POs */}
         <div 
           onClick={() => setActiveStageTab('completed')}
-          className={`bg-white dark:bg-zinc-900 p-4 rounded-2xl border transition-all cursor-pointer shadow-sm ${activeStageTab === 'completed' ? 'ring-2 ring-emerald-500 border-emerald-500' : 'border-zinc-200 dark:border-zinc-800 hover:border-emerald-400'}`}
+          className={`bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer shadow-xs flex flex-col justify-between ${activeStageTab === 'completed' ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/5' : 'border-zinc-200/80 dark:border-zinc-800 hover:border-emerald-400'}`}
         >
-          <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-            <span>{isRtl ? 'أوامر PO مصدرة' : 'PO Completed'}</span>
-            <CheckCircle2 size={16} />
+          <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
+            <span className="truncate">{isRtl ? 'أوامر مصدرة' : 'Completed'}</span>
+            <CheckCircle2 size={13} className="shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{stats.completed}</div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">{isRtl ? 'تم إصدار الـ PO بنجاح' : 'POs generated'}</p>
+          <div className="mt-1.5">
+            <div className="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400 leading-tight">{stats.completed}</div>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{isRtl ? 'PO مصدر' : 'issued POs'}</p>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-500 text-xs font-semibold">
-            <span>{isRtl ? 'إجمالي الكميات' : 'Total Quantities'}</span>
-            <Layers size={16} className="text-indigo-400" />
+        {/* 5. Rejected Orders */}
+        <div 
+          onClick={() => setActiveStageTab('rejected')}
+          className={`bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-xl border transition-all cursor-pointer shadow-xs flex flex-col justify-between ${activeStageTab === 'rejected' ? 'ring-2 ring-rose-500 border-rose-500 bg-rose-500/5' : 'border-zinc-200/80 dark:border-zinc-800 hover:border-rose-400'}`}
+        >
+          <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 text-[11px] font-bold">
+            <span className="truncate">{isRtl ? 'الطلبات المرفوضة' : 'Rejected'}</span>
+            <XCircle size={13} className="shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+          <div className="mt-1.5">
+            <div className="text-lg sm:text-xl font-black text-rose-600 dark:text-rose-400 leading-tight">{stats.rejected}</div>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{isRtl ? 'مرفوض من الإدارة' : 'rejected'}</p>
+          </div>
+        </div>
+
+        {/* 6. Total Quantities */}
+        <div className="bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-indigo-600 dark:text-indigo-400 text-[11px] font-bold">
+            <span className="truncate">{isRtl ? 'إجمالي الكميات' : 'Quantities'}</span>
+            <Layers size={13} className="text-indigo-400 shrink-0" />
+          </div>
+          <div className="mt-1.5">
+            <div className="text-base sm:text-lg font-black text-indigo-600 dark:text-indigo-400 leading-tight truncate">
               {stats.totalQuantity.toLocaleString()}
             </div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">{isRtl ? 'كجم / طن معتمد ومسجل' : 'kg / tons registered'}</p>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{isRtl ? 'كجم / طن' : 'kg / tons'}</p>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-500 text-xs font-semibold">
-            <span>{isRtl ? 'إجمالي القيمة' : 'Total Value'}</span>
-            <DollarSign size={16} className="text-emerald-500" />
+        {/* 7. Average Price */}
+        <div className="bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-teal-600 dark:text-teal-400 text-[11px] font-bold">
+            <span className="truncate">{isRtl ? 'متوسط السعر' : 'Avg Price'}</span>
+            <TrendingUp size={13} className="text-teal-500 shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 truncate">
-              {stats.totalValue.toLocaleString()} <span className="text-xs font-normal text-zinc-400">ج.م</span>
+          <div className="mt-1.5">
+            <div className="text-base sm:text-lg font-black text-teal-600 dark:text-teal-400 leading-tight truncate">
+              {stats.averagePrice.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })} <span className="text-[10px] font-normal text-zinc-400">ج.م</span>
             </div>
-            <p className="text-[11px] text-zinc-400 mt-0.5">{isRtl ? 'إجمالي أوامر التوريد' : 'total value in EGP'}</p>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{isRtl ? 'متوسط الطن / كجم' : 'avg unit price'}</p>
           </div>
         </div>
+
+        {/* 8. Total Value */}
+        <div className="bg-white dark:bg-zinc-900 p-2.5 sm:p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
+            <span className="truncate">{isRtl ? 'إجمالي القيمة' : 'Total Value'}</span>
+            <DollarSign size={13} className="text-emerald-500 shrink-0" />
+          </div>
+          <div className="mt-1.5">
+            <div className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 leading-tight truncate">
+              {stats.totalValue.toLocaleString()} <span className="text-[10px] font-normal text-zinc-400">ج.م</span>
+            </div>
+            <p className="text-[10px] text-zinc-400 mt-0.5 truncate">{isRtl ? 'إجمالي الأوامر' : 'total value'}</p>
+          </div>
+        </div>
+
       </div>
 
       {/* Unified Search & Multi-Filter Bar */}
@@ -1002,7 +1042,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
           )}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {filteredOrders.map((order) => {
             const badge = getStatusBadge(order.status);
             const StatusIcon = badge.icon;
@@ -1011,183 +1051,111 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               <motion.div
                 key={order.id}
                 layout
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-sm hover:shadow-md transition-all space-y-4"
+                className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 dark:border-zinc-800 p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all space-y-2"
               >
-                {/* Header of Item Card */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
-                      <ShoppingBag size={20} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-extrabold text-base text-zinc-900 dark:text-white">
-                          {order.orderNumber || 'طلب تسعير'}
-                        </span>
-                        {order.poNumber && (
-                          <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500 text-white text-xs font-black tracking-wide flex items-center gap-1 shadow-sm">
-                            <BadgeCheck size={13} />
-                            <span>PO: {order.poNumber}</span>
-                          </span>
-                        )}
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold border ${badge.color}`}>
-                          <StatusIcon size={13} />
-                          <span>{badge.label}</span>
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2 flex-wrap">
-                        <span>📅 {isRtl ? 'تاريخ التسعير:' : 'Pricing Date:'} {order.pricingDate}</span>
-                        <span>•</span>
-                        <span>📍 {order.region}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Pricing & Total Amount Highlight */}
-                  <div className="flex items-center gap-3 self-start sm:self-auto bg-zinc-50 dark:bg-zinc-800/60 px-4 py-2 rounded-xl border border-zinc-200/70 dark:border-zinc-800">
-                    <div className="text-right">
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase">{isRtl ? 'إجمالي القيمة التقديرية' : 'Total Amount'}</p>
-                      <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                        {order.totalAmount.toLocaleString()} <span className="text-xs font-bold text-zinc-500">ج.م</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Main Order Details Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                  <div className="p-2.5 rounded-xl bg-zinc-50/60 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-400 block mb-1 font-medium">{isRtl ? 'المورد' : 'Supplier'}</span>
-                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm block truncate">
-                      {order.supplierName}
+                {/* Row 1: Core Order Data & Status & Total Value */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="font-extrabold text-sm text-zinc-900 dark:text-white bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-md shrink-0">
+                      {order.orderNumber || 'طلب تسعير'}
                     </span>
-                  </div>
 
-                  <div className="p-2.5 rounded-xl bg-zinc-50/60 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-400 block mb-1 font-medium">{isRtl ? 'نوع الصنف' : 'Item Type'}</span>
-                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm block truncate">
-                      {order.itemType}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-zinc-50/60 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-400 block mb-1 font-medium">{isRtl ? 'الكمية المطلوبة' : 'Quantity'}</span>
-                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm block">
-                      {order.quantity.toLocaleString()} {order.unit}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-zinc-50/60 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-400 block mb-1 font-medium">{isRtl ? 'سعر الوحدة' : 'Unit Price'}</span>
-                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm block">
-                      {order.price.toLocaleString()} ج.م / {order.unit}
-                    </span>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-zinc-50/60 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800">
-                    <span className="text-zinc-400 block mb-1 font-medium">{isRtl ? 'مكان التنزيل' : 'Unloading'}</span>
-                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm block truncate" title={order.unloadingLocations?.join('، ') || '—'}>
-                      {order.unloadingLocations?.join('، ') || '—'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Workflow Tracking History Bar */}
-                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 text-[11px] grid grid-cols-1 md:grid-cols-3 gap-2">
-                  
-                  {/* Step 1: Registered */}
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center font-bold text-[10px] shrink-0">
-                      ✓
-                    </div>
-                    <div className="truncate">
-                      <span className="text-zinc-400">{isRtl ? 'المسجل:' : 'Registered by:'}</span>{' '}
-                      <strong className="text-zinc-800 dark:text-zinc-200">{order.createdByName || order.createdBy}</strong>
-                      <span className="text-zinc-400 block text-[10px]">
-                        {new Date(order.createdAt).toLocaleDateString('ar-EG')}
+                    {order.poNumber && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500 text-white text-[11px] font-black flex items-center gap-1 shadow-xs shrink-0">
+                        <BadgeCheck size={12} />
+                        <span>PO: {order.poNumber}</span>
                       </span>
-                    </div>
+                    )}
+
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border shrink-0 ${badge.color}`}>
+                      <StatusIcon size={12} />
+                      <span>{badge.label}</span>
+                    </span>
+
+                    <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                      📅 {order.pricingDate}
+                    </span>
+
+                    <span className="text-[11px] text-zinc-400">•</span>
+
+                    <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 truncate max-w-[150px] sm:max-w-[200px]" title={order.supplierName}>
+                      🏢 {order.supplierName}
+                    </span>
+
+                    <span className="text-[11px] text-zinc-400">•</span>
+
+                    <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      🌿 {order.itemType} {order.itemCategory ? `(${order.itemCategory})` : ''}
+                    </span>
                   </div>
 
-                  {/* Step 2: Approved / Rejected */}
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${order.approvedByName ? 'bg-emerald-500/20 text-emerald-600' : order.status === 'Rejected' ? 'bg-rose-500/20 text-rose-600' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400'}`}>
-                      {order.approvedByName ? '✓' : order.status === 'Rejected' ? '✕' : '2'}
-                    </div>
-                    <div className="truncate">
-                      <span className="text-zinc-400">{isRtl ? 'الاعتماد:' : 'Approved by:'}</span>{' '}
-                      {order.approvedByName ? (
-                        <strong className="text-zinc-800 dark:text-zinc-200">{order.approvedByName}</strong>
-                      ) : (
-                        <span className="text-amber-500 italic">{isRtl ? 'بانتظار الاعتماد...' : 'Pending...'}</span>
-                      )}
-                      {order.approvedAt && (
-                        <span className="text-zinc-400 block text-[10px]">
-                          {new Date(order.approvedAt).toLocaleDateString('ar-EG')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Step 3: Executed (PO Created) */}
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${order.executedByName ? 'bg-emerald-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400'}`}>
-                      {order.executedByName ? '✓' : '3'}
-                    </div>
-                    <div className="truncate">
-                      <span className="text-zinc-400">{isRtl ? 'التنفيذ (PO):' : 'PO by:'}</span>{' '}
-                      {order.executedByName ? (
-                        <strong className="text-zinc-800 dark:text-zinc-200">{order.executedByName} ({order.poNumber})</strong>
-                      ) : order.status === 'Approved' ? (
-                        <span className="text-blue-500 font-bold">{isRtl ? 'جاهز لإصدار الـ PO' : 'Ready for PO'}</span>
-                      ) : (
-                        <span className="text-zinc-400 italic">-</span>
-                      )}
-                      {order.executedAt && (
-                        <span className="text-zinc-400 block text-[10px]">
-                          {new Date(order.executedAt).toLocaleDateString('ar-EG')}
-                        </span>
-                      )}
+                  {/* Pricing / Total */}
+                  <div className="flex items-center gap-2 ms-auto">
+                    <div className="text-end bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium me-1">
+                        {order.quantity.toLocaleString()} {order.unit} × {order.price.toLocaleString()} ج.م =
+                      </span>
+                      <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                        {order.totalAmount.toLocaleString()} ج.م
+                      </strong>
                     </div>
                   </div>
                 </div>
 
-                {/* Notes or Rejection Reason if present */}
-                {(order.notes || order.approvalNotes || order.rejectionReason) && (
-                  <div className="text-xs p-2.5 rounded-xl bg-amber-50/40 dark:bg-amber-950/20 border border-amber-500/20 space-y-1">
+                {/* Row 2: Unloading Locations, Tracking Info & Actions */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/80 text-[11px]">
+                  
+                  {/* Key metadata chips */}
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-zinc-500 dark:text-zinc-400">
+                    <span className="inline-flex items-center gap-1">
+                      📍 <strong className="text-zinc-700 dark:text-zinc-300 font-semibold">{order.region}</strong>
+                    </span>
+                    
+                    {order.unloadingLocations && order.unloadingLocations.length > 0 && (
+                      <span className="inline-flex items-center gap-1 truncate max-w-[220px]" title={order.unloadingLocations.join('، ')}>
+                        🚛 <span className="text-zinc-700 dark:text-zinc-300">{order.unloadingLocations.join('، ')}</span>
+                      </span>
+                    )}
+
+                    {/* Creator & Approver Mini Badges */}
+                    <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-600 dark:text-zinc-300">
+                      ✍️ {order.createdByName || order.createdBy}
+                    </span>
+
+                    {order.approvedByName && (
+                      <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        ✓ {order.approvedByName}
+                      </span>
+                    )}
+
+                    {order.status === 'Rejected' && (
+                      <span className="text-[10px] bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/20 truncate max-w-[180px]" title={order.rejectionReason}>
+                        ✕ {order.rejectionReason || (isRtl ? 'مرفوض' : 'Rejected')}
+                      </span>
+                    )}
+
                     {order.notes && (
-                      <p className="text-zinc-600 dark:text-zinc-300">
-                        <strong className="text-amber-700 dark:text-amber-400">{isRtl ? 'ملاحظات التسجيل:' : 'Notes:'}</strong> {order.notes}
-                      </p>
-                    )}
-                    {order.approvalNotes && (
-                      <p className="text-zinc-600 dark:text-zinc-300">
-                        <strong className="text-blue-600 dark:text-blue-400">{isRtl ? 'ملاحظات الاعتماد:' : 'Approval notes:'}</strong> {order.approvalNotes}
-                      </p>
-                    )}
-                    {order.rejectionReason && (
-                      <p className="text-rose-600 dark:text-rose-400 font-semibold">
-                        <strong>{isRtl ? 'سبب الرفض:' : 'Rejection Reason:'}</strong> {order.rejectionReason}
-                      </p>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[150px]" title={order.notes}>
+                        💬 {order.notes}
+                      </span>
                     )}
                   </div>
-                )}
 
-                {/* Action Buttons Row */}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                  <div className="flex items-center gap-2">
+                  {/* Actions Toolbar */}
+                  <div className="flex items-center gap-1.5 ms-auto shrink-0">
                     {/* Print / View Voucher Button */}
                     <button
                       onClick={() => handlePrintVoucher(order)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-bold transition-all"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold transition-all"
+                      title={isRtl ? 'معاينة سند أمر التوريد' : 'Voucher'}
                     >
-                      <Printer size={14} />
-                      <span>{isRtl ? 'سند أمر التوريد' : 'Voucher'}</span>
+                      <Printer size={13} />
+                      <span className="hidden sm:inline">{isRtl ? 'السند' : 'Voucher'}</span>
                     </button>
 
-                    {/* Edit button (available for creator or admin or approval officer if pending approval or rejected) */}
+                    {/* Edit button */}
                     {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin || isApprovalOfficer) && ['Pending Approval', 'Rejected'].includes(order.status)) && (
                       <button
                         onClick={() => {
@@ -1211,40 +1179,36 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                           });
                           setIsEditModalOpen(true);
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-bold transition-all"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold transition-all"
                       >
-                        <Edit3 size={14} />
+                        <Edit3 size={13} />
                         <span>{isRtl ? 'تعديل' : 'Edit'}</span>
                       </button>
                     )}
 
-                    {/* Delete button (creator or admin if pending approval or rejected) */}
+                    {/* Delete button */}
                     {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin) && ['Pending Approval', 'Rejected'].includes(order.status)) && (
                       <button
                         onClick={() => handleDeleteOrder(order.id)}
-                        className="p-1.5 rounded-xl text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all"
+                        className="p-1 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all"
                         title={isRtl ? 'حذف' : 'Delete'}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     )}
-                  </div>
 
-                  {/* Stage-Specific Workflow Actions */}
-                  <div className="flex items-center gap-2">
-                    
                     {/* Stage 2 Action: Undo Approval (Admin & Approval Officer) */}
                     {(isAdmin || isApprovalOfficer) && order.status === 'Approved' && (
                       <button
                         onClick={() => handleUndoApproval(order)}
                         disabled={actionLoading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-500 text-xs font-bold transition-all disabled:opacity-50"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-500 text-[11px] font-bold transition-all disabled:opacity-50"
                       >
-                        <Undo2 size={14} />
+                        <Undo2 size={13} />
                         <span>{isRtl ? 'إلغاء الموافقة' : 'Undo Approval'}</span>
                       </button>
                     )}
-                    
+
                     {/* Stage 2 Action: Approval Officer -> Approve or Reject */}
                     {isApprovalOfficer && order.status === 'Pending Approval' && (
                       <>
@@ -1254,9 +1218,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                             setRejectionReason('');
                             setIsRejectModalOpen(true);
                           }}
-                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 text-xs font-bold transition-all"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 text-[11px] font-bold transition-all"
                         >
-                          <X size={14} />
+                          <X size={13} />
                           <span>{isRtl ? 'رفض' : 'Reject'}</span>
                         </button>
 
@@ -1266,10 +1230,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                             setApprovalNotes('');
                             setIsApproveModalOpen(true);
                           }}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all"
+                          className="flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold shadow-xs transition-all"
                         >
-                          <Check size={14} />
-                          <span>{isRtl ? 'اعتماد الأسعار والطلب' : 'Approve Order'}</span>
+                          <Check size={13} />
+                          <span>{isRtl ? 'اعتماد' : 'Approve'}</span>
                         </button>
                       </>
                     )}
@@ -1284,14 +1248,14 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                           setExecutionNotesInput('');
                           setIsExecuteModalOpen(true);
                         }}
-                        className="flex items-center gap-2 px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-extrabold shadow-lg shadow-emerald-500/30 transition-all hover:scale-105"
+                        className="flex items-center gap-1.5 px-3.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-[11px] font-extrabold shadow-sm transition-all hover:scale-102"
                       >
-                        <BadgeCheck size={16} />
-                        <span>{isRtl ? 'إصدار أمر التوريد (إنشاء الـ PO)' : 'Issue PO Number'}</span>
+                        <BadgeCheck size={14} />
+                        <span>{isRtl ? 'إصدار الـ PO' : 'Issue PO'}</span>
                       </button>
                     )}
-
                   </div>
+
                 </div>
               </motion.div>
             );
