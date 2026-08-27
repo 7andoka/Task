@@ -33,7 +33,8 @@ import {
   ArrowUpRight,
   ShieldCheck,
   TrendingUp,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Undo2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Language, UserProfile, PurchaseOrder, PurchaseOrderStatus } from '../types';
@@ -339,6 +340,12 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       notes: formData.notes.trim(),
       unloadingLocations: [...formData.unloadingLocations.filter(loc => loc !== 'أخرى'), formData.customUnloadingLocation.trim()].filter(Boolean),
       lastUpdatedAt: new Date().toISOString(),
+      ...(selectedOrder.status === 'Rejected' ? { 
+        status: 'Pending Approval', 
+        rejectedBy: undefined, 
+        rejectedByName: undefined, 
+        rejectionReason: undefined 
+      } : {})
     };
 
     setActionLoading(true);
@@ -376,6 +383,29 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       setApprovalNotes('');
     } catch (err: any) {
       toast.error(isRtl ? `خطأ أثناء الاعتماد: ${err.message}` : `Approval error: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Undo Approval
+  const handleUndoApproval = async (order: PurchaseOrder) => {
+    setActionLoading(true);
+    try {
+      const updatedOrder: PurchaseOrder = {
+        ...order,
+        status: 'Pending Approval',
+        approvedBy: undefined,
+        approvedByName: undefined,
+        approvedAt: undefined,
+        approvalNotes: undefined,
+        lastUpdatedAt: new Date().toISOString(),
+      };
+
+      await storageService.savePurchaseOrder(updatedOrder);
+      toast.success(isRtl ? 'تم إلغاء الموافقة بنجاح. يمكنك الآن تعديله والموافقة عليه مرة أخرى.' : 'Approval undone successfully. Order can now be edited.');
+    } catch (err: any) {
+      toast.error(isRtl ? `خطأ أثناء الإلغاء: ${err.message}` : `Undo error: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -1157,8 +1187,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                       <span>{isRtl ? 'سند أمر التوريد' : 'Voucher'}</span>
                     </button>
 
-                    {/* Edit button (available for creator or admin if pending approval) */}
-                    {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin) && order.status === 'Pending Approval') && (
+                    {/* Edit button (available for creator or admin or approval officer if pending approval or rejected) */}
+                    {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin || isApprovalOfficer) && ['Pending Approval', 'Rejected'].includes(order.status)) && (
                       <button
                         onClick={() => {
                           setSelectedOrder(order);
@@ -1188,8 +1218,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                       </button>
                     )}
 
-                    {/* Delete button (creator or admin if pending approval) */}
-                    {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin) && order.status === 'Pending Approval') && (
+                    {/* Delete button (creator or admin if pending approval or rejected) */}
+                    {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin) && ['Pending Approval', 'Rejected'].includes(order.status)) && (
                       <button
                         onClick={() => handleDeleteOrder(order.id)}
                         className="p-1.5 rounded-xl text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all"
@@ -1202,6 +1232,18 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
                   {/* Stage-Specific Workflow Actions */}
                   <div className="flex items-center gap-2">
+                    
+                    {/* Stage 2 Action: Undo Approval (Admin & Approval Officer) */}
+                    {(isAdmin || isApprovalOfficer) && order.status === 'Approved' && (
+                      <button
+                        onClick={() => handleUndoApproval(order)}
+                        disabled={actionLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-500 text-xs font-bold transition-all disabled:opacity-50"
+                      >
+                        <Undo2 size={14} />
+                        <span>{isRtl ? 'إلغاء الموافقة' : 'Undo Approval'}</span>
+                      </button>
+                    )}
                     
                     {/* Stage 2 Action: Approval Officer -> Approve or Reject */}
                     {isApprovalOfficer && order.status === 'Pending Approval' && (
@@ -1265,7 +1307,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-zinc-900 rounded-[32px] p-6 sm:p-8 w-full max-w-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-h-[90vh] overflow-y-auto"
+            className="bg-white dark:bg-zinc-900 rounded-[24px] p-5 sm:p-6 w-full max-w-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
               <div className="flex items-center gap-3">
@@ -1288,10 +1330,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               </button>
             </div>
 
-            <form onSubmit={isEditModalOpen ? handleUpdateOrder : handleCreateOrder} className="space-y-4 mt-5">
+            <form onSubmit={isEditModalOpen ? handleUpdateOrder : handleCreateOrder} className="space-y-3 mt-4">
               
               {/* Row 1: Pricing Date & Region */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
                     {isRtl ? 'تاريخ التسعير' : 'Pricing Date'} <span className="text-rose-500">*</span>
@@ -1301,7 +1343,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     required
                     value={formData.pricingDate}
                     onChange={(e) => setFormData({ ...formData, pricingDate: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-semibold text-zinc-900 dark:text-white"
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold text-zinc-900 dark:text-white"
                   />
                 </div>
 
@@ -1313,10 +1355,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     type="text"
                     required
                     list="regions-list"
-                    placeholder={isRtl ? 'مثال: طريق مصر إسكندرية الصحراوي، وادي النطرون...' : 'e.g. Desert Road, Ismailia...'}
+                    placeholder={isRtl ? 'اسم المنطقة...' : 'Region...'}
                     value={formData.region}
                     onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-900 dark:text-white"
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white"
                   />
                   <datalist id="regions-list">
                     {COMMON_REGIONS.map(reg => <option key={reg} value={reg} />)}
@@ -1325,8 +1367,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               </div>
 
               {/* Row 2: Supplier Name & Code */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="sm:col-span-2 space-y-1.5">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
                     {isRtl ? 'اسم المورد' : 'Supplier Name'} <span className="text-rose-500">*</span>
                   </label>
@@ -1334,10 +1376,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     type="text"
                     required
                     list="suppliers-list"
-                    placeholder={isRtl ? 'اسم المورد أو المزرعة...' : 'Supplier / Farm name...'}
+                    placeholder={isRtl ? 'اسم المورد...' : 'Supplier...'}
                     value={formData.supplierName}
                     onChange={(e) => setFormData({ ...formData, supplierName: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-900 dark:text-white"
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white"
                   />
                   <datalist id="suppliers-list">
                     {uniqueSuppliers.map(sup => <option key={sup} value={sup} />)}
@@ -1346,32 +1388,32 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                    {isRtl ? 'كود المورد (اختياري)' : 'Supplier Code'}
+                    {isRtl ? 'كود المورد' : 'Supplier Code'}
                   </label>
                   <input
                     type="text"
                     placeholder="SUP-001"
                     value={formData.supplierCode}
                     onChange={(e) => setFormData({ ...formData, supplierCode: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-900 dark:text-white"
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white"
                   />
                 </div>
               </div>
 
               {/* Row 3: Item Type & Category */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                    {isRtl ? 'نوع الصنف' : 'Item Type / Variety'} <span className="text-rose-500">*</span>
+                    {isRtl ? 'نوع الصنف' : 'Item Variety'} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     list="items-list"
-                    placeholder={isRtl ? 'مثال: زيتون تفاحي فريش، بيكوال...' : 'e.g. Kalamata Olives...'}
+                    placeholder={isRtl ? 'مثال: تفاحي...' : 'e.g. Kalamata...'}
                     value={formData.itemType}
                     onChange={(e) => setFormData({ ...formData, itemType: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-900 dark:text-white"
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white"
                   />
                   <datalist id="items-list">
                     {COMMON_ITEM_TYPES.map(item => <option key={item} value={item} />)}
@@ -1385,7 +1427,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                   <select
                     value={formData.itemCategory}
                     onChange={(e) => setFormData({ ...formData, itemCategory: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-900 dark:text-white"
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white"
                   >
                     <option value="زيتون فريش">{isRtl ? 'زيتون فريش' : 'Fresh Olives'}</option>
                     <option value="فلفل ومخللات">{isRtl ? 'فلفل ومخللات' : 'Peppers & Pickles'}</option>
@@ -1396,12 +1438,12 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               </div>
 
               {/* Row 4: Quantity, Unit, Price, Total live calculation */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
                     {isRtl ? 'الكمية' : 'Quantity'} <span className="text-rose-500">*</span>
                   </label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       step="any"
@@ -1410,12 +1452,12 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                       placeholder="0"
                       value={formData.quantity}
                       onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-bold text-zinc-900 dark:text-white"
+                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-bold text-zinc-900 dark:text-white"
                     />
                     <select
                       value={formData.unit}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="px-3 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-900 dark:text-white shrink-0"
+                      className="px-2 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-900 dark:text-white shrink-0"
                     >
                       {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
@@ -1424,7 +1466,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                    {isRtl ? 'سعر الوحدة (ج.م)' : 'Price per Unit (EGP)'} <span className="text-rose-500">*</span>
+                    {isRtl ? 'سعر الوحدة' : 'Price per Unit'} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -1434,31 +1476,31 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     placeholder="0.00"
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-bold text-zinc-900 dark:text-white"
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-bold text-zinc-900 dark:text-white"
                   />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="col-span-2 sm:col-span-1 space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
                     {isRtl ? 'الإجمالي التقديري' : 'Calculated Total'}
                   </label>
-                  <div className="w-full px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-extrabold text-sm flex items-center justify-between">
+                  <div className="w-full px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-extrabold text-xs flex items-center justify-between">
                     <span>
                       {((parseFloat(formData.quantity) || 0) * (parseFloat(formData.price) || 0)).toLocaleString()}
                     </span>
-                    <span className="text-xs font-bold">ج.م</span>
+                    <span className="text-[10px] font-bold">ج.م</span>
                   </div>
                 </div>
               </div>
 
               {/* Unloading Locations (مكان التنزيل / التعتيق) */}
-              <div className="space-y-2 border border-zinc-200 dark:border-zinc-700 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
+              <div className="space-y-2 border border-zinc-200 dark:border-zinc-700 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
                 <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
                   {isRtl ? 'مكان التنزيل / التعتيق' : 'Unloading Location'} <span className="text-rose-500">*</span>
                 </label>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2.5">
                   {['اوليف لاند', 'ريتش لاند', 'Jps'].map(loc => (
-                    <label key={loc} className="flex items-center gap-2 cursor-pointer">
+                    <label key={loc} className="flex items-center gap-1.5 cursor-pointer">
                       <input 
                         type="checkbox"
                         checked={formData.unloadingLocations.includes(loc)}
@@ -1469,13 +1511,13 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                             setFormData({ ...formData, unloadingLocations: formData.unloadingLocations.filter(l => l !== loc) });
                           }
                         }}
-                        className="w-4 h-4 text-emerald-500 rounded border-zinc-300 dark:border-zinc-600 focus:ring-emerald-500"
+                        className="w-3.5 h-3.5 text-emerald-500 rounded border-zinc-300 dark:border-zinc-600 focus:ring-emerald-500"
                       />
                       <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{loc}</span>
                     </label>
                   ))}
                   
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input 
                       type="checkbox"
                       checked={formData.unloadingLocations.includes('أخرى')}
@@ -1486,7 +1528,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                           setFormData({ ...formData, unloadingLocations: formData.unloadingLocations.filter(l => l !== 'أخرى'), customUnloadingLocation: '' });
                         }
                       }}
-                      className="w-4 h-4 text-emerald-500 rounded border-zinc-300 dark:border-zinc-600 focus:ring-emerald-500"
+                      className="w-3.5 h-3.5 text-emerald-500 rounded border-zinc-300 dark:border-zinc-600 focus:ring-emerald-500"
                     />
                     <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{isRtl ? 'أخرى' : 'Other'}</span>
                   </label>
@@ -1495,10 +1537,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                   <input
                     type="text"
                     required
-                    placeholder={isRtl ? 'اكتب مكان التعتيق / التنزيل...' : 'Enter location...'}
+                    placeholder={isRtl ? 'اكتب مكان التعتيق...' : 'Enter location...'}
                     value={formData.customUnloadingLocation}
                     onChange={(e) => setFormData({ ...formData, customUnloadingLocation: e.target.value })}
-                    className="w-full mt-2 px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-900 dark:text-white"
+                    className="w-full mt-2 px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white"
                   />
                 )}
               </div>
@@ -1510,18 +1552,18 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                 </label>
                 <textarea
                   rows={2}
-                  placeholder={isRtl ? 'أي شروط تسليم، مواصفات فرز، أو تفاصيل خاصة...' : 'Any special terms or specifications...'}
+                  placeholder={isRtl ? 'أي شروط تسليم أو تفاصيل خاصة...' : 'Any special terms...'}
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-900 dark:text-white resize-none"
+                  className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white resize-none"
                 />
               </div>
 
-              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-3">
+              <div className="pt-3 mt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => { setIsCreateModalOpen(false); setIsEditModalOpen(false); }}
-                  className="px-5 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-xs"
+                  className="px-4 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-xs"
                 >
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
@@ -1529,14 +1571,14 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-xl shadow-emerald-500/20 disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-xl shadow-emerald-500/20 disabled:opacity-50"
                 >
                   {actionLoading ? (
-                    <RefreshCw size={16} className="animate-spin" />
+                    <RefreshCw size={14} className="animate-spin" />
                   ) : (
-                    <Send size={16} />
+                    <Send size={14} />
                   )}
-                  <span>{isEditModalOpen ? (isRtl ? 'حفظ التعديلات' : 'Save Changes') : (isRtl ? 'تسجيل وإرسال للاعتماد' : 'Save & Send to Approver')}</span>
+                  <span>{isEditModalOpen ? (isRtl ? 'حفظ التعديلات' : 'Save Changes') : (isRtl ? 'تسجيل الطلب' : 'Submit')}</span>
                 </button>
               </div>
             </form>
