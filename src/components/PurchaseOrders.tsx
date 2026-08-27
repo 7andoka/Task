@@ -126,6 +126,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
     unit: 'كجم',
     price: '',
     notes: '',
+    unloadingLocations: [] as string[],
+    customUnloadingLocation: '',
   });
 
   // Action input states (Approval / Execution)
@@ -279,6 +281,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       totalAmount,
       currency: 'ج.م',
       notes: formData.notes.trim(),
+      unloadingLocations: [...formData.unloadingLocations.filter(loc => loc !== 'أخرى'), formData.customUnloadingLocation.trim()].filter(Boolean),
       status: 'Pending Approval',
       createdBy: user?.uid || user?.username || 'unknown',
       createdByName: user?.displayName || user?.username || (isRtl ? 'مسئول التسجيل' : 'Registration Officer'),
@@ -302,6 +305,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
         unit: 'كجم',
         price: '',
         notes: '',
+        unloadingLocations: [],
+        customUnloadingLocation: '',
       });
     } catch (err: any) {
       toast.error(isRtl ? `خطأ أثناء حفظ الطلب: ${err.message}` : `Error saving order: ${err.message}`);
@@ -332,6 +337,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       price: unitPrice,
       totalAmount,
       notes: formData.notes.trim(),
+      unloadingLocations: [...formData.unloadingLocations.filter(loc => loc !== 'أخرى'), formData.customUnloadingLocation.trim()].filter(Boolean),
       lastUpdatedAt: new Date().toISOString(),
     };
 
@@ -601,6 +607,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     unit: 'كجم',
                     price: '',
                     notes: '',
+                    unloadingLocations: [],
+                    customUnloadingLocation: '',
                   });
                   setIsCreateModalOpen(true);
                 }}
@@ -1019,7 +1027,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                 </div>
 
                 {/* Main Order Details Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                   <div className="p-2.5 rounded-xl bg-zinc-50/60 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800">
                     <span className="text-zinc-400 block mb-1 font-medium">{isRtl ? 'المورد' : 'Supplier'}</span>
                     <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm block truncate">
@@ -1045,6 +1053,13 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     <span className="text-zinc-400 block mb-1 font-medium">{isRtl ? 'سعر الوحدة' : 'Unit Price'}</span>
                     <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm block">
                       {order.price.toLocaleString()} ج.م / {order.unit}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-zinc-50/60 dark:bg-zinc-800/40 border border-zinc-100 dark:border-zinc-800">
+                    <span className="text-zinc-400 block mb-1 font-medium">{isRtl ? 'مكان التنزيل' : 'Unloading'}</span>
+                    <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm block truncate" title={order.unloadingLocations?.join('، ') || '—'}>
+                      {order.unloadingLocations?.join('، ') || '—'}
                     </span>
                   </div>
                 </div>
@@ -1158,6 +1173,11 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                             unit: order.unit,
                             price: String(order.price),
                             notes: order.notes || '',
+                            unloadingLocations: [
+                              ...(order.unloadingLocations?.filter(loc => ['اوليف لاند', 'ريتش لاند', 'Jps'].includes(loc)) || []),
+                              ...(order.unloadingLocations?.some(loc => !['اوليف لاند', 'ريتش لاند', 'Jps'].includes(loc)) ? ['أخرى'] : [])
+                            ],
+                            customUnloadingLocation: order.unloadingLocations?.find(loc => !['اوليف لاند', 'ريتش لاند', 'Jps'].includes(loc)) || '',
                           });
                           setIsEditModalOpen(true);
                         }}
@@ -1238,9 +1258,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 1: Registration Form (Stage 1)                                      */}
+      {/* MODAL 1 & Edit: Registration Form (Stage 1) / Edit                        */}
       {/* ========================================================================= */}
-      {isCreateModalOpen && (
+      {(isCreateModalOpen || isEditModalOpen) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -1250,23 +1270,25 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
             <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center font-bold">
-                  <FileText size={20} />
+                  {isEditModalOpen ? <Edit3 size={20} /> : <FileText size={20} />}
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
-                    {isRtl ? 'المرحلة الأولى: تسجيل طلب تسعير وتوريد' : 'Stage 1: Record Pricing & Order'}
+                    {isEditModalOpen 
+                      ? (isRtl ? 'تعديل طلب التسعير والتوريد' : 'Edit Pricing & Order') 
+                      : (isRtl ? 'المرحلة الأولى: تسجيل طلب تسعير وتوريد' : 'Stage 1: Record Pricing & Order')}
                   </h3>
                   <p className="text-xs text-zinc-400">
                     {isRtl ? 'يقوم مسئول التسجيل بإدخال بيانات المنطقة، المورد، الصنف والأسعار' : 'Enter pricing date, region, supplier, item, qty, and price.'}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setIsCreateModalOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400">
+              <button onClick={() => { setIsCreateModalOpen(false); setIsEditModalOpen(false); }} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400">
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateOrder} className="space-y-4 mt-5">
+            <form onSubmit={isEditModalOpen ? handleUpdateOrder : handleCreateOrder} className="space-y-4 mt-5">
               
               {/* Row 1: Pricing Date & Region */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1429,6 +1451,58 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                 </div>
               </div>
 
+              {/* Unloading Locations (مكان التنزيل / التعتيق) */}
+              <div className="space-y-2 border border-zinc-200 dark:border-zinc-700 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50">
+                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                  {isRtl ? 'مكان التنزيل / التعتيق' : 'Unloading Location'} <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex flex-wrap gap-3">
+                  {['اوليف لاند', 'ريتش لاند', 'Jps'].map(loc => (
+                    <label key={loc} className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={formData.unloadingLocations.includes(loc)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({ ...formData, unloadingLocations: [...formData.unloadingLocations, loc] });
+                          } else {
+                            setFormData({ ...formData, unloadingLocations: formData.unloadingLocations.filter(l => l !== loc) });
+                          }
+                        }}
+                        className="w-4 h-4 text-emerald-500 rounded border-zinc-300 dark:border-zinc-600 focus:ring-emerald-500"
+                      />
+                      <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{loc}</span>
+                    </label>
+                  ))}
+                  
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={formData.unloadingLocations.includes('أخرى')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFormData({ ...formData, unloadingLocations: [...formData.unloadingLocations, 'أخرى'] });
+                        } else {
+                          setFormData({ ...formData, unloadingLocations: formData.unloadingLocations.filter(l => l !== 'أخرى'), customUnloadingLocation: '' });
+                        }
+                      }}
+                      className="w-4 h-4 text-emerald-500 rounded border-zinc-300 dark:border-zinc-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{isRtl ? 'أخرى' : 'Other'}</span>
+                  </label>
+                </div>
+                {formData.unloadingLocations.includes('أخرى') && (
+                  <input
+                    type="text"
+                    required
+                    placeholder={isRtl ? 'اكتب مكان التعتيق / التنزيل...' : 'Enter location...'}
+                    value={formData.customUnloadingLocation}
+                    onChange={(e) => setFormData({ ...formData, customUnloadingLocation: e.target.value })}
+                    className="w-full mt-2 px-3 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-sm text-zinc-900 dark:text-white"
+                  />
+                )}
+              </div>
+
               {/* Notes */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
@@ -1446,7 +1520,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
+                  onClick={() => { setIsCreateModalOpen(false); setIsEditModalOpen(false); }}
                   className="px-5 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold text-xs"
                 >
                   {isRtl ? 'إلغاء' : 'Cancel'}
@@ -1462,7 +1536,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                   ) : (
                     <Send size={16} />
                   )}
-                  <span>{isRtl ? 'تسجيل وإرسال للاعتماد' : 'Save & Send to Approver'}</span>
+                  <span>{isEditModalOpen ? (isRtl ? 'حفظ التعديلات' : 'Save Changes') : (isRtl ? 'تسجيل وإرسال للاعتماد' : 'Save & Send to Approver')}</span>
                 </button>
               </div>
             </form>
@@ -1812,7 +1886,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               </div>
 
               {/* Information Table */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl">
                   <span className="text-zinc-400 block mb-1">اسم المورد:</span>
                   <strong className="text-sm text-zinc-900 dark:text-white">{selectedOrder.supplierName}</strong>
@@ -1824,6 +1898,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl">
                   <span className="text-zinc-400 block mb-1">تاريخ التسعير:</span>
                   <strong className="text-sm text-zinc-900 dark:text-white">{selectedOrder.pricingDate}</strong>
+                </div>
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl">
+                  <span className="text-zinc-400 block mb-1">مكان التنزيل:</span>
+                  <strong className="text-sm text-zinc-900 dark:text-white">{selectedOrder.unloadingLocations?.join('، ') || '—'}</strong>
                 </div>
               </div>
 

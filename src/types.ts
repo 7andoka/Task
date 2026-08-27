@@ -370,6 +370,7 @@ export interface PurchaseOrder {
   totalAmount: number;         // إجمالي القيمة (الكمية × السعر)
   currency?: string;           // العملة (ج.م)
   notes?: string;              // ملاحظات التسجيل
+  unloadingLocations?: string[]; // مكان التنزيل / التعتيق (متعدد)
 
   // Stage 1: Registration info
   createdBy: string;           // اسم / معرف مسجل الطلب
