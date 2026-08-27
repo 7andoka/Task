@@ -86,9 +86,11 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
   
   // Strict Permission checks (No overlapping of generic roles)
   const isAdmin = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
-  const isRegistrationOfficer = isAdmin || userRoles.includes('Registration Officer');
-  const isApprovalOfficer = isAdmin || userRoles.includes('Approval Officer');
-  const isExecutionOfficer = isAdmin || userRoles.includes('Execution Officer');
+  // Only explicitly assigned officers can perform workflow actions, ensuring strict separation of duties.
+  // Admins can view everything and edit/delete pending orders, but for normal users, roles are strictly siloed.
+  const isRegistrationOfficer = userRoles.includes('Registration Officer');
+  const isApprovalOfficer = userRoles.includes('Approval Officer');
+  const isExecutionOfficer = userRoles.includes('Execution Officer');
 
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1140,8 +1142,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                       <span>{isRtl ? 'سند أمر التوريد' : 'Voucher'}</span>
                     </button>
 
-                    {/* Edit button (available for creator if pending approval) */}
-                    {(isRegistrationOfficer && order.status === 'Pending Approval') && (
+                    {/* Edit button (available for creator or admin if pending approval) */}
+                    {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin) && order.status === 'Pending Approval') && (
                       <button
                         onClick={() => {
                           setSelectedOrder(order);
@@ -1166,8 +1168,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                       </button>
                     )}
 
-                    {/* Delete button (creator if pending approval) */}
-                    {(isRegistrationOfficer && order.status === 'Pending Approval') && (
+                    {/* Delete button (creator or admin if pending approval) */}
+                    {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin) && order.status === 'Pending Approval') && (
                       <button
                         onClick={() => handleDeleteOrder(order.id)}
                         className="p-1.5 rounded-xl text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all"
