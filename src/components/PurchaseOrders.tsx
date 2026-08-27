@@ -34,7 +34,10 @@ import {
   ShieldCheck,
   TrendingUp,
   SlidersHorizontal,
-  Undo2
+  Undo2,
+  ChevronUp,
+  User,
+  Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Language, UserProfile, PurchaseOrder, PurchaseOrderStatus } from '../types';
@@ -114,6 +117,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   // Form states for Registration (Stage 1)
   const [formData, setFormData] = useState({
@@ -434,6 +438,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
         approvedBy: user?.uid || user?.username || 'approver',
         approvedByName: user?.displayName || user?.username || (isRtl ? 'مسئول الاعتماد' : 'Approval Officer'),
         approvedAt: new Date().toISOString(),
+        rejectedBy: user?.uid || user?.username || 'approver',
+        rejectedByName: user?.displayName || user?.username || (isRtl ? 'مسئول الاعتماد' : 'Approval Officer'),
+        rejectedAt: new Date().toISOString(),
         rejectionReason: rejectionReason.trim(),
         lastUpdatedAt: new Date().toISOString(),
       };
@@ -1046,6 +1053,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
           {filteredOrders.map((order) => {
             const badge = getStatusBadge(order.status);
             const StatusIcon = badge.icon;
+            const isExpanded = expandedOrderId === order.id;
 
             return (
               <motion.div
@@ -1053,7 +1061,12 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                 layout
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200/90 dark:border-zinc-800 p-2.5 sm:p-3 shadow-xs hover:shadow-md transition-all space-y-2"
+                onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                className={`bg-white dark:bg-zinc-900 rounded-xl border transition-all space-y-2 cursor-pointer ${
+                  isExpanded 
+                    ? 'border-emerald-500/80 shadow-md ring-1 ring-emerald-500/30 p-3 sm:p-4' 
+                    : 'border-zinc-200/90 dark:border-zinc-800 p-2.5 sm:p-3 shadow-xs hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm'
+                }`}
               >
                 {/* Row 1: Core Order Data & Status & Total Value */}
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1080,7 +1093,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
                     <span className="text-[11px] text-zinc-400">•</span>
 
-                    <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 truncate max-w-[150px] sm:max-w-[200px]" title={order.supplierName}>
+                    <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 truncate max-w-[180px] sm:max-w-[240px]" title={order.supplierName}>
                       🏢 {order.supplierName}
                     </span>
 
@@ -1091,7 +1104,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     </span>
                   </div>
 
-                  {/* Pricing / Total */}
+                  {/* Pricing / Total Calculation */}
                   <div className="flex items-center gap-2 ms-auto">
                     <div className="text-end bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-500/20">
                       <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium me-1">
@@ -1104,50 +1117,62 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                   </div>
                 </div>
 
-                {/* Row 2: Unloading Locations, Tracking Info & Actions */}
+                {/* Row 2: Region, Unloading Locations & Full Visible Notes & Action Buttons */}
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-zinc-100 dark:border-zinc-800/80 text-[11px]">
                   
-                  {/* Key metadata chips */}
-                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-zinc-500 dark:text-zinc-400">
-                    <span className="inline-flex items-center gap-1">
+                  {/* Region & Full Notes (User names removed to give full space to notes) */}
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-zinc-500 dark:text-zinc-400 flex-1 min-w-0">
+                    <span className="inline-flex items-center gap-1 shrink-0">
                       📍 <strong className="text-zinc-700 dark:text-zinc-300 font-semibold">{order.region}</strong>
                     </span>
                     
                     {order.unloadingLocations && order.unloadingLocations.length > 0 && (
-                      <span className="inline-flex items-center gap-1 truncate max-w-[220px]" title={order.unloadingLocations.join('، ')}>
+                      <span className="inline-flex items-center gap-1 shrink-0">
                         🚛 <span className="text-zinc-700 dark:text-zinc-300">{order.unloadingLocations.join('، ')}</span>
                       </span>
                     )}
 
-                    {/* Creator & Approver Mini Badges */}
-                    <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800/80 px-1.5 py-0.5 rounded text-zinc-600 dark:text-zinc-300">
-                      ✍️ {order.createdByName || order.createdBy}
-                    </span>
-
-                    {order.approvedByName && (
-                      <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                        ✓ {order.approvedByName}
-                      </span>
-                    )}
-
-                    {order.status === 'Rejected' && (
-                      <span className="text-[10px] bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/20 truncate max-w-[180px]" title={order.rejectionReason}>
-                        ✕ {order.rejectionReason || (isRtl ? 'مرفوض' : 'Rejected')}
-                      </span>
-                    )}
-
+                    {/* Registration Notes (Full text visible) */}
                     {order.notes && (
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[150px]" title={order.notes}>
-                        💬 {order.notes}
-                      </span>
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50/90 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-500/20 text-[11px] font-medium max-w-full">
+                        <span className="shrink-0 font-bold">💬 {isRtl ? 'ملاحظات:' : 'Notes:'}</span>
+                        <span className="break-words">{order.notes}</span>
+                      </div>
+                    )}
+
+                    {/* Approval Notes (Full text visible) */}
+                    {order.approvalNotes && (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50/90 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200 border border-blue-500/20 text-[11px] font-medium max-w-full">
+                        <span className="shrink-0 font-bold">✓ {isRtl ? 'ملاحظة الاعتماد:' : 'Approval Note:'}</span>
+                        <span className="break-words">{order.approvalNotes}</span>
+                      </div>
+                    )}
+
+                    {/* Rejection Reason (Full text visible) */}
+                    {order.status === 'Rejected' && order.rejectionReason && (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50/90 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200 border border-rose-500/20 text-[11px] font-medium max-w-full">
+                        <span className="shrink-0 font-bold">✕ {isRtl ? 'سبب الرفض:' : 'Rejection Reason:'}</span>
+                        <span className="break-words">{order.rejectionReason}</span>
+                      </div>
+                    )}
+
+                    {/* Execution Notes (Full text visible) */}
+                    {order.executionNotes && (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 border border-emerald-500/20 text-[11px] font-medium max-w-full">
+                        <span className="shrink-0 font-bold">📦 {isRtl ? 'ملاحظة PO:' : 'PO Note:'}</span>
+                        <span className="break-words">{order.executionNotes}</span>
+                      </div>
                     )}
                   </div>
 
                   {/* Actions Toolbar */}
-                  <div className="flex items-center gap-1.5 ms-auto shrink-0">
+                  <div className="flex items-center gap-1.5 ms-auto shrink-0" onClick={(e) => e.stopPropagation()}>
                     {/* Print / View Voucher Button */}
                     <button
-                      onClick={() => handlePrintVoucher(order)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrintVoucher(order);
+                      }}
                       className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold transition-all"
                       title={isRtl ? 'معاينة سند أمر التوريد' : 'Voucher'}
                     >
@@ -1158,7 +1183,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     {/* Edit button */}
                     {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin || isApprovalOfficer) && ['Pending Approval', 'Rejected'].includes(order.status)) && (
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSelectedOrder(order);
                           setFormData({
                             pricingDate: order.pricingDate,
@@ -1189,7 +1215,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     {/* Delete button */}
                     {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin) && ['Pending Approval', 'Rejected'].includes(order.status)) && (
                       <button
-                        onClick={() => handleDeleteOrder(order.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOrder(order.id);
+                        }}
                         className="p-1 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all"
                         title={isRtl ? 'حذف' : 'Delete'}
                       >
@@ -1200,7 +1229,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     {/* Stage 2 Action: Undo Approval (Admin & Approval Officer) */}
                     {(isAdmin || isApprovalOfficer) && order.status === 'Approved' && (
                       <button
-                        onClick={() => handleUndoApproval(order)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUndoApproval(order);
+                        }}
                         disabled={actionLoading}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-500 text-[11px] font-bold transition-all disabled:opacity-50"
                       >
@@ -1213,7 +1245,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     {isApprovalOfficer && order.status === 'Pending Approval' && (
                       <>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedOrder(order);
                             setRejectionReason('');
                             setIsRejectModalOpen(true);
@@ -1225,7 +1258,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                         </button>
 
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedOrder(order);
                             setApprovalNotes('');
                             setIsApproveModalOpen(true);
@@ -1241,7 +1275,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     {/* Stage 3 Action: Execution Officer -> Create PO Number & Complete */}
                     {isExecutionOfficer && order.status === 'Approved' && (
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSelectedOrder(order);
                           setPoNumberInput('');
                           setSapDocInput('');
@@ -1254,9 +1289,155 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                         <span>{isRtl ? 'إصدار الـ PO' : 'Issue PO'}</span>
                       </button>
                     )}
+
+                    {/* Expand / Collapse Indicator Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedOrderId(isExpanded ? null : order.id);
+                      }}
+                      className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-all flex items-center gap-1 text-[10px] font-semibold"
+                      title={isExpanded ? (isRtl ? 'إخفاء التفاصيل' : 'Hide Details') : (isRtl ? 'عرض التفاصيل الكاملة' : 'Show Details')}
+                    >
+                      <ChevronDown size={15} className={`transition-transform duration-200 ${isExpanded ? 'rotate-180 text-emerald-500' : ''}`} />
+                    </button>
                   </div>
 
                 </div>
+
+                {/* Expanded Details Panel (Shows Full Audit Trail, Users, Timestamps, and Complete Specs) */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden pt-3 border-t border-zinc-200 dark:border-zinc-800/90 mt-2 space-y-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Section 1: Workflow Stages & Assigned Users History */}
+                      <div className="bg-zinc-50 dark:bg-zinc-800/40 rounded-xl p-3 border border-zinc-200/70 dark:border-zinc-800 space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-200">
+                          <UserCheck size={14} className="text-emerald-500" />
+                          <span>{isRtl ? 'مراحل ومسئولي العمليات والتسجيل' : 'Workflow History & Assigned Users'}</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+                          {/* Stage 1: Registration Officer */}
+                          <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-start gap-2">
+                            <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">
+                              ✓
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[10px] text-zinc-400 block font-bold uppercase">{isRtl ? 'مسئول التسجيل (المرحلة 1)' : 'Registered By (Stage 1)'}</span>
+                              <strong className="text-zinc-900 dark:text-zinc-100 font-bold block truncate">
+                                {order.createdByName || order.createdBy}
+                              </strong>
+                              <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                                🕒 {new Date(order.createdAt).toLocaleString(isRtl ? 'ar-EG' : 'en-US')}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Stage 2: Approval Officer */}
+                          <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-start gap-2">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5 ${
+                              order.approvedByName ? 'bg-emerald-500/20 text-emerald-600' : 
+                              order.status === 'Rejected' ? 'bg-rose-500/20 text-rose-600' : 
+                              'bg-amber-500/20 text-amber-600'
+                            }`}>
+                              {order.approvedByName ? '✓' : order.status === 'Rejected' ? '✕' : '2'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[10px] text-zinc-400 block font-bold uppercase">{isRtl ? 'مسئول الاعتماد (المرحلة 2)' : 'Approved By (Stage 2)'}</span>
+                              {order.approvedByName ? (
+                                <>
+                                  <strong className="text-zinc-900 dark:text-zinc-100 font-bold block truncate">{order.approvedByName}</strong>
+                                  {order.approvedAt && (
+                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                                      🕒 {new Date(order.approvedAt).toLocaleString(isRtl ? 'ar-EG' : 'en-US')}
+                                    </span>
+                                  )}
+                                </>
+                              ) : order.status === 'Rejected' ? (
+                                <>
+                                  <strong className="text-rose-600 font-bold block truncate">{order.rejectedByName || (isRtl ? 'تم الرفض' : 'Rejected')}</strong>
+                                  {order.rejectedAt && (
+                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                                      🕒 {new Date(order.rejectedAt).toLocaleString(isRtl ? 'ar-EG' : 'en-US')}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-amber-500 font-semibold italic text-xs">{isRtl ? 'بانتظار مراجعة واعتماد المدير' : 'Pending review...'}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Stage 3: Execution Officer */}
+                          <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-start gap-2">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5 ${
+                              order.executedByName ? 'bg-emerald-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400'
+                            }`}>
+                              {order.executedByName ? '✓' : '3'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[10px] text-zinc-400 block font-bold uppercase">{isRtl ? 'مسئول التنفيذ (المرحلة 3)' : 'Executed By (Stage 3)'}</span>
+                              {order.executedByName ? (
+                                <>
+                                  <strong className="text-zinc-900 dark:text-zinc-100 font-bold block truncate">
+                                    {order.executedByName}
+                                  </strong>
+                                  <div className="flex items-center gap-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                                    <span>PO: {order.poNumber}</span>
+                                    {order.sapDocNumber && <span>• SAP: {order.sapDocNumber}</span>}
+                                  </div>
+                                  {order.executedAt && (
+                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block mt-0.5">
+                                      🕒 {new Date(order.executedAt).toLocaleString(isRtl ? 'ar-EG' : 'en-US')}
+                                    </span>
+                                  )}
+                                </>
+                              ) : order.status === 'Approved' ? (
+                                <span className="text-blue-500 font-bold text-xs">{isRtl ? 'معتمد - جاهز لإصدار أمر التوريد PO' : 'Approved - Ready for PO'}</span>
+                              ) : (
+                                <span className="text-zinc-400 text-xs italic">{isRtl ? 'لم يبدأ بعد' : 'Not started'}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section 2: Detailed Specs & Metadata Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
+                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'كود المورد' : 'Supplier Code'}</span>
+                          <span className="font-bold text-zinc-800 dark:text-zinc-200">{order.supplierCode || '—'}</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
+                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'تصنيف الصنف' : 'Item Category'}</span>
+                          <span className="font-bold text-zinc-800 dark:text-zinc-200">{order.itemCategory || 'زيتون فريش'}</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
+                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'سعر الوحدة المحدد' : 'Unit Price'}</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{order.price.toLocaleString()} ج.م / {order.unit}</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
+                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'أماكن التنزيل' : 'Unloading Locations'}</span>
+                          <span className="font-bold text-zinc-800 dark:text-zinc-200 truncate block" title={order.unloadingLocations?.join(' • ') || '—'}>
+                            {order.unloadingLocations?.join(' • ') || '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
               </motion.div>
             );
           })}

@@ -384,6 +384,9 @@ export interface PurchaseOrder {
   approvedAt?: string;         // تاريخ ووقت الاعتماد
   approvalNotes?: string;      // ملاحظات الاعتماد / سبب الرفض
   rejectionReason?: string;    // سبب الرفض
+  rejectedBy?: string;         // معرف مسئول الرفض
+  rejectedByName?: string;     // اسم مسئول الرفض
+  rejectedAt?: string;         // تاريخ ووقت الرفض
 
   // Stage 3: Execution / PO Generation info
   poNumber?: string;           // رقم أمر التوريد (الـ PO)
