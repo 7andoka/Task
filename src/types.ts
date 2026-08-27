@@ -363,7 +363,10 @@ export interface PurchaseOrder {
   supplierName: string;        // اسم المورد
   supplierCode?: string;       // كود المورد
   itemType: string;            // نوع الصنف
-  itemCategory?: string;       // التصنيف (زيتون / فلفل / خام زراعي / إلخ)
+  itemCategory?: string;       // التصنيف (زيتون فريش / زيتون مياه وملح / زيتون مطبوخ / خام زراعي)
+  initialRouting?: string;     // التوجيه الأولي (مياه وملح / مطبوخ / أخرى)
+  analysisType?: string;       // التحليل (مبيدات / خالي المبيدات / عشوائي)
+  paymentMethod?: string;      // طريقة السداد (نص حر)
   quantity: number;            // الكمية
   unit: string;                // الوحدة (كجم / طن / عدد)
   price: number;               // السعر للوحدة
@@ -395,6 +398,14 @@ export interface PurchaseOrder {
   executedAt?: string;         // تاريخ ووقت إصدار أمر التوريد
   executionNotes?: string;     // ملاحظات التنفيذ
   sapDocNumber?: string;       // رقم مستند ساب إن وجد
+
+  // Actual Receipt info (بعد إصدار أمر التوريد)
+  receivedQuantity?: number;   // الكمية المستلمة فعلياً (كجم)
+  receivedTotalAmount?: number; // إجمالي القيمة الفعلية للكمية المستلمة
+  receivedAt?: string;         // تاريخ ووقت تسجيل الاستلام الفعلي
+  receivedBy?: string;         // معرف مسئول الاستلام الفعلي
+  receivedByName?: string;     // اسم مسئول الاستلام الفعلي
+  receivingNotes?: string;     // ملاحظات الاستلام الفعلي والفروقات
 
   lastUpdatedAt: string;
 }

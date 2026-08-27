@@ -37,10 +37,13 @@ import {
   Undo2,
   ChevronUp,
   User,
-  Info
+  Info,
+  PackageCheck,
+  Scale
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Language, UserProfile, PurchaseOrder, PurchaseOrderStatus } from '../types';
+import ModernPurchaseOrderVoucher from './ModernPurchaseOrderVoucher';
 import { storageService } from '../services/storageService';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
@@ -82,7 +85,26 @@ const COMMON_ITEM_TYPES = [
   'خام زراعي مشكل'
 ];
 
-const UNITS = ['كجم', 'طن', 'شيكارة', 'صندوق', 'قفص', 'برميل'];
+const COMMON_ITEM_CATEGORIES = [
+  'زيتون فريش',
+  'زيتون مياه وملح',
+  'زيتون مطبوخ',
+  'خام زراعي'
+];
+
+const INITIAL_ROUTING_OPTIONS = [
+  'مياه وملح',
+  'مطبوخ',
+  'أخرى'
+];
+
+const ANALYSIS_OPTIONS = [
+  'مبيدات',
+  'خالي المبيدات',
+  'عشوائي'
+];
+
+const UNITS = ['كجم'];
 
 export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
   const isRtl = lang === 'ar';
@@ -114,6 +136,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isExecuteModalOpen, setIsExecuteModalOpen] = useState(false);
+  const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
@@ -127,6 +150,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
     supplierCode: '',
     itemType: '',
     itemCategory: 'زيتون فريش',
+    initialRouting: 'مياه وملح',
+    analysisType: 'مبيدات',
+    paymentMethod: '',
     quantity: '',
     unit: 'كجم',
     price: '',
@@ -135,12 +161,14 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
     customUnloadingLocation: '',
   });
 
-  // Action input states (Approval / Execution)
+  // Action input states (Approval / Execution / Receiving)
   const [approvalNotes, setApprovalNotes] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [poNumberInput, setPoNumberInput] = useState('');
   const [sapDocInput, setSapDocInput] = useState('');
   const [executionNotesInput, setExecutionNotesInput] = useState('');
+  const [receivedQtyInput, setReceivedQtyInput] = useState('');
+  const [receivingNotesInput, setReceivingNotesInput] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
@@ -288,6 +316,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       supplierCode: formData.supplierCode.trim(),
       itemType: formData.itemType.trim(),
       itemCategory: formData.itemCategory,
+      initialRouting: formData.initialRouting,
+      analysisType: formData.analysisType,
+      paymentMethod: formData.paymentMethod.trim(),
       quantity: qty,
       unit: formData.unit,
       price: unitPrice,
@@ -314,6 +345,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
         supplierCode: '',
         itemType: '',
         itemCategory: 'زيتون فريش',
+        initialRouting: 'مياه وملح',
+        analysisType: 'مبيدات',
+        paymentMethod: '',
         quantity: '',
         unit: 'كجم',
         price: '',
@@ -345,6 +379,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       supplierCode: formData.supplierCode.trim(),
       itemType: formData.itemType.trim(),
       itemCategory: formData.itemCategory,
+      initialRouting: formData.initialRouting,
+      analysisType: formData.analysisType,
+      paymentMethod: formData.paymentMethod.trim(),
       quantity: qty,
       unit: formData.unit,
       price: unitPrice,
@@ -467,6 +504,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
     setActionLoading(true);
     try {
+      const qtyReceived = receivedQtyInput.trim() ? parseFloat(receivedQtyInput) : undefined;
+      const isQtyValid = qtyReceived !== undefined && !isNaN(qtyReceived) && qtyReceived >= 0;
+
       const updatedOrder: PurchaseOrder = {
         ...selectedOrder,
         status: 'Completed',
@@ -476,6 +516,14 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
         executedByName: user?.displayName || user?.username || (isRtl ? 'مسئول التنفيذ' : 'Execution Officer'),
         executedAt: new Date().toISOString(),
         executionNotes: executionNotesInput.trim() || undefined,
+        ...(isQtyValid ? {
+          receivedQuantity: qtyReceived,
+          receivedTotalAmount: qtyReceived * (selectedOrder.price || 0),
+          receivedAt: new Date().toISOString(),
+          receivedBy: user?.uid || user?.username || 'executor',
+          receivedByName: user?.displayName || user?.username || (isRtl ? 'مسئول التنفيذ' : 'Execution Officer'),
+          receivingNotes: receivingNotesInput.trim() || undefined,
+        } : {}),
         lastUpdatedAt: new Date().toISOString(),
       };
 
@@ -486,8 +534,46 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       setPoNumberInput('');
       setSapDocInput('');
       setExecutionNotesInput('');
+      setReceivedQtyInput('');
+      setReceivingNotesInput('');
     } catch (err: any) {
       toast.error(isRtl ? `خطأ أثناء إصدار أمر التوريد: ${err.message}` : `Execution error: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle Stage 4: Actual Receipt Recording (بعد إصدار أمر التوريد)
+  const handleSaveReceipt = async () => {
+    if (!selectedOrder) return;
+    const qtyReceived = parseFloat(receivedQtyInput);
+    if (isNaN(qtyReceived) || qtyReceived < 0) {
+      toast.error(isRtl ? 'يرجى إدخال كمية مستلمة صحيحة بالكيلو جرام' : 'Please enter a valid received quantity in kg');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const receivedTotal = qtyReceived * (selectedOrder.price || 0);
+      const updatedOrder: PurchaseOrder = {
+        ...selectedOrder,
+        receivedQuantity: qtyReceived,
+        receivedTotalAmount: receivedTotal,
+        receivedAt: new Date().toISOString(),
+        receivedBy: user?.uid || user?.username || 'receiver',
+        receivedByName: user?.displayName || user?.username || (isRtl ? 'مسئول الاستلام' : 'Receiving Officer'),
+        receivingNotes: receivingNotesInput.trim() || undefined,
+        lastUpdatedAt: new Date().toISOString(),
+      };
+
+      await storageService.savePurchaseOrder(updatedOrder);
+      toast.success(isRtl ? `تم حفظ الكمية المستلمة فعلياً بنجاح (${qtyReceived.toLocaleString()} كجم)!` : `Actual received quantity saved (${qtyReceived.toLocaleString()} kg)!`);
+      setIsReceiveModalOpen(false);
+      setSelectedOrder(null);
+      setReceivedQtyInput('');
+      setReceivingNotesInput('');
+    } catch (err: any) {
+      toast.error(isRtl ? `خطأ أثناء حفظ الاستلام: ${err.message}` : `Receipt error: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -518,10 +604,17 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       'المنطقة',
       'المورد',
       'الصنف',
-      'الكمية',
+      'التصنيف',
+      'التوجيه الأولي',
+      'التحليل',
+      'طريقة السداد',
+      'الكمية المطلوبة',
       'الوحدة',
-      'السعر',
-      'الإجمالي (ج.م)',
+      'السعر للكيلو',
+      'الإجمالي المطلوب (ج.م)',
+      'الكمية المستلمة فعلياً (كجم)',
+      'فارق الكمية (كجم)',
+      'الإجمالي الفعلي المستحق (ج.م)',
       'رقم أمر التوريد (PO)',
       'مسئول التسجيل',
       'تاريخ التسجيل',
@@ -529,6 +622,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       'تاريخ الاعتماد',
       'مسئول التنفيذ',
       'تاريخ التنفيذ',
+      'مسئول الاستلام',
+      'تاريخ الاستلام',
+      'ملاحظات الاستلام',
       'الملاحظات'
     ];
 
@@ -539,10 +635,17 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       `"${o.region || ''}"`,
       `"${o.supplierName || ''}"`,
       `"${o.itemType || ''}"`,
+      `"${o.itemCategory || 'زيتون فريش'}"`,
+      `"${o.initialRouting || 'مياه وملح'}"`,
+      `"${o.analysisType || 'مبيدات'}"`,
+      `"${o.paymentMethod || ''}"`,
       o.quantity || 0,
-      `"${o.unit || ''}"`,
+      `"${o.unit || 'كجم'}"`,
       o.price || 0,
       o.totalAmount || 0,
+      o.receivedQuantity !== undefined ? o.receivedQuantity : '',
+      o.receivedQuantity !== undefined ? (o.receivedQuantity - o.quantity) : '',
+      o.receivedTotalAmount !== undefined ? o.receivedTotalAmount : (o.receivedQuantity !== undefined ? o.receivedQuantity * o.price : ''),
       `"${o.poNumber || ''}"`,
       `"${o.createdByName || ''}"`,
       `"${o.createdAt ? new Date(o.createdAt).toLocaleDateString('ar-EG') : ''}"`,
@@ -550,6 +653,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       `"${o.approvedAt ? new Date(o.approvedAt).toLocaleDateString('ar-EG') : ''}"`,
       `"${o.executedByName || ''}"`,
       `"${o.executedAt ? new Date(o.executedAt).toLocaleDateString('ar-EG') : ''}"`,
+      `"${o.receivedByName || ''}"`,
+      `"${o.receivedAt ? new Date(o.receivedAt).toLocaleDateString('ar-EG') : ''}"`,
+      `"${(o.receivingNotes || '').replace(/"/g, '""')}"`,
       `"${(o.notes || '').replace(/"/g, '""')}"`
     ]);
 
@@ -643,6 +749,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     supplierCode: '',
                     itemType: '',
                     itemCategory: 'زيتون فريش',
+                    initialRouting: 'مياه وملح',
+                    analysisType: 'مبيدات',
+                    paymentMethod: 'تحويل بنكي',
                     quantity: '',
                     unit: 'كجم',
                     price: '',
@@ -1104,8 +1213,33 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     </span>
                   </div>
 
-                  {/* Pricing / Total Calculation */}
-                  <div className="flex items-center gap-2 ms-auto">
+                  {/* Pricing / Total Calculation & Actual Received Badge */}
+                  <div className="flex items-center gap-2 ms-auto flex-wrap justify-end">
+                    {order.receivedQuantity !== undefined && (
+                      <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-950/40 px-2.5 py-1 rounded-lg border border-purple-500/20 text-xs">
+                        <PackageCheck size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                        <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
+                          {isRtl ? 'المستلم فعلياً:' : 'Received:'}
+                        </span>
+                        <strong className="text-xs font-black text-purple-700 dark:text-purple-300">
+                          {order.receivedQuantity.toLocaleString()} {order.unit || 'كجم'}
+                        </strong>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-black ${
+                          order.receivedQuantity < order.quantity
+                            ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300'
+                            : order.receivedQuantity > order.quantity
+                            ? 'bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300'
+                            : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300'
+                        }`}>
+                          {order.receivedQuantity < order.quantity
+                            ? `عجز: -${(order.quantity - order.receivedQuantity).toLocaleString()} كجم`
+                            : order.receivedQuantity > order.quantity
+                            ? `زيادة: +${(order.receivedQuantity - order.quantity).toLocaleString()} كجم`
+                            : 'مطابق 100%'}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="text-end bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-500/20">
                       <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium me-1">
                         {order.quantity.toLocaleString()} {order.unit} × {order.price.toLocaleString()} ج.م =
@@ -1163,6 +1297,14 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                         <span className="break-words">{order.executionNotes}</span>
                       </div>
                     )}
+
+                    {/* Receiving Notes (Full text visible) */}
+                    {order.receivingNotes && (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50/90 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 border border-purple-500/20 text-[11px] font-medium max-w-full">
+                        <span className="shrink-0 font-bold">📥 {isRtl ? 'ملاحظة الاستلام:' : 'Receipt Note:'}</span>
+                        <span className="break-words">{order.receivingNotes}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions Toolbar */}
@@ -1180,6 +1322,32 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                       <span className="hidden sm:inline">{isRtl ? 'السند' : 'Voucher'}</span>
                     </button>
 
+                    {/* Stage 4 Action: Actual Receipt recording / editing */}
+                    {order.status === 'Completed' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedOrder(order);
+                          setReceivedQtyInput(order.receivedQuantity !== undefined ? String(order.receivedQuantity) : '');
+                          setReceivingNotesInput(order.receivingNotes || '');
+                          setIsReceiveModalOpen(true);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold transition-all shadow-xs ${
+                          order.receivedQuantity !== undefined
+                            ? 'bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/60 dark:hover:bg-purple-900 text-purple-800 dark:text-purple-200 border border-purple-400/30'
+                            : 'bg-purple-600 hover:bg-purple-500 text-white'
+                        }`}
+                        title={isRtl ? 'تسجيل / تعديل الكمية المستلمة فعلياً بالمخزن' : 'Record / Edit actual received quantity'}
+                      >
+                        <PackageCheck size={13} />
+                        <span>
+                          {order.receivedQuantity !== undefined
+                            ? (isRtl ? `الاستلام (${order.receivedQuantity.toLocaleString()} كجم)` : `Receipt (${order.receivedQuantity} kg)`)
+                            : (isRtl ? 'تسجيل الاستلام الفعلي' : 'Record Receipt')}
+                        </span>
+                      </button>
+                    )}
+
                     {/* Edit button */}
                     {(((isRegistrationOfficer && order.createdBy === user?.uid) || isAdmin || isApprovalOfficer) && ['Pending Approval', 'Rejected'].includes(order.status)) && (
                       <button
@@ -1193,6 +1361,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                             supplierCode: order.supplierCode || '',
                             itemType: order.itemType,
                             itemCategory: order.itemCategory || 'زيتون فريش',
+                            initialRouting: order.initialRouting || 'مياه وملح',
+                            analysisType: order.analysisType || 'مبيدات',
+                            paymentMethod: order.paymentMethod || '',
                             quantity: String(order.quantity),
                             unit: order.unit,
                             price: String(order.price),
@@ -1318,12 +1489,28 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     >
                       {/* Section 1: Workflow Stages & Assigned Users History */}
                       <div className="bg-zinc-50 dark:bg-zinc-800/40 rounded-xl p-3 border border-zinc-200/70 dark:border-zinc-800 space-y-2">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-200">
-                          <UserCheck size={14} className="text-emerald-500" />
-                          <span>{isRtl ? 'مراحل ومسئولي العمليات والتسجيل' : 'Workflow History & Assigned Users'}</span>
+                        <div className="flex items-center justify-between text-xs font-bold text-zinc-700 dark:text-zinc-200">
+                          <div className="flex items-center gap-1.5">
+                            <UserCheck size={14} className="text-emerald-500" />
+                            <span>{isRtl ? 'مراحل ومسئولي العمليات والتسجيل والاستلام' : 'Workflow & Receipt Audit Trail'}</span>
+                          </div>
+                          {order.status === 'Completed' && (
+                            <button
+                              onClick={() => {
+                                setSelectedOrder(order);
+                                setReceivedQtyInput(order.receivedQuantity !== undefined ? String(order.receivedQuantity) : '');
+                                setReceivingNotesInput(order.receivingNotes || '');
+                                setIsReceiveModalOpen(true);
+                              }}
+                              className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-bold"
+                            >
+                              <PackageCheck size={13} />
+                              <span>{order.receivedQuantity !== undefined ? (isRtl ? 'تعديل بيانات الاستلام' : 'Edit Receipt') : (isRtl ? 'تسجيل الاستلام الفعلي' : 'Record Receipt')}</span>
+                            </button>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
                           {/* Stage 1: Registration Officer */}
                           <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-start gap-2">
                             <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">
@@ -1406,11 +1593,58 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                               )}
                             </div>
                           </div>
+
+                          {/* Stage 4: Actual Warehouse Receipt */}
+                          <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-start gap-2">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5 ${
+                              order.receivedQuantity !== undefined 
+                                ? 'bg-purple-600 text-white' 
+                                : order.status === 'Completed' 
+                                ? 'bg-purple-100 dark:bg-purple-950 text-purple-600' 
+                                : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-400'
+                            }`}>
+                              {order.receivedQuantity !== undefined ? '✓' : '4'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-[10px] text-zinc-400 block font-bold uppercase">{isRtl ? 'الاستلام الفعلي بالمخزن (المرحلة 4)' : 'Actual Receipt (Stage 4)'}</span>
+                              {order.receivedQuantity !== undefined ? (
+                                <>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <strong className="text-purple-700 dark:text-purple-300 font-extrabold text-xs">
+                                      {order.receivedQuantity.toLocaleString()} كجم
+                                    </strong>
+                                    <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                                      order.receivedQuantity < order.quantity ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300' :
+                                      order.receivedQuantity > order.quantity ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300' :
+                                      'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                                    }`}>
+                                      {order.receivedQuantity < order.quantity ? `عجز ${(order.quantity - order.receivedQuantity).toLocaleString()} كجم` :
+                                       order.receivedQuantity > order.quantity ? `زيادة +${(order.receivedQuantity - order.quantity).toLocaleString()} كجم` : 'مطابق'}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-zinc-600 dark:text-zinc-300 block truncate mt-0.5 font-medium">
+                                    👤 {order.receivedByName || order.receivedBy}
+                                  </span>
+                                  {order.receivedAt && (
+                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 block">
+                                      🕒 {new Date(order.receivedAt).toLocaleString(isRtl ? 'ar-EG' : 'en-US')}
+                                    </span>
+                                  )}
+                                </>
+                              ) : order.status === 'Completed' ? (
+                                <span className="text-purple-600 dark:text-purple-400 font-bold text-xs italic">
+                                  {isRtl ? 'بانتظار إثبات الكمية المستلمة' : 'Awaiting receipt...'}
+                                </span>
+                              ) : (
+                                <span className="text-zinc-400 text-xs italic">{isRtl ? 'بعد إصدار الـ PO' : 'After PO'}</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
                       {/* Section 2: Detailed Specs & Metadata Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
                         <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
                           <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'كود المورد' : 'Supplier Code'}</span>
                           <span className="font-bold text-zinc-800 dark:text-zinc-200">{order.supplierCode || '—'}</span>
@@ -1422,11 +1656,42 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                         </div>
 
                         <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
-                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'سعر الوحدة المحدد' : 'Unit Price'}</span>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{order.price.toLocaleString()} ج.م / {order.unit}</span>
+                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'التوجيه الأولي' : 'Initial Routing'}</span>
+                          <span className="font-bold text-blue-700 dark:text-blue-400">{order.initialRouting || 'مياه وملح'}</span>
                         </div>
 
                         <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
+                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'التحليل' : 'Analysis'}</span>
+                          <span className="font-bold text-amber-700 dark:text-amber-400">{order.analysisType || 'مبيدات'}</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
+                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'طريقة السداد' : 'Payment Method'}</span>
+                          <span className="font-bold text-zinc-800 dark:text-zinc-200">{order.paymentMethod || (isRtl ? 'غير محددة' : 'Not specified')}</span>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
+                          <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'سعر الكيلو المحدد' : 'Unit Price (kg)'}</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{order.price.toLocaleString()} ج.م / {order.unit || 'كجم'}</span>
+                        </div>
+
+                        {order.receivedQuantity !== undefined && (
+                          <>
+                            <div className="p-2.5 rounded-lg bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900">
+                              <span className="text-purple-600 dark:text-purple-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'الكمية المستلمة فعلياً' : 'Actual Received Qty'}</span>
+                              <span className="font-black text-purple-900 dark:text-purple-200 text-sm">{order.receivedQuantity.toLocaleString()} كجم</span>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900">
+                              <span className="text-purple-600 dark:text-purple-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'القيمة المستحقة الفعلية' : 'Actual Total Due'}</span>
+                              <span className="font-black text-purple-900 dark:text-purple-200 text-sm">
+                                {(order.receivedTotalAmount || order.receivedQuantity * order.price).toLocaleString()} ج.م
+                              </span>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="p-2.5 rounded-lg bg-zinc-50/70 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800 sm:col-span-2 lg:col-span-4">
                           <span className="text-zinc-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'أماكن التنزيل' : 'Unloading Locations'}</span>
                           <span className="font-bold text-zinc-800 dark:text-zinc-200 truncate block" title={order.unloadingLocations?.join(' • ') || '—'}>
                             {order.unloadingLocations?.join(' • ') || '—'}
@@ -1567,26 +1832,71 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                    {isRtl ? 'التصنيف' : 'Category'}
+                    {isRtl ? 'التصنيف' : 'Category'} <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={formData.itemCategory}
                     onChange={(e) => setFormData({ ...formData, itemCategory: e.target.value })}
-                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white"
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-bold text-zinc-900 dark:text-white"
                   >
-                    <option value="زيتون فريش">{isRtl ? 'زيتون فريش' : 'Fresh Olives'}</option>
-                    <option value="فلفل ومخللات">{isRtl ? 'فلفل ومخللات' : 'Peppers & Pickles'}</option>
-                    <option value="خام زراعي">{isRtl ? 'خام زراعي' : 'Agri Raw Material'}</option>
-                    <option value="مستلزمات إنتاج">{isRtl ? 'مستلزمات إنتاج' : 'Supplies'}</option>
+                    {COMMON_ITEM_CATEGORIES.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              {/* Row 4: Quantity, Unit, Price, Total live calculation */}
+              {/* Row 3.5: New Specific Fields (التوجيه الأولي & التحليل & طريقة السداد) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                    {isRtl ? 'التوجيه الأولي' : 'Initial Routing'} <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={formData.initialRouting}
+                    onChange={(e) => setFormData({ ...formData, initialRouting: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-bold text-zinc-900 dark:text-white"
+                  >
+                    {INITIAL_ROUTING_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                    {isRtl ? 'التحليل' : 'Analysis'} <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={formData.analysisType}
+                    onChange={(e) => setFormData({ ...formData, analysisType: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-bold text-zinc-900 dark:text-white"
+                  >
+                    {ANALYSIS_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                    {isRtl ? 'طريقة السداد' : 'Payment Method'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={isRtl ? 'مثال: نقداً / شيك 30 يوم / تحويل...' : 'e.g. Cash / Bank transfer / Check...'}
+                    value={formData.paymentMethod}
+                    onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                    className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-zinc-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: Quantity, Unit (كيلو جرام فقط), Price, Total live calculation */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                    {isRtl ? 'الكمية' : 'Quantity'} <span className="text-rose-500">*</span>
+                    {isRtl ? 'الكمية (كيلو جرام)' : 'Quantity (kg)'} <span className="text-rose-500">*</span>
                   </label>
                   <div className="flex items-center gap-1.5">
                     <input
@@ -1599,19 +1909,15 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                       onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                       className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-bold text-zinc-900 dark:text-white"
                     />
-                    <select
-                      value={formData.unit}
-                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="px-2 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-900 dark:text-white shrink-0"
-                    >
-                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                    <div className="px-3 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-extrabold text-zinc-800 dark:text-zinc-200 shrink-0 select-none">
+                      كجم
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                    {isRtl ? 'سعر الوحدة' : 'Price per Unit'} <span className="text-rose-500">*</span>
+                    {isRtl ? 'سعر الكيلو جرام' : 'Price per kg'} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -1969,6 +2275,39 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                 />
               </div>
 
+              {/* Optional Actual Received Quantity (If already delivered) */}
+              <div className="space-y-1.5 p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50">
+                <label className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <PackageCheck size={14} className="text-purple-600" />
+                    <span>{isRtl ? 'الكمية المستلمة فعلياً (اختياري إذا تم الاستلام)' : 'Actual Received Qty (Optional)'}</span>
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-normal">كجم</span>
+                </label>
+                <input
+                  type="number"
+                  placeholder={isRtl ? `الكمية المطلوبة: ${selectedOrder.quantity.toLocaleString()} كجم` : `Requested: ${selectedOrder.quantity} kg`}
+                  value={receivedQtyInput}
+                  onChange={(e) => setReceivedQtyInput(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-purple-200 dark:border-purple-800 outline-none focus:ring-2 focus:ring-purple-500 text-sm font-bold text-zinc-900 dark:text-white"
+                />
+                {receivedQtyInput && !isNaN(parseFloat(receivedQtyInput)) && (
+                  <div className="flex items-center justify-between text-[11px] font-bold text-purple-700 dark:text-purple-300 pt-1">
+                    <span>
+                      {isRtl ? 'الإجمالي الفعلي المستحق:' : 'Actual Due:'}{' '}
+                      {(parseFloat(receivedQtyInput) * (selectedOrder.price || 0)).toLocaleString()} ج.م
+                    </span>
+                    <span className={parseFloat(receivedQtyInput) < selectedOrder.quantity ? 'text-amber-600' : 'text-emerald-600'}>
+                      {parseFloat(receivedQtyInput) < selectedOrder.quantity 
+                        ? `عجز ${(selectedOrder.quantity - parseFloat(receivedQtyInput)).toLocaleString()} كجم`
+                        : parseFloat(receivedQtyInput) > selectedOrder.quantity
+                        ? `زيادة +${(parseFloat(receivedQtyInput) - selectedOrder.quantity).toLocaleString()} كجم`
+                        : 'مطابق'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* Execution Notes */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
@@ -2010,170 +2349,174 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       {/* MODAL 5: Printable Purchase Order Official Voucher Modal                 */}
       {/* ========================================================================= */}
       {isViewModalOpen && selectedOrder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-4xl max-h-[95vh] overflow-y-auto rounded-3xl"
+          >
+            <ModernPurchaseOrderVoucher
+              order={selectedOrder}
+              companyName="شركة ريتشلاند للصناعات الغذائية"
+              companySubtitle="إدارة المشتريات والتوريدات الزراعية • RICHLAND AGRI & FRESH SUPPLY"
+              onClose={() => setIsViewModalOpen(false)}
+            />
+          </motion.div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: Stage 4 - Actual Receipt Recording Modal                         */}
+      {/* ========================================================================= */}
+      {isReceiveModalOpen && selectedOrder && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-zinc-900 rounded-[32px] p-6 sm:p-8 w-full max-w-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 max-h-[90vh] overflow-y-auto"
+            className="bg-white dark:bg-zinc-900 rounded-[32px] p-6 sm:p-8 w-full max-w-lg shadow-2xl border border-zinc-200 dark:border-zinc-800"
           >
-            <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800 print:hidden">
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                <Printer size={20} className="text-emerald-500" />
-                <span>{isRtl ? 'معاينة سند أمر التوريد المعتمد' : 'Purchase Order Voucher'}</span>
-              </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs transition-all shadow-md shadow-emerald-500/20"
-                >
-                  <Printer size={16} />
-                  <span>{isRtl ? 'طباعة السند' : 'Print'}</span>
-                </button>
-                <button onClick={() => setIsViewModalOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400">
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Printable Document Sheet */}
-            <div ref={printRef} className="mt-6 p-8 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-900 dark:text-zinc-100 space-y-6 shadow-sm font-sans" dir="rtl">
-              
-              {/* Header */}
-              <div className="flex items-start justify-between border-b-2 border-emerald-600 pb-4">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-500 flex items-center justify-center font-bold">
+                  <PackageCheck size={24} />
+                </div>
                 <div>
-                  <h1 className="text-2xl font-black text-emerald-800 dark:text-emerald-400 tracking-tight">
-                    شركة ريتشلاند للصناعات الغذائية
-                  </h1>
-                  <p className="text-xs text-zinc-500 font-semibold mt-0.5">
-                    إدارة المشتريات والتوريدات الزراعية • RICHLAND AGRI & FRESH SUPPLY
+                  <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
+                    {isRtl ? 'تسجيل الكمية المستلمة فعلياً' : 'Record Actual Received Quantity'}
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    {selectedOrder.orderNumber} • {selectedOrder.poNumber ? `PO: ${selectedOrder.poNumber}` : ''}
                   </p>
                 </div>
-                <div className="text-left" dir="ltr">
-                  <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-black rounded-lg inline-block mb-1">
-                    PURCHASE ORDER
-                  </span>
-                  <p className="text-xs text-zinc-500 font-mono">Date: {selectedOrder.pricingDate}</p>
+              </div>
+              <button onClick={() => setIsReceiveModalOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 mt-5">
+              {/* Order Info Summary Card */}
+              <div className="p-4 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-500/20 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'المورد:' : 'Supplier:'}</span>
+                  <span className="font-bold text-zinc-800 dark:text-zinc-200">{selectedOrder.supplierName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'الصنف والتصنيف:' : 'Item & Category:'}</span>
+                  <span className="font-bold text-zinc-800 dark:text-zinc-200">{selectedOrder.itemType} ({selectedOrder.itemCategory || 'زيتون فريش'})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'الكمية المطلوبة بأمر التوريد:' : 'Requested Quantity:'}</span>
+                  <span className="font-extrabold text-zinc-900 dark:text-white text-sm">{selectedOrder.quantity.toLocaleString()} كجم</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'السعر للكيلو:' : 'Price / kg:'}</span>
+                  <span className="font-bold text-zinc-800 dark:text-zinc-200">{selectedOrder.price.toLocaleString()} ج.م</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-purple-500/20">
+                  <span className="font-bold text-zinc-700 dark:text-zinc-300">{isRtl ? 'الإجمالي المطلوب المعتمد:' : 'Requested Total:'}</span>
+                  <span className="font-bold text-zinc-900 dark:text-white">{selectedOrder.totalAmount.toLocaleString()} ج.م</span>
                 </div>
               </div>
 
-              {/* Title and PO Numbers */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                <div>
-                  <span className="text-xs text-zinc-400 block font-bold">رقم الطلب المسجل:</span>
-                  <span className="text-lg font-black text-zinc-800 dark:text-zinc-200 font-mono">{selectedOrder.orderNumber}</span>
+              {/* Input: Actual Received Quantity (kg) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center justify-between">
+                  <span>{isRtl ? 'الكمية المستلمة فعلياً بالمخزن (كجم)' : 'Actual Received Quantity (kg)'} <span className="text-rose-500">*</span></span>
+                  <button
+                    type="button"
+                    onClick={() => setReceivedQtyInput(String(selectedOrder.quantity))}
+                    className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold hover:underline"
+                  >
+                    {isRtl ? 'مطابق للطلب تماماً' : 'Same as requested'}
+                  </button>
+                </label>
+                <div className="relative">
+                  <Scale className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    placeholder="أدخل وزن الكمية المستلمة الفعلي..."
+                    value={receivedQtyInput}
+                    onChange={(e) => setReceivedQtyInput(e.target.value)}
+                    className="w-full pl-4 pr-11 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-purple-300 dark:border-purple-800 outline-none focus:ring-2 focus:ring-purple-500 text-base font-black text-purple-900 dark:text-purple-100"
+                  />
                 </div>
-                {selectedOrder.poNumber && (
-                  <div className="sm:text-left">
-                    <span className="text-xs text-emerald-600 font-bold block">رقم أمر التوريد المعتمد (PO No):</span>
-                    <span className="text-xl font-black text-emerald-700 dark:text-emerald-400 font-mono tracking-wider">
-                      {selectedOrder.poNumber}
+              </div>
+
+              {/* Real-time Variance Calculation */}
+              {receivedQtyInput && !isNaN(parseFloat(receivedQtyInput)) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 space-y-2 text-xs"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-500">{isRtl ? 'نسبة الاستلام:' : 'Receipt Ratio:'}</span>
+                    <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                      {((parseFloat(receivedQtyInput) / selectedOrder.quantity) * 100).toFixed(1)}%
                     </span>
                   </div>
-                )}
-              </div>
 
-              {/* Information Table */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl">
-                  <span className="text-zinc-400 block mb-1">اسم المورد:</span>
-                  <strong className="text-sm text-zinc-900 dark:text-white">{selectedOrder.supplierName}</strong>
-                </div>
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl">
-                  <span className="text-zinc-400 block mb-1">المنطقة الجغرافية:</span>
-                  <strong className="text-sm text-zinc-900 dark:text-white">{selectedOrder.region}</strong>
-                </div>
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl">
-                  <span className="text-zinc-400 block mb-1">تاريخ التسعير:</span>
-                  <strong className="text-sm text-zinc-900 dark:text-white">{selectedOrder.pricingDate}</strong>
-                </div>
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl">
-                  <span className="text-zinc-400 block mb-1">مكان التنزيل:</span>
-                  <strong className="text-sm text-zinc-900 dark:text-white">{selectedOrder.unloadingLocations?.join('، ') || '—'}</strong>
-                </div>
-              </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-500">{isRtl ? 'فارق الكمية (الوزن):' : 'Quantity Variance:'}</span>
+                    <span className={`font-black ${
+                      parseFloat(receivedQtyInput) < selectedOrder.quantity ? 'text-amber-600' :
+                      parseFloat(receivedQtyInput) > selectedOrder.quantity ? 'text-blue-600' : 'text-emerald-600'
+                    }`}>
+                      {parseFloat(receivedQtyInput) < selectedOrder.quantity
+                        ? `عجز: -${(selectedOrder.quantity - parseFloat(receivedQtyInput)).toLocaleString()} كجم`
+                        : parseFloat(receivedQtyInput) > selectedOrder.quantity
+                        ? `زيادة: +${(parseFloat(receivedQtyInput) - selectedOrder.quantity).toLocaleString()} كجم`
+                        : 'مطابق بنسبة 100%'}
+                    </span>
+                  </div>
 
-              {/* Item Details Table */}
-              <table className="w-full text-right text-xs border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                <thead className="bg-zinc-100 dark:bg-zinc-800/80 font-bold text-zinc-700 dark:text-zinc-300">
-                  <tr>
-                    <th className="p-3 border-b">م</th>
-                    <th className="p-3 border-b">نوع الصنف</th>
-                    <th className="p-3 border-b">الكمية المطلوبة</th>
-                    <th className="p-3 border-b">الوحدة</th>
-                    <th className="p-3 border-b">السعر المتفق عليه</th>
-                    <th className="p-3 border-b text-left">الإجمالي</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                  <tr>
-                    <td className="p-3 font-bold">1</td>
-                    <td className="p-3 font-extrabold text-sm">{selectedOrder.itemType}</td>
-                    <td className="p-3 font-bold">{selectedOrder.quantity.toLocaleString()}</td>
-                    <td className="p-3">{selectedOrder.unit}</td>
-                    <td className="p-3 font-bold">{selectedOrder.price.toLocaleString()} ج.م</td>
-                    <td className="p-3 font-black text-sm text-emerald-600 dark:text-emerald-400 text-left">
-                      {selectedOrder.totalAmount.toLocaleString()} ج.م
-                    </td>
-                  </tr>
-                </tbody>
-                <tfoot className="bg-emerald-50 dark:bg-emerald-950/40 font-black text-sm">
-                  <tr>
-                    <td colSpan={5} className="p-3 text-right text-emerald-900 dark:text-emerald-200">
-                      إجمالي قيمة أمر التوريد:
-                    </td>
-                    <td className="p-3 text-left text-emerald-700 dark:text-emerald-400 text-base">
-                      {selectedOrder.totalAmount.toLocaleString()} ج.م
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-
-              {selectedOrder.notes && (
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl text-xs">
-                  <span className="text-zinc-400 block mb-0.5 font-bold">ملاحظات وشروط التوريد:</span>
-                  <p className="text-zinc-700 dark:text-zinc-300">{selectedOrder.notes}</p>
-                </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-zinc-200 dark:border-zinc-700 text-sm">
+                    <span className="font-extrabold text-zinc-900 dark:text-white">
+                      {isRtl ? 'القيمة المستحقة الفعلية للصرف:' : 'Actual Due Amount:'}
+                    </span>
+                    <span className="font-black text-purple-700 dark:text-purple-300 text-base">
+                      {(parseFloat(receivedQtyInput) * (selectedOrder.price || 0)).toLocaleString()} ج.م
+                    </span>
+                  </div>
+                </motion.div>
               )}
 
-              {/* Three Official Signatures */}
-              <div className="pt-6 border-t-2 border-zinc-200 dark:border-zinc-800 grid grid-cols-3 gap-4 text-center text-xs">
-                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-800">
-                  <span className="text-zinc-400 block text-[11px] mb-1 font-bold">1. مسئول التسجيل</span>
-                  <strong className="block text-zinc-800 dark:text-zinc-200 text-sm mb-4">
-                    {selectedOrder.createdByName || selectedOrder.createdBy}
-                  </strong>
-                  <div className="border-t border-dashed border-zinc-300 dark:border-zinc-700 pt-1 text-[10px] text-zinc-400">
-                    التوقيع: .....................
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-800">
-                  <span className="text-zinc-400 block text-[11px] mb-1 font-bold">2. مسئول الاعتماد</span>
-                  <strong className="block text-zinc-800 dark:text-zinc-200 text-sm mb-4">
-                    {selectedOrder.approvedByName || '.....................'}
-                  </strong>
-                  <div className="border-t border-dashed border-zinc-300 dark:border-zinc-700 pt-1 text-[10px] text-zinc-400">
-                    التوقيع: .....................
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-100 dark:border-zinc-800">
-                  <span className="text-zinc-400 block text-[11px] mb-1 font-bold">3. مسئول التنفيذ والمشتريات</span>
-                  <strong className="block text-zinc-800 dark:text-zinc-200 text-sm mb-4">
-                    {selectedOrder.executedByName || '.....................'}
-                  </strong>
-                  <div className="border-t border-dashed border-zinc-300 dark:border-zinc-700 pt-1 text-[10px] text-zinc-400">
-                    التوقيع: .....................
-                  </div>
-                </div>
+              {/* Receiving Notes / Discrepancy Reason */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
+                  {isRtl ? 'ملاحظات الاستلام والمطابقة (اختياري)' : 'Receiving & Inspection Notes (Optional)'}
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder={isRtl ? 'تم استلام الشحنة وتفريغها في مخزن...' : 'Delivered and unloaded at warehouse...'}
+                  value={receivingNotesInput}
+                  onChange={(e) => setReceivingNotesInput(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-purple-500 text-sm text-zinc-900 dark:text-white resize-none"
+                />
               </div>
 
-              {/* Stamp & Footer notice */}
-              <div className="flex items-center justify-between pt-4 text-[10px] text-zinc-400">
-                <span>سند أمر توريد إلكتروني صادر ومعتمد من نظام إدارة المستودعات والمشتريات.</span>
-                <span>ختم الشركة المعتمد [ .................... ]</span>
+              {/* Actions Footer */}
+              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsReceiveModalOpen(false)}
+                  className="px-5 py-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold text-xs"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveReceipt}
+                  disabled={actionLoading}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs shadow-xl shadow-purple-600/20 disabled:opacity-50"
+                >
+                  {actionLoading ? <RefreshCw size={16} className="animate-spin" /> : <PackageCheck size={16} />}
+                  <span>{isRtl ? 'حفظ وتأكيد الاستلام الفعلي' : 'Save & Confirm Receipt'}</span>
+                </button>
               </div>
-
             </div>
           </motion.div>
         </div>
