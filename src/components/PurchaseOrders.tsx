@@ -156,6 +156,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
     quantity: '',
     unit: 'كجم',
     price: '',
+    discountPercentage: '',
     notes: '',
     unloadingLocations: [] as string[],
     customUnloadingLocation: '',
@@ -168,6 +169,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
   const [sapDocInput, setSapDocInput] = useState('');
   const [executionNotesInput, setExecutionNotesInput] = useState('');
   const [receivedQtyInput, setReceivedQtyInput] = useState('');
+  const [receivedDiscountInput, setReceivedDiscountInput] = useState('');
   const [receivingNotesInput, setReceivingNotesInput] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -300,7 +302,10 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
     const qty = parseFloat(formData.quantity) || 0;
     const unitPrice = parseFloat(formData.price) || 0;
-    const totalAmount = qty * unitPrice;
+    const discountPct = parseFloat(formData.discountPercentage) || 0;
+    const subtotalAmount = qty * unitPrice;
+    const discountAmount = discountPct > 0 ? (subtotalAmount * discountPct) / 100 : 0;
+    const totalAmount = subtotalAmount - discountAmount;
 
     // Generate Order Number
     const timestamp = Date.now();
@@ -322,6 +327,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       quantity: qty,
       unit: formData.unit,
       price: unitPrice,
+      discountPercentage: discountPct > 0 ? discountPct : undefined,
+      discountAmount: discountPct > 0 ? discountAmount : undefined,
+      subtotalAmount,
       totalAmount,
       currency: 'ج.م',
       notes: formData.notes.trim(),
@@ -351,6 +359,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
         quantity: '',
         unit: 'كجم',
         price: '',
+        discountPercentage: '',
         notes: '',
         unloadingLocations: [],
         customUnloadingLocation: '',
@@ -369,7 +378,20 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
     const qty = parseFloat(formData.quantity) || 0;
     const unitPrice = parseFloat(formData.price) || 0;
-    const totalAmount = qty * unitPrice;
+    const discountPct = parseFloat(formData.discountPercentage) || 0;
+    const subtotalAmount = qty * unitPrice;
+    const discountAmount = discountPct > 0 ? (subtotalAmount * discountPct) / 100 : 0;
+    const totalAmount = subtotalAmount - discountAmount;
+
+    // Recalculate actual received amounts if already recorded
+    let receivedSubtotalAmount = selectedOrder.receivedSubtotalAmount;
+    let receivedDiscountAmount = selectedOrder.receivedDiscountAmount;
+    let receivedTotalAmount = selectedOrder.receivedTotalAmount;
+    if (selectedOrder.receivedQuantity !== undefined) {
+      receivedSubtotalAmount = selectedOrder.receivedQuantity * unitPrice;
+      receivedDiscountAmount = discountPct > 0 ? (receivedSubtotalAmount * discountPct) / 100 : 0;
+      receivedTotalAmount = receivedSubtotalAmount - receivedDiscountAmount;
+    }
 
     const updatedOrder: PurchaseOrder = {
       ...selectedOrder,
@@ -385,7 +407,13 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       quantity: qty,
       unit: formData.unit,
       price: unitPrice,
+      discountPercentage: discountPct > 0 ? discountPct : undefined,
+      discountAmount: discountPct > 0 ? discountAmount : undefined,
+      subtotalAmount,
       totalAmount,
+      receivedSubtotalAmount,
+      receivedDiscountAmount: (receivedDiscountAmount && receivedDiscountAmount > 0) ? receivedDiscountAmount : undefined,
+      receivedTotalAmount,
       notes: formData.notes.trim(),
       unloadingLocations: [...formData.unloadingLocations.filter(loc => loc !== 'أخرى'), formData.customUnloadingLocation.trim()].filter(Boolean),
       lastUpdatedAt: new Date().toISOString(),
@@ -507,6 +535,25 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       const qtyReceived = receivedQtyInput.trim() ? parseFloat(receivedQtyInput) : undefined;
       const isQtyValid = qtyReceived !== undefined && !isNaN(qtyReceived) && qtyReceived >= 0;
 
+      let receivedSubtotal = 0;
+      let receivedDiscount = 0;
+      let receivedTotal = 0;
+
+      if (isQtyValid && qtyReceived !== undefined) {
+        const discountPct = selectedOrder.discountPercentage || 0;
+        receivedSubtotal = qtyReceived * (selectedOrder.price || 0);
+        
+        // If user manually inputted a discount percentage for the received quantity, use it. Otherwise compute from default percentage.
+        const inputPct = parseFloat(receivedDiscountInput);
+        let appliedPct = discountPct;
+        if (!isNaN(inputPct) && inputPct >= 0) {
+          appliedPct = inputPct;
+        }
+        
+        receivedDiscount = appliedPct > 0 ? (receivedSubtotal * appliedPct) / 100 : 0;
+        receivedTotal = receivedSubtotal - receivedDiscount;
+      }
+
       const updatedOrder: PurchaseOrder = {
         ...selectedOrder,
         status: 'Completed',
@@ -518,7 +565,9 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
         executionNotes: executionNotesInput.trim() || undefined,
         ...(isQtyValid ? {
           receivedQuantity: qtyReceived,
-          receivedTotalAmount: qtyReceived * (selectedOrder.price || 0),
+          receivedSubtotalAmount: receivedSubtotal,
+          receivedDiscountAmount: receivedDiscount > 0 ? receivedDiscount : undefined,
+          receivedTotalAmount: receivedTotal,
           receivedAt: new Date().toISOString(),
           receivedBy: user?.uid || user?.username || 'executor',
           receivedByName: user?.displayName || user?.username || (isRtl ? 'مسئول التنفيذ' : 'Execution Officer'),
@@ -535,6 +584,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       setSapDocInput('');
       setExecutionNotesInput('');
       setReceivedQtyInput('');
+      setReceivedDiscountInput('');
       setReceivingNotesInput('');
     } catch (err: any) {
       toast.error(isRtl ? `خطأ أثناء إصدار أمر التوريد: ${err.message}` : `Execution error: ${err.message}`);
@@ -554,10 +604,23 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
     setActionLoading(true);
     try {
-      const receivedTotal = qtyReceived * (selectedOrder.price || 0);
+      const discountPct = selectedOrder.discountPercentage || 0;
+      const receivedSubtotal = qtyReceived * (selectedOrder.price || 0);
+
+      // If user manually inputted a discount percentage for the received quantity, use it. Otherwise compute from default percentage.
+      const inputPct = parseFloat(receivedDiscountInput);
+      let appliedPct = discountPct;
+      if (!isNaN(inputPct) && inputPct >= 0) {
+        appliedPct = inputPct;
+      }
+      const receivedDiscount = appliedPct > 0 ? (receivedSubtotal * appliedPct) / 100 : 0;
+      const receivedTotal = receivedSubtotal - receivedDiscount;
+
       const updatedOrder: PurchaseOrder = {
         ...selectedOrder,
         receivedQuantity: qtyReceived,
+        receivedSubtotalAmount: receivedSubtotal,
+        receivedDiscountAmount: receivedDiscount > 0 ? receivedDiscount : undefined,
         receivedTotalAmount: receivedTotal,
         receivedAt: new Date().toISOString(),
         receivedBy: user?.uid || user?.username || 'receiver',
@@ -567,10 +630,11 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       };
 
       await storageService.savePurchaseOrder(updatedOrder);
-      toast.success(isRtl ? `تم حفظ الكمية المستلمة فعلياً بنجاح (${qtyReceived.toLocaleString()} كجم)!` : `Actual received quantity saved (${qtyReceived.toLocaleString()} kg)!`);
+      toast.success(isRtl ? `تم حفظ الكمية المستلمة فعلياً وتعديل السعر بنجاح (${qtyReceived.toLocaleString()} كجم)!` : `Actual received quantity and adjusted price saved (${qtyReceived.toLocaleString()} kg)!`);
       setIsReceiveModalOpen(false);
       setSelectedOrder(null);
       setReceivedQtyInput('');
+      setReceivedDiscountInput('');
       setReceivingNotesInput('');
     } catch (err: any) {
       toast.error(isRtl ? `خطأ أثناء حفظ الاستلام: ${err.message}` : `Receipt error: ${err.message}`);
@@ -611,10 +675,12 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       'الكمية المطلوبة',
       'الوحدة',
       'السعر للكيلو',
-      'الإجمالي المطلوب (ج.م)',
+      'نسبة الخصم %',
+      'قيمة الخصم المبدئي (ج.م)',
+      'الإجمالي المطلوب بعد الخصم (ج.م)',
       'الكمية المستلمة فعلياً (كجم)',
       'فارق الكمية (كجم)',
-      'الإجمالي الفعلي المستحق (ج.م)',
+      'الإجمالي الفعلي المستحق بعد الخصم (ج.م)',
       'رقم أمر التوريد (PO)',
       'مسئول التسجيل',
       'تاريخ التسجيل',
@@ -642,6 +708,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
       o.quantity || 0,
       `"${o.unit || 'كجم'}"`,
       o.price || 0,
+      o.discountPercentage || 0,
+      o.discountAmount || 0,
       o.totalAmount || 0,
       o.receivedQuantity !== undefined ? o.receivedQuantity : '',
       o.receivedQuantity !== undefined ? (o.receivedQuantity - o.quantity) : '',
@@ -755,6 +823,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                     quantity: '',
                     unit: 'كجم',
                     price: '',
+                    discountPercentage: '',
                     notes: '',
                     unloadingLocations: [],
                     customUnloadingLocation: '',
@@ -1237,16 +1306,33 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                             ? `زيادة: +${(order.receivedQuantity - order.quantity).toLocaleString()} كجم`
                             : 'مطابق 100%'}
                         </span>
+                        <span className="text-[11px] font-black text-purple-900 dark:text-purple-200 border-r border-purple-300 dark:border-purple-800 pr-1.5">
+                          {isRtl ? 'الفعلي:' : 'Due:'} {(order.receivedTotalAmount !== undefined ? order.receivedTotalAmount : (order.receivedQuantity * order.price)).toLocaleString()} ج.م
+                        </span>
                       </div>
                     )}
 
                     <div className="text-end bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium me-1">
-                        {order.quantity.toLocaleString()} {order.unit} × {order.price.toLocaleString()} ج.م =
-                      </span>
-                      <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                        {order.totalAmount.toLocaleString()} ج.م
-                      </strong>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
+                          {order.quantity.toLocaleString()} {order.unit} × {order.price.toLocaleString()} ج.م
+                        </span>
+                        {order.discountPercentage && order.discountPercentage > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 font-extrabold">
+                            {isRtl ? `خصم ${order.discountPercentage}%` : `${order.discountPercentage}% off`}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        {order.discountPercentage && order.discountPercentage > 0 && (
+                          <span className="text-[10px] text-zinc-400 line-through">
+                            {(order.subtotalAmount || order.quantity * order.price).toLocaleString()} ج.م
+                          </span>
+                        )}
+                        <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                          {order.totalAmount.toLocaleString()} ج.م
+                        </strong>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1367,6 +1453,7 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                             quantity: String(order.quantity),
                             unit: order.unit,
                             price: String(order.price),
+                            discountPercentage: order.discountPercentage !== undefined ? String(order.discountPercentage) : '',
                             notes: order.notes || '',
                             unloadingLocations: [
                               ...(order.unloadingLocations?.filter(loc => ['اوليف لاند', 'ريتش لاند', 'Jps'].includes(loc)) || []),
@@ -1675,6 +1762,20 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                           <span className="font-bold text-emerald-600 dark:text-emerald-400">{order.price.toLocaleString()} ج.م / {order.unit || 'كجم'}</span>
                         </div>
 
+                        {order.discountPercentage && order.discountPercentage > 0 ? (
+                          <>
+                            <div className="p-2.5 rounded-lg bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50">
+                              <span className="text-rose-600 dark:text-rose-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'نسبة الخصم المعتمدة' : 'Discount %'}</span>
+                              <span className="font-black text-rose-700 dark:text-rose-300">{order.discountPercentage}%</span>
+                            </div>
+
+                            <div className="p-2.5 rounded-lg bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50">
+                              <span className="text-rose-600 dark:text-rose-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'قيمة الخصم المبدئي' : 'Discount Amount'}</span>
+                              <span className="font-black text-rose-700 dark:text-rose-300">{(order.discountAmount || 0).toLocaleString()} ج.م</span>
+                            </div>
+                          </>
+                        ) : null}
+
                         {order.receivedQuantity !== undefined && (
                           <>
                             <div className="p-2.5 rounded-lg bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900">
@@ -1685,8 +1786,13 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                             <div className="p-2.5 rounded-lg bg-purple-50/80 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900">
                               <span className="text-purple-600 dark:text-purple-400 text-[10px] font-bold block mb-0.5">{isRtl ? 'القيمة المستحقة الفعلية' : 'Actual Total Due'}</span>
                               <span className="font-black text-purple-900 dark:text-purple-200 text-sm">
-                                {(order.receivedTotalAmount || order.receivedQuantity * order.price).toLocaleString()} ج.م
+                                {(order.receivedTotalAmount !== undefined ? order.receivedTotalAmount : (order.receivedQuantity * order.price)).toLocaleString()} ج.م
                               </span>
+                              {order.receivedDiscountAmount && order.receivedDiscountAmount > 0 && (
+                                <span className="text-[10px] text-rose-600 dark:text-rose-400 block font-semibold mt-0.5">
+                                  {isRtl ? `(شامل خصم ${order.discountPercentage}% = -${order.receivedDiscountAmount.toLocaleString()} ج.م)` : `(incl. ${order.discountPercentage}% discount = -${order.receivedDiscountAmount.toLocaleString()})`}
+                                </span>
+                              )}
                             </div>
                           </>
                         )}
@@ -1892,8 +1998,8 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                 </div>
               </div>
 
-              {/* Row 4: Quantity, Unit (كيلو جرام فقط), Price, Total live calculation */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* Row 4: Quantity, Price, Discount %, and Total live calculation */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
                     {isRtl ? 'الكمية (كيلو جرام)' : 'Quantity (kg)'} <span className="text-rose-500">*</span>
@@ -1931,16 +2037,54 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                   />
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300 flex items-center justify-between">
+                    <span>{isRtl ? 'نسبة الخصم %' : 'Discount %'}</span>
+                    <span className="text-[10px] text-zinc-400 font-normal">{isRtl ? 'اختياري' : 'Optional'}</span>
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      max="100"
+                      placeholder="0"
+                      value={formData.discountPercentage}
+                      onChange={(e) => setFormData({ ...formData, discountPercentage: e.target.value })}
+                      className="w-full px-3 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none focus:ring-2 focus:ring-rose-500 text-xs font-bold text-zinc-900 dark:text-white"
+                    />
+                    <div className="px-2.5 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs font-black text-rose-600 dark:text-rose-400 shrink-0 select-none">
+                      %
+                    </div>
+                  </div>
+                </div>
+
                 <div className="col-span-2 sm:col-span-1 space-y-1.5">
                   <label className="text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                    {isRtl ? 'الإجمالي التقديري' : 'Calculated Total'}
+                    {isRtl ? 'الإجمالي بعد الخصم' : 'Net Total'}
                   </label>
-                  <div className="w-full px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 font-extrabold text-xs flex items-center justify-between">
-                    <span>
-                      {((parseFloat(formData.quantity) || 0) * (parseFloat(formData.price) || 0)).toLocaleString()}
-                    </span>
-                    <span className="text-[10px] font-bold">ج.م</span>
-                  </div>
+                  {(() => {
+                    const q = parseFloat(formData.quantity) || 0;
+                    const p = parseFloat(formData.price) || 0;
+                    const d = parseFloat(formData.discountPercentage) || 0;
+                    const sub = q * p;
+                    const disc = d > 0 ? (sub * (d / 100)) : 0;
+                    const total = sub - disc;
+                    return (
+                      <div className="w-full px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 flex flex-col justify-center min-h-[42px]">
+                        <div className="flex items-center justify-between font-extrabold text-xs">
+                          <span>{total.toLocaleString()}</span>
+                          <span className="text-[10px] font-bold">ج.م</span>
+                        </div>
+                        {d > 0 && sub > 0 && (
+                          <div className="flex items-center justify-between text-[9px] text-zinc-400 font-semibold pt-0.5 border-t border-emerald-500/20 mt-0.5">
+                            <span className="line-through">{sub.toLocaleString()}</span>
+                            <span className="text-rose-600 dark:text-rose-400 font-bold">-{disc.toLocaleString()} ({d}%)</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -2230,8 +2374,22 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                   <span className="text-zinc-500">{isRtl ? 'السعر المعتمد:' : 'Approved Price:'}</span>
                   <span className="font-bold text-zinc-800 dark:text-zinc-200">{selectedOrder.price.toLocaleString()} ج.م</span>
                 </div>
+                {selectedOrder.discountPercentage && selectedOrder.discountPercentage > 0 ? (
+                  <>
+                    <div className="flex justify-between text-zinc-500">
+                      <span>{isRtl ? 'الإجمالي قبل الخصم:' : 'Subtotal:'}</span>
+                      <span className="font-bold text-zinc-700 dark:text-zinc-300">
+                        {(selectedOrder.subtotalAmount || (selectedOrder.quantity * selectedOrder.price)).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-rose-600 dark:text-rose-400 font-bold">
+                      <span>{isRtl ? `قيمة الخصم (${selectedOrder.discountPercentage}%):` : `Discount (${selectedOrder.discountPercentage}%):`}</span>
+                      <span>-{(selectedOrder.discountAmount || 0).toLocaleString()} ج.م</span>
+                    </div>
+                  </>
+                ) : null}
                 <div className="flex justify-between pt-2 border-t border-emerald-500/20 text-sm">
-                  <span className="font-bold text-zinc-700 dark:text-zinc-300">{isRtl ? 'القيمة الإجمالية:' : 'Total Value:'}</span>
+                  <span className="font-bold text-zinc-700 dark:text-zinc-300">{isRtl ? 'القيمة الإجمالية المطلوبة:' : 'Total Value:'}</span>
                   <span className="font-black text-emerald-600 dark:text-emerald-400">{selectedOrder.totalAmount.toLocaleString()} ج.م</span>
                 </div>
               </div>
@@ -2276,36 +2434,79 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               </div>
 
               {/* Optional Actual Received Quantity (If already delivered) */}
-              <div className="space-y-1.5 p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50">
-                <label className="text-xs font-bold text-purple-900 dark:text-purple-300 flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <PackageCheck size={14} className="text-purple-600" />
-                    <span>{isRtl ? 'الكمية المستلمة فعلياً (اختياري إذا تم الاستلام)' : 'Actual Received Qty (Optional)'}</span>
-                  </span>
-                  <span className="text-[10px] text-zinc-400 font-normal">كجم</span>
-                </label>
-                <input
-                  type="number"
-                  placeholder={isRtl ? `الكمية المطلوبة: ${selectedOrder.quantity.toLocaleString()} كجم` : `Requested: ${selectedOrder.quantity} kg`}
-                  value={receivedQtyInput}
-                  onChange={(e) => setReceivedQtyInput(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-purple-200 dark:border-purple-800 outline-none focus:ring-2 focus:ring-purple-500 text-sm font-bold text-zinc-900 dark:text-white"
-                />
-                {receivedQtyInput && !isNaN(parseFloat(receivedQtyInput)) && (
-                  <div className="flex items-center justify-between text-[11px] font-bold text-purple-700 dark:text-purple-300 pt-1">
-                    <span>
-                      {isRtl ? 'الإجمالي الفعلي المستحق:' : 'Actual Due:'}{' '}
-                      {(parseFloat(receivedQtyInput) * (selectedOrder.price || 0)).toLocaleString()} ج.م
-                    </span>
-                    <span className={parseFloat(receivedQtyInput) < selectedOrder.quantity ? 'text-amber-600' : 'text-emerald-600'}>
-                      {parseFloat(receivedQtyInput) < selectedOrder.quantity 
-                        ? `عجز ${(selectedOrder.quantity - parseFloat(receivedQtyInput)).toLocaleString()} كجم`
-                        : parseFloat(receivedQtyInput) > selectedOrder.quantity
-                        ? `زيادة +${(parseFloat(receivedQtyInput) - selectedOrder.quantity).toLocaleString()} كجم`
-                        : 'مطابق'}
-                    </span>
+              <div className="space-y-3 p-4 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50">
+                <div className="flex items-center gap-1.5 text-purple-900 dark:text-purple-300 font-bold text-xs border-b border-purple-200/50 dark:border-purple-800/50 pb-2">
+                  <PackageCheck size={14} className="text-purple-600" />
+                  <span>{isRtl ? 'تسجيل الاستلام الفعلي (اختياري إذا تم التوريد)' : 'Actual Receipt (Optional)'}</span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">
+                      {isRtl ? 'الكمية المستلمة (كجم)' : 'Received Qty (kg)'}
+                    </label>
+                    <input
+                      type="number"
+                      placeholder={isRtl ? `الكمية المطلوبة: ${selectedOrder.quantity.toLocaleString()} كجم` : `Requested: ${selectedOrder.quantity} kg`}
+                      value={receivedQtyInput}
+                      onChange={(e) => setReceivedQtyInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-purple-200 dark:border-purple-800 outline-none focus:ring-2 focus:ring-purple-500 text-xs font-bold text-zinc-900 dark:text-white"
+                    />
                   </div>
-                )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-600 dark:text-zinc-400">
+                      {isRtl ? 'نسبة الخصم الفعلي (%)' : 'Actual Discount %'}
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder={isRtl ? `النسبة المبدئية: ${selectedOrder.discountPercentage || 0}%` : `Default: ${selectedOrder.discountPercentage || 0}%`}
+                      value={receivedDiscountInput}
+                      onChange={(e) => setReceivedDiscountInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-purple-200 dark:border-purple-800 outline-none focus:ring-2 focus:ring-purple-500 text-xs font-bold text-rose-600 dark:text-rose-400"
+                    />
+                  </div>
+                </div>
+
+                {receivedQtyInput && !isNaN(parseFloat(receivedQtyInput)) && (() => {
+                  const recQty = parseFloat(receivedQtyInput);
+                  const price = selectedOrder.price || 0;
+                  const discPct = selectedOrder.discountPercentage || 0;
+                  const recSub = recQty * price;
+                  
+                  const inputPct = parseFloat(receivedDiscountInput);
+                  let appliedPct = discPct;
+                  if (!isNaN(inputPct) && inputPct >= 0) {
+                    appliedPct = inputPct;
+                  }
+                  
+                  const recDisc = appliedPct > 0 ? recSub * (appliedPct / 100) : 0;
+                  const recTotal = recSub - recDisc;
+                  return (
+                    <div className="space-y-1 pt-2 border-t border-purple-200 dark:border-purple-800 text-[11px]">
+                      <div className="flex items-center justify-between text-purple-700 dark:text-purple-300 font-bold">
+                        <span>
+                          {isRtl ? 'الإجمالي الفعلي المستحق للصرف:' : 'Actual Due Amount:'}{' '}
+                          {recTotal.toLocaleString()} ج.م
+                        </span>
+                        <span className={recQty < selectedOrder.quantity ? 'text-amber-600' : 'text-emerald-600'}>
+                          {recQty < selectedOrder.quantity 
+                            ? `عجز ${(selectedOrder.quantity - recQty).toLocaleString()} كجم`
+                            : recQty > selectedOrder.quantity
+                            ? `زيادة +${(recQty - selectedOrder.quantity).toLocaleString()} كجم`
+                            : 'مطابق'}
+                        </span>
+                      </div>
+                      {recDisc > 0 && (
+                        <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                          <span>{isRtl ? `قبل الخصم: ${recSub.toLocaleString()} ج.م` : `Subtotal: ${recSub.toLocaleString()}`}</span>
+                          <span className="text-rose-600 font-semibold">{isRtl ? `(خصم -${recDisc.toLocaleString()} ج.م [${appliedPct}%])` : `(Discount -${recDisc.toLocaleString()} [${appliedPct}%])`}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Execution Notes */}
@@ -2413,6 +2614,20 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
                   <span className="text-zinc-500">{isRtl ? 'السعر للكيلو:' : 'Price / kg:'}</span>
                   <span className="font-bold text-zinc-800 dark:text-zinc-200">{selectedOrder.price.toLocaleString()} ج.م</span>
                 </div>
+                {selectedOrder.discountPercentage && selectedOrder.discountPercentage > 0 ? (
+                  <>
+                    <div className="flex justify-between text-zinc-500">
+                      <span>{isRtl ? 'الإجمالي قبل الخصم:' : 'Subtotal:'}</span>
+                      <span className="font-bold text-zinc-700 dark:text-zinc-300">
+                        {(selectedOrder.subtotalAmount || (selectedOrder.quantity * selectedOrder.price)).toLocaleString()} ج.م
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-rose-600 dark:text-rose-400 font-bold">
+                      <span>{isRtl ? `نسبة الخصم (${selectedOrder.discountPercentage}%):` : `Discount (${selectedOrder.discountPercentage}%):`}</span>
+                      <span>-{(selectedOrder.discountAmount || 0).toLocaleString()} ج.م</span>
+                    </div>
+                  </>
+                ) : null}
                 <div className="flex justify-between pt-2 border-t border-purple-500/20">
                   <span className="font-bold text-zinc-700 dark:text-zinc-300">{isRtl ? 'الإجمالي المطلوب المعتمد:' : 'Requested Total:'}</span>
                   <span className="font-bold text-zinc-900 dark:text-white">{selectedOrder.totalAmount.toLocaleString()} ج.م</span>
@@ -2420,69 +2635,120 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               </div>
 
               {/* Input: Actual Received Quantity (kg) */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center justify-between">
-                  <span>{isRtl ? 'الكمية المستلمة فعلياً بالمخزن (كجم)' : 'Actual Received Quantity (kg)'} <span className="text-rose-500">*</span></span>
-                  <button
-                    type="button"
-                    onClick={() => setReceivedQtyInput(String(selectedOrder.quantity))}
-                    className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold hover:underline"
-                  >
-                    {isRtl ? 'مطابق للطلب تماماً' : 'Same as requested'}
-                  </button>
-                </label>
-                <div className="relative">
-                  <Scale className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    placeholder="أدخل وزن الكمية المستلمة الفعلي..."
-                    value={receivedQtyInput}
-                    onChange={(e) => setReceivedQtyInput(e.target.value)}
-                    className="w-full pl-4 pr-11 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-purple-300 dark:border-purple-800 outline-none focus:ring-2 focus:ring-purple-500 text-base font-black text-purple-900 dark:text-purple-100"
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center justify-between">
+                    <span>{isRtl ? 'الكمية المستلمة (كجم)' : 'Received Qty (kg)'} <span className="text-rose-500">*</span></span>
+                    <button
+                      type="button"
+                      onClick={() => setReceivedQtyInput(String(selectedOrder.quantity))}
+                      className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold hover:underline"
+                    >
+                      {isRtl ? 'مطابق للطلب تماماً' : 'Same as requested'}
+                    </button>
+                  </label>
+                  <div className="relative">
+                    <Scale className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      placeholder="أدخل وزن الكمية..."
+                      value={receivedQtyInput}
+                      onChange={(e) => setReceivedQtyInput(e.target.value)}
+                      className="w-full pl-4 pr-11 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-purple-300 dark:border-purple-800 outline-none focus:ring-2 focus:ring-purple-500 text-base font-black text-purple-900 dark:text-purple-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 flex items-center justify-between">
+                    <span>{isRtl ? 'نسبة الخصم الفعلي (%)' : 'Actual Discount %'}</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</div>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder={String(selectedOrder.discountPercentage || 0)}
+                      value={receivedDiscountInput}
+                      onChange={(e) => setReceivedDiscountInput(e.target.value)}
+                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-rose-200 dark:border-rose-900/50 outline-none focus:ring-2 focus:ring-rose-500 text-base font-black text-rose-600 dark:text-rose-400"
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    {isRtl ? 'اتركه فارغاً لتطبيق النسبة المبدئية.' : 'Leave empty to apply default %.'}
+                  </p>
                 </div>
               </div>
 
               {/* Real-time Variance Calculation */}
-              {receivedQtyInput && !isNaN(parseFloat(receivedQtyInput)) && (
-                <motion.div
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 space-y-2 text-xs"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">{isRtl ? 'نسبة الاستلام:' : 'Receipt Ratio:'}</span>
-                    <span className="font-bold text-zinc-800 dark:text-zinc-200">
-                      {((parseFloat(receivedQtyInput) / selectedOrder.quantity) * 100).toFixed(1)}%
-                    </span>
-                  </div>
+              {receivedQtyInput && !isNaN(parseFloat(receivedQtyInput)) && (() => {
+                const recQty = parseFloat(receivedQtyInput);
+                const price = selectedOrder.price || 0;
+                const discPct = selectedOrder.discountPercentage || 0;
+                const recSub = recQty * price;
+                
+                const inputPct = parseFloat(receivedDiscountInput);
+                let appliedPct = discPct;
+                if (!isNaN(inputPct) && inputPct >= 0) {
+                  appliedPct = inputPct;
+                }
+                
+                const recDisc = appliedPct > 0 ? recSub * (appliedPct / 100) : 0;
+                const recTotal = recSub - recDisc;
 
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">{isRtl ? 'فارق الكمية (الوزن):' : 'Quantity Variance:'}</span>
-                    <span className={`font-black ${
-                      parseFloat(receivedQtyInput) < selectedOrder.quantity ? 'text-amber-600' :
-                      parseFloat(receivedQtyInput) > selectedOrder.quantity ? 'text-blue-600' : 'text-emerald-600'
-                    }`}>
-                      {parseFloat(receivedQtyInput) < selectedOrder.quantity
-                        ? `عجز: -${(selectedOrder.quantity - parseFloat(receivedQtyInput)).toLocaleString()} كجم`
-                        : parseFloat(receivedQtyInput) > selectedOrder.quantity
-                        ? `زيادة: +${(parseFloat(receivedQtyInput) - selectedOrder.quantity).toLocaleString()} كجم`
-                        : 'مطابق بنسبة 100%'}
-                    </span>
-                  </div>
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 space-y-2 text-xs"
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500">{isRtl ? 'نسبة الاستلام:' : 'Receipt Ratio:'}</span>
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                        {((recQty / selectedOrder.quantity) * 100).toFixed(1)}%
+                      </span>
+                    </div>
 
-                  <div className="flex justify-between items-center pt-2 border-t border-zinc-200 dark:border-zinc-700 text-sm">
-                    <span className="font-extrabold text-zinc-900 dark:text-white">
-                      {isRtl ? 'القيمة المستحقة الفعلية للصرف:' : 'Actual Due Amount:'}
-                    </span>
-                    <span className="font-black text-purple-700 dark:text-purple-300 text-base">
-                      {(parseFloat(receivedQtyInput) * (selectedOrder.price || 0)).toLocaleString()} ج.م
-                    </span>
-                  </div>
-                </motion.div>
-              )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500">{isRtl ? 'فارق الكمية (الوزن):' : 'Quantity Variance:'}</span>
+                      <span className={`font-black ${
+                        recQty < selectedOrder.quantity ? 'text-amber-600' :
+                        recQty > selectedOrder.quantity ? 'text-blue-600' : 'text-emerald-600'
+                      }`}>
+                        {recQty < selectedOrder.quantity
+                          ? `عجز: -${(selectedOrder.quantity - recQty).toLocaleString()} كجم`
+                          : recQty > selectedOrder.quantity
+                          ? `زيادة: +${(recQty - selectedOrder.quantity).toLocaleString()} كجم`
+                          : 'مطابق بنسبة 100%'}
+                      </span>
+                    </div>
+
+                    {recDisc > 0 && (
+                      <>
+                        <div className="flex justify-between items-center text-zinc-500 pt-1 border-t border-zinc-100 dark:border-zinc-700/50">
+                          <span>{isRtl ? 'إجمالي الاستلام قبل الخصم:' : 'Received Subtotal:'}</span>
+                          <span className="font-semibold text-zinc-700 dark:text-zinc-300">{recSub.toLocaleString()} ج.م</span>
+                        </div>
+                        <div className="flex justify-between items-center text-rose-600 dark:text-rose-400 font-bold">
+                          <span>{isRtl ? `قيمة الخصم المقتطع (${appliedPct}%):` : `Deducted Discount (${appliedPct}%):`}</span>
+                          <span>-{recDisc.toLocaleString()} ج.م</span>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="flex justify-between items-center pt-2 border-t border-zinc-200 dark:border-zinc-700 text-sm">
+                      <span className="font-extrabold text-zinc-900 dark:text-white">
+                        {isRtl ? 'صافي القيمة المستحقة الفعلية للصرف:' : 'Net Actual Due Amount:'}
+                      </span>
+                      <span className="font-black text-purple-700 dark:text-purple-300 text-base">
+                        {recTotal.toLocaleString()} ج.م
+                      </span>
+                    </div>
+                  </motion.div>
+                );
+              })()}
 
               {/* Receiving Notes / Discrepancy Reason */}
               <div className="space-y-1.5">

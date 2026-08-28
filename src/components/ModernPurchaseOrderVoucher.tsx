@@ -146,7 +146,15 @@ export default function ModernPurchaseOrderVoucher({
                     <th className="px-4 py-3">الصنف والتصنيف</th>
                     <th className="px-4 py-3">الكمية المطلوبة</th>
                     <th className="px-4 py-3">سعر الوحدة</th>
-                    <th className="px-4 py-3 text-left">الإجمالي المطلوب</th>
+                    {order.discountPercentage && order.discountPercentage > 0 ? (
+                      <>
+                        <th className="px-4 py-3">الإجمالي المبدئي</th>
+                        <th className="px-4 py-3 text-center">نسبة الخصم</th>
+                        <th className="px-4 py-3 text-left">الصافي بعد الخصم</th>
+                      </>
+                    ) : (
+                      <th className="px-4 py-3 text-left">الإجمالي المطلوب</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -162,12 +170,32 @@ export default function ModernPurchaseOrderVoucher({
                       {Number(order.quantity || 0).toLocaleString('ar-EG')} {order.unit || 'كجم'}
                     </td>
                     <td className="px-4 py-4 font-bold text-slate-800">{money(order.price)} ج.م / {order.unit || 'كجم'}</td>
-                    <td className="px-4 py-4 text-left font-black text-emerald-700">{money(order.totalAmount)} ج.م</td>
+                    {order.discountPercentage && order.discountPercentage > 0 ? (
+                      <>
+                        <td className="px-4 py-4 font-semibold text-slate-600">
+                          {money(order.subtotalAmount || (order.quantity * order.price))} ج.م
+                        </td>
+                        <td className="px-4 py-4 text-center font-extrabold text-rose-600">
+                          {order.discountPercentage}%
+                          <span className="block text-[11px] font-medium text-rose-500">(-{money(order.discountAmount)} ج.م)</span>
+                        </td>
+                        <td className="px-4 py-4 text-left font-black text-emerald-700">{money(order.totalAmount)} ج.م</td>
+                      </>
+                    ) : (
+                      <td className="px-4 py-4 text-left font-black text-emerald-700">{money(order.totalAmount)} ج.م</td>
+                    )}
                   </tr>
                 </tbody>
               </table>
-              <div className="flex items-center justify-between bg-emerald-50 px-5 py-4 border-t border-emerald-100">
-                <span className="font-bold text-emerald-950 text-sm">إجمالي قيمة أمر التوريد المطلوب</span>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 bg-emerald-50 px-5 py-4 border-t border-emerald-100">
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="font-bold text-emerald-950 text-sm">إجمالي أمر التوريد المعتمد:</span>
+                  {order.discountPercentage && order.discountPercentage > 0 && (
+                    <span className="text-slate-600 font-semibold">
+                      (المبلغ قبل الخصم: {money(order.subtotalAmount || (order.quantity * order.price))} ج.م — قيمة الخصم: {money(order.discountAmount)} ج.م)
+                    </span>
+                  )}
+                </div>
                 <span className="text-lg font-black text-emerald-700">{money(order.totalAmount)} ج.م</span>
               </div>
             </section>
@@ -178,7 +206,7 @@ export default function ModernPurchaseOrderVoucher({
                 <div className="flex items-center justify-between bg-purple-100/70 px-4 py-2.5 text-purple-900 border-b border-purple-200">
                   <span className="text-xs font-extrabold flex items-center gap-1.5">
                     <PackageCheck size={16} className="text-purple-700" />
-                    <span>بيان الاستلام الفعلي بالمستودع والمطابقة</span>
+                    <span>بيان الاستلام الفعلي بالمستودع والمطابقة المالية</span>
                   </span>
                   {order.receivedAt && (
                     <span className="text-[11px] font-medium text-purple-700">
@@ -209,10 +237,15 @@ export default function ModernPurchaseOrderVoucher({
                     </strong>
                   </div>
                   <div>
-                    <span className="text-slate-500 block text-[10px] font-bold">الإجمالي الفعلي المستحق:</span>
+                    <span className="text-slate-500 block text-[10px] font-bold">صافي القيمة المستحقة بعد الخصم:</span>
                     <strong className="text-purple-900 text-sm font-black">
-                      {money(order.receivedTotalAmount || ((order.receivedQuantity || 0) * (order.price || 0)))} ج.م
+                      {money(order.receivedTotalAmount !== undefined ? order.receivedTotalAmount : ((order.receivedQuantity || 0) * (order.price || 0)))} ج.م
                     </strong>
+                    {order.discountPercentage && order.discountPercentage > 0 && order.receivedDiscountAmount !== undefined && (
+                      <span className="block text-[10px] text-rose-600 font-bold mt-0.5">
+                        (خصم {order.discountPercentage}% = -{money(order.receivedDiscountAmount)} ج.م)
+                      </span>
+                    )}
                   </div>
                 </div>
                 {order.receivingNotes && (

@@ -370,7 +370,10 @@ export interface PurchaseOrder {
   quantity: number;            // الكمية
   unit: string;                // الوحدة (كجم / طن / عدد)
   price: number;               // السعر للوحدة
-  totalAmount: number;         // إجمالي القيمة (الكمية × السعر)
+  discountPercentage?: number; // نسبة الخصم % (مثلاً 5%)
+  discountAmount?: number;     // قيمة الخصم المبدئي (ج.م)
+  subtotalAmount?: number;     // الإجمالي قبل الخصم (الكمية × السعر)
+  totalAmount: number;         // إجمالي القيمة الصافية بعد الخصم
   currency?: string;           // العملة (ج.م)
   notes?: string;              // ملاحظات التسجيل
   unloadingLocations?: string[]; // مكان التنزيل / التعتيق (متعدد)
@@ -401,7 +404,9 @@ export interface PurchaseOrder {
 
   // Actual Receipt info (بعد إصدار أمر التوريد)
   receivedQuantity?: number;   // الكمية المستلمة فعلياً (كجم)
-  receivedTotalAmount?: number; // إجمالي القيمة الفعلية للكمية المستلمة
+  receivedSubtotalAmount?: number; // الإجمالي الفعلي قبل الخصم (الكمية المستلمة × السعر)
+  receivedDiscountAmount?: number; // قيمة الخصم المخصومة من الإجمالي الفعلي
+  receivedTotalAmount?: number; // إجمالي القيمة الفعلية المستحقة بعد الخصم
   receivedAt?: string;         // تاريخ ووقت تسجيل الاستلام الفعلي
   receivedBy?: string;         // معرف مسئول الاستلام الفعلي
   receivedByName?: string;     // اسم مسئول الاستلام الفعلي
