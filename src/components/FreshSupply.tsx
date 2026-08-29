@@ -92,7 +92,8 @@ const STORAGE_TIME_KEY = "fresh_supply_last_synced";
 
 export interface FreshSupplyRecord {
   id: string;
-  date: string;              // التاريخ (e.g. 3-Aug)
+  date: string;              // التاريخ الموحد (e.g. 27/08/2026)
+  originalDate?: string;     // التاريخ الأصلي من الملف (e.g. 27-Aug)
   parsedDate?: Date | null;
   store: string;             // المخزن (e.g. GPS, اوليف لاند)
   movementType: string;      // نوع الحركة (e.g. اضافة)
@@ -462,13 +463,16 @@ function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSe
   );
 }
 
-// Helper to parse dates like "3-Aug", "15-Aug", "2024-08-03", etc.
-const parseFlexibleDate = (dateStr: string): Date | null => {
+// Helper to parse dates like "3-Aug", "15-Aug", "28/08/2026", "2024-08-03", etc.
+export const parseFlexibleDate = (dateStr: string): Date | null => {
   if (!dateStr || typeof dateStr !== 'string') return null;
-  const clean = dateStr.trim();
+  let clean = dateStr.trim();
   if (!clean) return null;
 
-  // Check format "3-Aug" or "03-Aug" or "3-Aug-2024"
+  // Convert Arabic-Indic numerals (٠١٢٣٤٥٦٧٨٩) to standard ASCII
+  clean = clean.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+
+  // Check format "3-Aug" or "03-Aug" or "3-Aug-2024" or "3/Aug/2026"
   const monthMap: Record<string, number> = {
     'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
     'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11,
@@ -483,19 +487,55 @@ const parseFlexibleDate = (dateStr: string): Date | null => {
     const monthKey = Object.keys(monthMap).find(k => mStr.startsWith(k));
     if (monthKey !== undefined) {
       const month = monthMap[monthKey];
-      const year = dayMonthMatch[3] ? parseInt(dayMonthMatch[3], 10) : new Date().getFullYear();
+      const year = dayMonthMatch[3] ? parseInt(dayMonthMatch[3], 10) : 2026;
       const fullYear = year < 100 ? 2000 + year : year;
       return new Date(fullYear, month, day);
     }
   }
 
-  // Check standard ISO / YYYY-MM-DD or DD/MM/YYYY
+  // Check format "DD/MM/YYYY" or "DD-MM-YYYY" (e.g. "28/08/2026")
+  const ddmmyyyyMatch = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})(?:\s+.*)?$/);
+  if (ddmmyyyyMatch) {
+    const p1 = parseInt(ddmmyyyyMatch[1], 10);
+    const p2 = parseInt(ddmmyyyyMatch[2], 10);
+    let year = parseInt(ddmmyyyyMatch[3], 10);
+    if (year < 100) year += 2000;
+    
+    let day = p1;
+    let month = p2 - 1;
+    if (p1 <= 12 && p2 > 12) {
+      month = p1 - 1;
+      day = p2;
+    }
+    return new Date(year, month, day);
+  }
+
+  // Check format "YYYY-MM-DD" or "YYYY/MM/DD"
+  const yyyymmddMatch = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:\s+.*)?$/);
+  if (yyyymmddMatch) {
+    const year = parseInt(yyyymmddMatch[1], 10);
+    const month = parseInt(yyyymmddMatch[2], 10) - 1;
+    const day = parseInt(yyyymmddMatch[3], 10);
+    return new Date(year, month, day);
+  }
+
+  // Check standard ISO / JS parse
   const parsed = new Date(clean);
   if (!isNaN(parsed.getTime())) {
     return parsed;
   }
 
   return null;
+};
+
+// Helper to format date into standard unified DD/MM/YYYY string
+export const formatUnifiedDate = (d: Date | null | undefined): string => {
+  if (!d || isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
 };
 
 export default function FreshSupply({ lang, user }: FreshSupplyProps) {
@@ -823,8 +863,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     // ==========================================
     // 3. MAP INTO FINAL RECORD STRUCTURE
     // ==========================================
-    return validRows.map((row, idx) => {
+    const processedRecords = validRows.map((row, idx) => {
       const dateStr = String(row['التاريخ'] || '').trim();
+      const parsedDate = parseFlexibleDate(dateStr);
+      const unifiedDate = parsedDate ? formatUnifiedDate(parsedDate) : dateStr;
       const rawKg = String(row['اضافة'] || row['الكمية'] || '0').replace(/,/g, '').trim();
       const kg = parseFloat(rawKg) || 0;
       const tons = kg / 1000;
@@ -861,8 +903,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       return {
         id: `fresh-${idx}-${row['رقم الحركة'] || Math.random().toString(36).substr(2, 9)}`,
-        date: dateStr,
-        parsedDate: parseFlexibleDate(dateStr),
+        date: unifiedDate,
+        originalDate: dateStr,
+        parsedDate: parsedDate,
         store: String(row['المخزن'] || '').trim(),
         movementType: String(row['نوع الحركة'] || '').trim(),
         movementNo: String(row['رقم الحركة'] || '').trim(),
@@ -886,6 +929,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         tankNo: String(row['رقم التانك'] || '').trim(),
         raw: row
       };
+    });
+
+    // Default sort by date descending (Newest first, then oldest)
+    return processedRecords.sort((a, b) => {
+      const timeA = a.parsedDate ? a.parsedDate.getTime() : (parseFlexibleDate(a.date)?.getTime() || 0);
+      const timeB = b.parsedDate ? b.parsedDate.getTime() : (parseFlexibleDate(b.date)?.getTime() || 0);
+      if (timeB !== timeA) return timeB - timeA;
+      const moveA = parseInt(String(a.movementNo).replace(/\D/g, ''), 10) || 0;
+      const moveB = parseInt(String(b.movementNo).replace(/\D/g, ''), 10) || 0;
+      return moveB - moveA;
     });
   };
 
@@ -1030,13 +1083,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     const datesSet = new Set<string>();
     data.forEach(r => { if (r.date) datesSet.add(r.date); });
 
+    // Sort unique dates descending (newest first)
+    const sortedUniqueDates = Array.from(datesSet).sort((a, b) => {
+      const da = parseFlexibleDate(a);
+      const db = parseFlexibleDate(b);
+      const timeA = da ? da.getTime() : 0;
+      const timeB = db ? db.getTime() : 0;
+      return timeB - timeA;
+    });
+
     return {
       items: Array.from(itemsSet).sort(),
       varieties: Array.from(varietiesSet).map(v => ({ id: v, label: getFreshVarietyName(v, isRtl) })),
       suppliers: Array.from(suppliersSet).sort(),
       stores: Array.from(storesSet).sort(),
       locations: Array.from(locationsSet).sort(),
-      dates: Array.from(datesSet)
+      dates: sortedUniqueDates
     };
   }, [data, mainCategoryFilter, selectedItems, selectedSuppliers, selectedStores, selectedLocations, isRtl]);
 
@@ -1060,6 +1122,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           record.sapCode.toLowerCase().includes(term) ||
           record.oldCode.toLowerCase().includes(term) ||
           record.date.toLowerCase().includes(term) ||
+          (record.originalDate && record.originalDate.toLowerCase().includes(term)) ||
           record.store.toLowerCase().includes(term) ||
           record.location.toLowerCase().includes(term);
         if (!match) return false;
@@ -1112,8 +1175,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       if (dateFilter.mode !== 'all') {
         if (dateFilter.mode === 'single' && dateFilter.singleDate) {
           if (record.date === dateFilter.singleDate) return true;
-          if (record.parsedDate) {
-            const singleD = new Date(dateFilter.singleDate);
+          if (record.originalDate === dateFilter.singleDate) return true;
+          const singleD = parseFlexibleDate(dateFilter.singleDate) || new Date(dateFilter.singleDate);
+          if (record.parsedDate && !isNaN(singleD.getTime())) {
             if (
               record.parsedDate.getFullYear() === singleD.getFullYear() &&
               record.parsedDate.getMonth() === singleD.getMonth() &&
@@ -1130,22 +1194,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
         if (dateFilter.mode === 'range') {
           if (dateFilter.startDate) {
-            startD = new Date(dateFilter.startDate);
-            startD.setHours(0, 0, 0, 0);
+            startD = parseFlexibleDate(dateFilter.startDate) || new Date(dateFilter.startDate);
+            if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
           }
           if (dateFilter.endDate) {
-            endD = new Date(dateFilter.endDate);
-            endD.setHours(23, 59, 59, 999);
+            endD = parseFlexibleDate(dateFilter.endDate) || new Date(dateFilter.endDate);
+            if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
           }
         } else if (dateFilter.mode === 'preset' && dateFilter.presetKey) {
           const preset = getPresetDates(dateFilter.presetKey);
           if (preset.startDate) {
-            startD = new Date(preset.startDate);
-            startD.setHours(0, 0, 0, 0);
+            startD = parseFlexibleDate(preset.startDate) || new Date(preset.startDate);
+            if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
           }
           if (preset.endDate) {
-            endD = new Date(preset.endDate);
-            endD.setHours(23, 59, 59, 999);
+            endD = parseFlexibleDate(preset.endDate) || new Date(preset.endDate);
+            if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
           }
         }
 
@@ -1158,6 +1222,21 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       return true;
     }).sort((a, b) => {
+      // Specialized sorting for Date
+      if (sortField === 'date') {
+        const timeA = a.parsedDate ? a.parsedDate.getTime() : (parseFlexibleDate(a.date)?.getTime() || 0);
+        const timeB = b.parsedDate ? b.parsedDate.getTime() : (parseFlexibleDate(b.date)?.getTime() || 0);
+        if (timeA !== timeB) {
+          return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+        }
+        // Secondary sort on movementNo
+        const moveA = parseInt(String(a.movementNo).replace(/\D/g, ''), 10) || 0;
+        const moveB = parseInt(String(b.movementNo).replace(/\D/g, ''), 10) || 0;
+        if (moveA !== moveB) {
+          return sortOrder === 'asc' ? moveA - moveB : moveB - moveA;
+        }
+      }
+
       const aVal = a[sortField];
       const bVal = b[sortField];
 
@@ -1170,7 +1249,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       const aStr = String(aVal).toLowerCase();
       const bStr = String(bVal).toLowerCase();
-      return sortOrder === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+      return sortOrder === 'asc' ? aStr.localeCompare(bStr, 'ar') : bStr.localeCompare(aStr, 'ar');
     });
   }, [
     data, 
@@ -3138,11 +3217,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   {visibleColumns.date && (
                     <th 
                       onClick={() => handleSort('date')}
-                      className="py-3.5 px-3 cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60 transition-colors"
+                      className={`py-3.5 px-3 cursor-pointer transition-colors ${
+                        sortField === 'date' 
+                          ? 'bg-emerald-100/70 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-300 font-black' 
+                          : 'hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60'
+                      }`}
+                      title={isRtl ? 'انقر للترتيب حسب التاريخ (الجديد / القديم)' : 'Click to sort by date (Newest / Oldest)'}
                     >
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <span>{isRtl ? 'التاريخ' : 'Date'}</span>
-                        <ArrowUpDown className="w-3 h-3 text-zinc-400" />
+                        {sortField === 'date' ? (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-600 text-white font-bold tracking-tight">
+                            {sortOrder === 'desc' ? (isRtl ? 'الأحدث ↓' : 'Newest ↓') : (isRtl ? 'الأقدم ↑' : 'Oldest ↑')}
+                          </span>
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-zinc-400" />
+                        )}
                       </div>
                     </th>
                   )}
