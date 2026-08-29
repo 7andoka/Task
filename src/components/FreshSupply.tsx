@@ -778,86 +778,98 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     // ==========================================
     // 2. ITEM CODE UNIFICATION (ربط الصنف بالكود)
     // ==========================================
-    // If multiple item names exist for a single code, standardize to ONE single canonical name
-    const itemUf = new UnionFind<string>();
-    const allItemCodeKeys = new Set<string>();
+    // 2. UNIFIED ITEM NAME & CODE CANONICALIZATION
+    // Group by SAP Code primarily (or unique Old Code) and pick the most frequent (common) name
+    // ==========================================
+    const isGenericOldCode = (code: string) => {
+      const c = code.trim().toLowerCase();
+      return !c || c === 'تانك' || c === 'برميل' || c === 'tank' || c === 'barrel' || c === 'بدون' || c === 'موقع';
+    };
 
-    validRows.forEach(row => {
-      const sap = String(row['كود ساب'] || row['كود SAP'] || row['SAP'] || row['كود الصنف'] || row['كود'] || '').trim();
-      const old = String(row['كود قديم'] || row['الكود القديم'] || '').trim();
-
-      if (sap) allItemCodeKeys.add(`sap:${sap}`);
-      if (old) allItemCodeKeys.add(`old:${old}`);
-      if (sap && old) {
-        itemUf.union(`sap:${sap}`, `old:${old}`);
-      }
-    });
-
-    // Collect name frequencies per item cluster
-    interface ItemClusterInfo {
-      sapCodes: Set<string>;
-      oldCodes: Set<string>;
-      nameFrequencies: Map<string, number>;
+    // 1) Collect name frequencies and old codes per SAP Code
+    interface SapItemAgg {
+      names: Map<string, number>;
+      oldCodes: Map<string, number>;
     }
-    const itemClusters = new Map<string, ItemClusterInfo>();
+    const sapMap = new Map<string, SapItemAgg>();
+    const oldCodeMap = new Map<string, Map<string, number>>();
 
     validRows.forEach(row => {
       const sap = String(row['كود ساب'] || row['كود SAP'] || row['SAP'] || row['كود الصنف'] || row['كود'] || '').trim();
       const old = String(row['كود قديم'] || row['الكود القديم'] || '').trim();
       const rawItemName = String(row['اسم الصنف'] || row['الصنف'] || row['Item Name'] || row['الوصف'] || '').trim();
 
-      let clusterKey = '';
       if (sap) {
-        clusterKey = itemUf.find(`sap:${sap}`);
-      } else if (old) {
-        clusterKey = itemUf.find(`old:${old}`);
-      }
-
-      if (clusterKey) {
-        if (!itemClusters.has(clusterKey)) {
-          itemClusters.set(clusterKey, {
-            sapCodes: new Set(),
-            oldCodes: new Set(),
-            nameFrequencies: new Map()
-          });
+        if (!sapMap.has(sap)) {
+          sapMap.set(sap, { names: new Map(), oldCodes: new Map() });
         }
-        const cluster = itemClusters.get(clusterKey)!;
-        if (sap) cluster.sapCodes.add(sap);
-        if (old) cluster.oldCodes.add(old);
+        const agg = sapMap.get(sap)!;
         if (rawItemName) {
-          cluster.nameFrequencies.set(rawItemName, (cluster.nameFrequencies.get(rawItemName) || 0) + 1);
+          agg.names.set(rawItemName, (agg.names.get(rawItemName) || 0) + 1);
+        }
+        if (old && !isGenericOldCode(old)) {
+          agg.oldCodes.set(old, (agg.oldCodes.get(old) || 0) + 1);
+        }
+      } else if (old && !isGenericOldCode(old)) {
+        if (!oldCodeMap.has(old)) {
+          oldCodeMap.set(old, new Map());
+        }
+        const names = oldCodeMap.get(old)!;
+        if (rawItemName) {
+          names.set(rawItemName, (names.get(rawItemName) || 0) + 1);
         }
       }
     });
 
-    // Determine the single canonical itemName, sapCode, and oldCode for each item group
-    const canonicalItemByCode = new Map<string, {
-      itemName: string;
-      sapCode: string;
-      oldCode: string;
-    }>();
-
-    itemClusters.forEach((cluster) => {
-      let bestName = '';
+    // Helper to find the most frequent (common) name from a frequency map
+    const getMostCommonName = (names: Map<string, number>, fallback: string = ''): string => {
+      let bestName = fallback;
       let maxCount = -1;
-      cluster.nameFrequencies.forEach((count, name) => {
+      names.forEach((count, name) => {
         if (count > maxCount || (count === maxCount && name.length > bestName.length)) {
           maxCount = count;
           bestName = name;
         }
       });
+      return bestName;
+    };
 
-      const bestSap = Array.from(cluster.sapCodes)[0] || '';
-      const bestOld = Array.from(cluster.oldCodes)[0] || '';
+    // 2) Build canonical maps for SAP codes and Old codes
+    const canonicalBySap = new Map<string, { itemName: string; sapCode: string; oldCode: string }>();
+    const canonicalByOld = new Map<string, { itemName: string; sapCode: string; oldCode: string }>();
+
+    sapMap.forEach((agg, sap) => {
+      const canonicalName = getMostCommonName(agg.names, '');
+      let bestOld = '';
+      let maxOldCount = -1;
+      agg.oldCodes.forEach((count, code) => {
+        if (count > maxOldCount) {
+          maxOldCount = count;
+          bestOld = code;
+        }
+      });
 
       const canonical = {
-        itemName: bestName,
-        sapCode: bestSap,
+        itemName: canonicalName,
+        sapCode: sap,
         oldCode: bestOld
       };
+      canonicalBySap.set(sap, canonical);
+      if (bestOld) {
+        canonicalByOld.set(bestOld, canonical);
+      }
+    });
 
-      cluster.sapCodes.forEach(s => canonicalItemByCode.set(`sap:${s}`, canonical));
-      cluster.oldCodes.forEach(o => canonicalItemByCode.set(`old:${o}`, canonical));
+    // Handle any standalone old codes (without SAP code)
+    oldCodeMap.forEach((names, old) => {
+      if (!canonicalByOld.has(old)) {
+        const canonicalName = getMostCommonName(names, '');
+        canonicalByOld.set(old, {
+          itemName: canonicalName,
+          sapCode: '',
+          oldCode: old
+        });
+      }
     });
 
     // ==========================================
@@ -891,14 +903,18 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       let finalSapCode = rawSapCode;
       let finalOldCode = rawOldCode;
 
-      const itemKey = rawSapCode ? `sap:${rawSapCode}` : (rawOldCode ? `old:${rawOldCode}` : '');
-      if (itemKey && canonicalItemByCode.has(itemKey)) {
-        const itemInfo = canonicalItemByCode.get(itemKey)!;
+      if (rawSapCode && canonicalBySap.has(rawSapCode)) {
+        const itemInfo = canonicalBySap.get(rawSapCode)!;
+        if (itemInfo.itemName) {
+          finalItemName = itemInfo.itemName;
+        }
+        finalOldCode = finalOldCode || itemInfo.oldCode;
+      } else if (rawOldCode && !isGenericOldCode(rawOldCode) && canonicalByOld.has(rawOldCode)) {
+        const itemInfo = canonicalByOld.get(rawOldCode)!;
         if (itemInfo.itemName) {
           finalItemName = itemInfo.itemName;
         }
         finalSapCode = finalSapCode || itemInfo.sapCode;
-        finalOldCode = finalOldCode || itemInfo.oldCode;
       }
 
       return {
