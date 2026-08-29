@@ -51,6 +51,14 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
 }) => {
   const defaultLogoFallback = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230F766E'/><path d='M30 65 L50 35 L70 65 Z' fill='%23F59E0B'/><circle cx='50' cy='50' r='12' fill='%23FFFFFF'/></svg>";
 
+  const isFirstWeightOnly = operation ? (
+    (Number(operation.firstWeight) > 0) && 
+    (!operation.secondWeight || Number(operation.secondWeight) === 0 || operation.status === 'وزن أول' || Number(operation.netWeight) === 0)
+  ) : false;
+
+  // If first weight only, default to 1 page (2 copies), otherwise default to 2 pages (4 copies)
+  const [pageCount, setPageCount] = React.useState<1 | 2>(() => (isFirstWeightOnly ? 1 : 2));
+
   const [printDateTime] = React.useState<{ date: string; time: string }>(() => {
     const now = new Date();
     const year = now.getFullYear();
@@ -81,6 +89,8 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
     date: operation.date,
     time: operation.time
   });
+
+  const certificationMessage = settings.scaleCertificationText || 'تمت عملية الوزن آلياً بواسطة ميزان إلكتروني مطابق للمواصفات القياسية و موثق برقم T15310056';
 
   const renderSingleTicket = (copyLabel: string, copyBadgeColor: string = 'bg-teal-50 text-[#0F766E] border-teal-300') => (
     <div 
@@ -113,7 +123,7 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
           />
           <div>
             <h1 className="text-[16px] font-black text-[#0F766E] tracking-tight leading-tight uppercase">
-              {settings.companyName || 'شركة ريتش لاند للصناعات الغذائية'}
+              {settings.companyName || 'ريتش لاند للصناعات الغذائية'}
             </h1>
             <p className="text-[11.5px] text-slate-800 flex items-center gap-1 font-black mt-0.5">
               <Building2 className="w-3.5 h-3.5 text-[#0F766E]" /> 
@@ -122,10 +132,20 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
           </div>
         </div>
 
-        {/* Center: Top Header Print Date & Time */}
-        <div className="text-center px-3.5 py-1 bg-slate-100 rounded-md border-2 border-slate-300">
-          <span className="text-[9.5px] font-black text-slate-700 block leading-none mb-0.5">تاريخ وتوقيت الطباعة</span>
-          <span className="text-[12.5px] font-black font-mono text-black">{printDateTime.date} | {printDateTime.time}</span>
+        {/* Center: Top Header Entry Date (1st Weight) & Print Date */}
+        <div className="text-center px-2.5 py-1 bg-slate-100 rounded-md border-2 border-slate-300 flex flex-col justify-center min-w-[130px]">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-300 pb-0.5 mb-0.5">
+            <span className="text-[10px] font-black text-slate-700 whitespace-nowrap">تاريخ الدخول:</span>
+            <span className="text-[11.5px] font-black font-mono text-black whitespace-nowrap">
+              {operation.firstWeightDate || operation.date}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-black text-slate-700 whitespace-nowrap">تاريخ الطباعة:</span>
+            <span className="text-[11.5px] font-black font-mono text-slate-900 whitespace-nowrap">
+              {printDateTime.date}
+            </span>
+          </div>
         </div>
 
         {/* Left side (RTL): Copy Label & Ticket No & Barcode */}
@@ -135,7 +155,7 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
               {copyLabel}
             </span>
             <div className="bg-[#0F766E] text-white font-black px-2.5 py-0.5 rounded text-[11px]">
-              تذكرة وزن
+              {isFirstWeightOnly ? 'تذكرة وزنة أولى (دخول)' : 'تذكرة وزن نهائية'}
             </div>
           </div>
           <p className="text-[12px] font-black text-slate-900 mt-1 text-left">
@@ -204,7 +224,7 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
             <div>
               <span className="text-[11px] font-black text-slate-800 block mb-0.5">الوزنة الأولى</span>
               <span className="font-mono font-black text-[20px] text-black">
-                {(operation.firstWeight || operation.grossWeight || 0).toLocaleString('en-US')} <span className="text-[12px] font-black font-sans text-slate-700">{settings.unit || 'كجم'}</span>
+                {(operation.firstWeight || operation.grossWeight || 0).toLocaleString('en-US')} <span className="text-[12px] font-black font-sans text-slate-700">{settings.unit}</span>
               </span>
             </div>
             <div className="text-[10px] font-mono font-black text-slate-700 border-t-2 border-slate-200 mt-1 pt-0.5">
@@ -216,12 +236,15 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
           <div className="bg-white border-2 border-slate-300 rounded-md p-1.5 flex flex-col justify-between">
             <div>
               <span className="text-[11px] font-black text-slate-800 block mb-0.5">الوزنة الثانية</span>
-              <span className="font-mono font-black text-[20px] text-black">
-                {(operation.secondWeight || operation.tareWeight || 0).toLocaleString('en-US')} <span className="text-[12px] font-black font-sans text-slate-700">{settings.unit || 'كجم'}</span>
+              <span className={`font-mono font-black text-[20px] ${isFirstWeightOnly ? 'text-slate-400' : 'text-black'}`}>
+                {isFirstWeightOnly ? '---' : `${(operation.secondWeight || operation.tareWeight || 0).toLocaleString('en-US')} `}
+                {!isFirstWeightOnly && <span className="text-[12px] font-black font-sans text-slate-700">{settings.unit}</span>}
               </span>
             </div>
             <div className="text-[10px] font-mono font-black text-slate-700 border-t-2 border-slate-200 mt-1 pt-0.5">
-              {operation.secondWeightDate && operation.secondWeightTime ? `${operation.secondWeightDate} | ${operation.secondWeightTime}` : (operation.secondWeight && operation.secondWeight > 0 ? `${operation.date} | ${operation.time}` : 'في الانتظار')}
+              {isFirstWeightOnly 
+                ? 'في انتظار الوزن الثاني' 
+                : (operation.secondWeightDate && operation.secondWeightTime ? `${operation.secondWeightDate} | ${operation.secondWeightTime}` : `${operation.date} | ${operation.time}`)}
             </div>
           </div>
 
@@ -229,12 +252,18 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
           <div className="net-weight-box bg-teal-50/50 text-slate-950 rounded-md p-1.5 flex flex-col justify-between shadow-none border-3 border-[#0F766E]">
             <div>
               <span className="net-weight-title text-[11.5px] font-black text-[#0F766E] block mb-0.5">الوزن الصافي</span>
-              <span className="net-weight-val font-mono font-black text-[26px] text-black leading-tight">
-                {(operation.netWeight || 0).toLocaleString('en-US')} <span className="text-[13px] font-black font-sans text-slate-800">{settings.unit || 'كجم'}</span>
+              <span className="net-weight-val font-mono font-black text-[22px] text-black leading-tight">
+                {isFirstWeightOnly ? (
+                  <span className="text-[15px] font-bold text-amber-700">بانتظار الوزنة الثانية</span>
+                ) : (
+                  <>
+                    {(operation.netWeight || 0).toLocaleString('en-US')} <span className="text-[13px] font-black font-sans text-slate-800">{settings.unit}</span>
+                  </>
+                )}
               </span>
             </div>
             <div className="net-weight-sub text-[13px] font-black text-[#0F766E] border-t-2 border-teal-300 mt-1 pt-0.5 font-mono">
-              {((operation.netWeight || 0) / 1000).toFixed(3)} طن
+              {isFirstWeightOnly ? 'وزنة أولى معلقة' : `${((operation.netWeight || 0) / 1000).toFixed(3)} طن`}
             </div>
           </div>
 
@@ -245,8 +274,8 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
       <div className="space-y-1 relative z-10">
         <div className="text-center">
           <p className="text-[11px] font-black text-[#0F766E] flex items-center justify-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4" />
-            تمت عملية الوزن آلياً بواسطة ميزان إلكتروني موثق ومطابق للمواصفات القياسية
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-[#0F766E]" />
+            <span>{certificationMessage}</span>
           </p>
         </div>
 
@@ -276,8 +305,6 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
                     target.src = './Gemini  1.jpg';
                   } else if (!target.src.includes('doka.jpg')) {
                     target.src = './doka.jpg';
-                  } else {
-                    target.src = '/logo.png';
                   }
                 }}
                 className="w-full h-full object-contain"
@@ -304,10 +331,10 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
           </div>
         </div>
 
-        {/* 3 Clean Spaced Signatures Section (Without Stamp & Seal) */}
+        {/* 3 Clean Spaced Signatures Section */}
         <div className="grid grid-cols-3 gap-4 text-[11px] text-center flex-1 max-w-lg mr-auto">
           <div>
-            <p className="font-black text-black leading-tight mb-2 text-[11.5px]">مسؤول الميزان<br/><span className="text-[9px] text-slate-700 font-bold font-mono">({operation.userName || 'الوردية'})</span></p>
+            <p className="font-black text-black leading-tight mb-2 text-[11.5px]">مسؤول الميزان<br/><span className="text-[9px] text-slate-700 font-bold font-mono">({operation.userName})</span></p>
             <div className="border-b-2 border-dashed border-slate-700 w-24 mx-auto"></div>
           </div>
           <div>
@@ -348,7 +375,7 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
           .net-weight-val {
             color: #000000 !important;
             font-weight: 900 !important;
-            font-size: 26px !important;
+            font-size: 24px !important;
           }
           .net-weight-sub {
             color: #0F766E !important;
@@ -384,7 +411,7 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
             background: white !important;
           }
 
-          /* 5. A4 Sheet definitions (2 Pages) */
+          /* 5. A4 Sheet definitions */
           .printable-a4-sheet {
             width: 210mm !important;
             height: 297mm !important;
@@ -399,8 +426,8 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
             background: white !important;
             box-shadow: none !important;
             transform: none !important;
-            page-break-after: always !important;
-            break-after: page !important;
+            page-break-after: ${pageCount === 1 ? 'auto' : 'always'} !important;
+            break-after: ${pageCount === 1 ? 'auto' : 'page'} !important;
           }
 
           .printable-a4-sheet:last-child {
@@ -458,20 +485,60 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
                 <Printer className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-black text-sm flex items-center gap-2">
-                  <span>معاينة تذكرة الميزان الرسمية</span>
-                  <span className="text-[10px] px-2 py-0.5 bg-amber-400 text-slate-950 rounded-full font-black">ورقتان A4 (4 نسخ)</span>
-                </h3>
-                <p className="text-[10px] text-teal-100/80">كل ورقة A4 تحتوي على نسختين | إجمالي 4 نسخ: الأصل، الحسابات، العميل، وللحفظ والاطلاع</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-sm">
+                    {isFirstWeightOnly ? 'معاينة تذكرة وزنة أولى (دخول)' : 'معاينة تذكرة الميزان الرسمية'}
+                  </h3>
+                  <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-black ${
+                    pageCount === 1 ? 'bg-emerald-400 text-slate-950' : 'bg-amber-400 text-slate-950'
+                  }`}>
+                    {pageCount === 1 ? 'ورقة واحدة A4 (نسختان)' : 'ورقتان A4 (4 نسخ)'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-teal-100/80 mt-0.5">
+                  {pageCount === 1 
+                    ? 'سيتم طباعة ورقة A4 واحدة فقط تحتوي على نسختين (أصل التذكرة + نسخة الحسابات والميزان)'
+                    : 'كل ورقة A4 تحتوي على نسختين | إجمالي 4 نسخ: الأصل، الحسابات، العميل، وللحفظ والاطلاع'}
+                </p>
               </div>
             </div>
+
+            {/* Header Actions & Page Count Toggle */}
             <div className="flex items-center gap-3">
+              {/* Toggle 1 Sheet vs 2 Sheets */}
+              <div className="bg-teal-900/60 p-1 rounded-xl border border-teal-600/40 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPageCount(1)}
+                  className={`px-2.5 py-1 text-[11px] font-black rounded-lg transition-all cursor-pointer ${
+                    pageCount === 1 
+                      ? 'bg-amber-400 text-slate-950 shadow-sm' 
+                      : 'text-teal-100 hover:bg-white/10'
+                  }`}
+                  title="طباعة ورقة واحدة تحتوي على نسختين"
+                >
+                  ورقة واحدة (نسختان)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPageCount(2)}
+                  className={`px-2.5 py-1 text-[11px] font-black rounded-lg transition-all cursor-pointer ${
+                    pageCount === 2 
+                      ? 'bg-amber-400 text-slate-950 shadow-sm' 
+                      : 'text-teal-100 hover:bg-white/10'
+                  }`}
+                  title="طباعة ورقتين تحتويان على 4 نسخ"
+                >
+                  ورقتان (4 نسخ)
+                </button>
+              </div>
+
               <button
                 onClick={handlePrint}
-                className="px-6 py-2.5 bg-[#F59E0B] hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                className="px-5 py-2 bg-[#F59E0B] hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
               >
                 <Printer className="w-4 h-4" />
-                <span>طباعة الورقتين (4 نسخ)</span>
+                <span>{pageCount === 1 ? 'طباعة الورقة (نسختان)' : 'طباعة الورقتين (4 نسخ)'}</span>
               </button>
               <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl cursor-pointer">
                 <X className="w-6 h-6" />
@@ -479,7 +546,7 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
             </div>
           </div>
 
-          {/* Preview Viewport showing Page 1 and Page 2 */}
+          {/* Preview Viewport showing Page 1 (and Page 2 if selected) */}
           <div className="preview-viewport">
             
             <div id="printable-pages-container" className="w-full flex flex-col items-center gap-8">
@@ -488,12 +555,19 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
               <div className="w-full flex flex-col items-center">
                 <div className="text-amber-400 text-xs font-bold mb-2 flex items-center gap-1.5 no-print">
                   <Layers className="w-4 h-4" />
-                  <span>الورقة الأولى (A4) - أصل التذكرة + نسخة الحسابات</span>
+                  <span>
+                    {isFirstWeightOnly 
+                      ? 'الورقة الوحيدة (A4) - أصل التذكرة + نسخة الحسابات والميزان' 
+                      : 'الورقة الأولى (A4) - أصل التذكرة + نسخة الحسابات'}
+                  </span>
                 </div>
 
                 <div className="preview-a4-container printable-a4-sheet text-slate-950">
                   {/* Copy 1: Original */}
-                  {renderSingleTicket('أصل التذكرة - السائق', 'bg-emerald-50 text-emerald-900 border-emerald-300')}
+                  {renderSingleTicket(
+                    isFirstWeightOnly ? 'أصل التذكرة - وزنة أولى' : 'أصل التذكرة - السائق', 
+                    'bg-emerald-50 text-emerald-900 border-emerald-300'
+                  )}
 
                   {/* Cutting Line between Copy 1 & Copy 2 */}
                   <div className="relative flex items-center justify-center my-1 no-print">
@@ -507,36 +581,41 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
                   </div>
 
                   {/* Copy 2: Accounts */}
-                  {renderSingleTicket('نسخة الحسابات والمالية', 'bg-blue-50 text-blue-900 border-blue-300')}
+                  {renderSingleTicket(
+                    isFirstWeightOnly ? 'نسخة الحسابات / الميزان' : 'نسخة الحسابات والمالية', 
+                    'bg-blue-50 text-blue-900 border-blue-300'
+                  )}
                 </div>
               </div>
 
-              {/* === PAGE 2 (الورقة الثانية: نسختان) === */}
-              <div className="w-full flex flex-col items-center">
-                <div className="text-amber-400 text-xs font-bold mb-2 flex items-center gap-1.5 no-print">
-                  <Layers className="w-4 h-4" />
-                  <span>الورقة الثانية (A4) - نسخة العميل/المورد + نسخة الحفظ والاطلاع</span>
-                </div>
-
-                <div className="preview-a4-container printable-a4-sheet text-slate-950">
-                  {/* Copy 3: Customer / Supplier */}
-                  {renderSingleTicket('نسخة العميل / المورد', 'bg-purple-50 text-purple-900 border-purple-300')}
-
-                  {/* Cutting Line between Copy 3 & Copy 4 */}
-                  <div className="relative flex items-center justify-center my-1 no-print">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-dashed border-slate-300"></div>
-                    </div>
-                    <div className="relative bg-white text-slate-400 px-2 py-0.5 text-[8px] font-black border border-slate-200 rounded-sm flex items-center gap-1">
-                      <Scissors className="w-3 h-3" />
-                      <span>خط فصل النسخ (الورقة 2)</span>
-                    </div>
+              {/* === PAGE 2 (الورقة الثانية: نسختان) - تظهر فقط في حالة اختيار ورقتين (4 نسخ) === */}
+              {pageCount === 2 && (
+                <div className="w-full flex flex-col items-center">
+                  <div className="text-amber-400 text-xs font-bold mb-2 flex items-center gap-1.5 no-print">
+                    <Layers className="w-4 h-4" />
+                    <span>الورقة الثانية (A4) - نسخة العميل/المورد + نسخة الحفظ والاطلاع</span>
                   </div>
 
-                  {/* Copy 4: Archive / Record & Review */}
-                  {renderSingleTicket('النسخة الرابعة - للحفظ والاطلاع', 'bg-amber-50 text-amber-900 border-amber-300')}
+                  <div className="preview-a4-container printable-a4-sheet text-slate-950">
+                    {/* Copy 3: Customer / Supplier */}
+                    {renderSingleTicket('نسخة العميل / المورد', 'bg-purple-50 text-purple-900 border-purple-300')}
+
+                    {/* Cutting Line between Copy 3 & Copy 4 */}
+                    <div className="relative flex items-center justify-center my-1 no-print">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-dashed border-slate-300"></div>
+                      </div>
+                      <div className="relative bg-white text-slate-400 px-2 py-0.5 text-[8px] font-black border border-slate-200 rounded-sm flex items-center gap-1">
+                        <Scissors className="w-3 h-3" />
+                        <span>خط فصل النسخ (الورقة 2)</span>
+                      </div>
+                    </div>
+
+                    {/* Copy 4: Archive / Record & Review */}
+                    {renderSingleTicket('النسخة الرابعة - للحفظ والاطلاع', 'bg-amber-50 text-amber-900 border-amber-300')}
+                  </div>
                 </div>
-              </div>
+              )}
 
             </div>
 
@@ -546,19 +625,23 @@ export const PrintTicketModal: React.FC<PrintTicketModalProps> = ({
           <div className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between no-print">
             <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
               <FileText className="w-4 h-4 text-emerald-600" />
-              <span>سيتم طباعة ورقتين (A4) - كل ورقة تحتوي على نسختين (إجمالي 4 نسخ: أصل التذكرة، الحسابات، العميل، وللحفظ والاطلاع).</span>
+              <span>
+                {pageCount === 1 
+                  ? 'سيتم طباعة ورقة واحدة (A4) تحتوي على نسختين (أصل التذكرة + نسخة الحسابات/الميزان).'
+                  : 'سيتم طباعة ورقتين (A4) - كل ورقة تحتوي على نسختين (إجمالي 4 نسخ: أصل التذكرة، الحسابات، العميل، وللحفظ والاطلاع).'}
+              </span>
             </p>
             <div className="flex items-center gap-3">
               <button
                 onClick={handlePrint}
-                className="px-10 py-3.5 bg-gradient-to-r from-[#0F766E] to-teal-800 hover:from-teal-600 hover:to-teal-700 text-white font-black text-sm rounded-2xl shadow-xl transition-all flex items-center gap-2 cursor-pointer border border-teal-500/20"
+                className="px-8 py-3 bg-gradient-to-r from-[#0F766E] to-teal-800 hover:from-teal-600 hover:to-teal-700 text-white font-black text-sm rounded-2xl shadow-xl transition-all flex items-center gap-2 cursor-pointer border border-teal-500/20"
               >
                 <Printer className="w-5 h-5" />
-                <span>تأكيد وطباعة الورقتين</span>
+                <span>{pageCount === 1 ? 'تأكيد وطباعة ورقة واحدة (نسختان)' : 'تأكيد وطباعة الورقتين (4 نسخ)'}</span>
               </button>
               <button
                 onClick={onClose}
-                className="px-8 py-3.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-sm rounded-2xl cursor-pointer"
+                className="px-6 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-sm rounded-2xl cursor-pointer"
               >
                 إغلاق
               </button>
