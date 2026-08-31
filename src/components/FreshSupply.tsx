@@ -4543,254 +4543,302 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             </div>
 
             {/* Modal Body - Direct Inspection & Intake Details Entry */}
-            <div className="p-6 space-y-5 overflow-y-auto text-xs flex-1" dir={isRtl ? 'rtl' : 'ltr'}>
+            <div className="p-6 space-y-6 overflow-y-auto text-xs flex-1" dir={isRtl ? 'rtl' : 'ltr'}>
               
-              <div className="space-y-5">
-                {/* Summary Bar */}
-                <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الصنف المستلم:</span>
-                    <h4 className="text-base font-black text-zinc-900 dark:text-white mt-0.5">{selectedRecord.itemName}</h4>
-                    <span className="text-xs text-zinc-500 font-medium block mt-0.5">
-                      المورد: {selectedRecord.costCenter} {selectedRecord.truckNo ? `| سيارة: ${selectedRecord.truckNo}` : ''}
-                    </span>
+              <div className="space-y-6">
+                {/* Summary Header Card */}
+                <div className="bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-emerald-500/5 dark:from-emerald-950/60 dark:via-zinc-900 dark:to-emerald-950/30 p-5 rounded-3xl border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[10px] tracking-wide">
+                        {isRtl ? 'حركة توريد نشطة' : 'Active Movement'}
+                      </span>
+                      <span className="text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">
+                        {selectedRecord.date} | كود: {selectedRecord.oldCode || selectedRecord.sapCode || '-'}
+                      </span>
+                    </div>
+                    <h4 className="text-lg font-black text-zinc-900 dark:text-white leading-tight">
+                      {selectedRecord.itemName}
+                    </h4>
+                    <div className="flex items-center gap-3 text-zinc-600 dark:text-zinc-300 text-[11px] font-medium flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <strong>{isRtl ? 'المورد/مركز التكلفة:' : 'Cost Center:'}</strong> {selectedRecord.costCenter || '-'}
+                      </span>
+                      {selectedRecord.truckNo && (
+                        <span className="flex items-center gap-1 font-mono">
+                          <Truck className="w-3.5 h-3.5 text-amber-600" />
+                          <strong>السيارة:</strong> {selectedRecord.truckNo} {selectedRecord.driver ? `(${selectedRecord.driver})` : ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-left sm:text-right">
-                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الكمية الإجمالية:</span>
-                    <span className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-400 block">
-                      {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
-                    </span>
-                    <span className="text-xs font-mono font-bold text-zinc-500 block">
-                      ({selectedRecord.quantityTons.toFixed(3)} طن)
-                    </span>
+
+                  <div className="bg-white/80 dark:bg-zinc-800/80 px-4 py-3 rounded-2xl border border-emerald-200 dark:border-emerald-700/60 text-left sm:text-right shrink-0 shadow-2xs">
+                    <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 block">الكمية الإجمالية المستلمة:</span>
+                    <div className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-400">
+                      {selectedRecord.quantityKg.toLocaleString()} <span className="text-xs font-bold">{selectedRecord.unit || 'كجم'}</span>
+                    </div>
+                    <div className="text-[11px] font-mono font-bold text-zinc-500">
+                      = {selectedRecord.quantityTons.toFixed(3)} طن
+                    </div>
                   </div>
                 </div>
 
-                <form onSubmit={(e) => { e.preventDefault(); handleSaveRecordDetails(); }} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      
-                      {/* 1. PO Number */}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                          <Hash className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>{isRtl ? 'رقم أمر الشراء (PO Number)' : 'PO Number'}</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.po}
-                          onChange={(e) => setEditForm({ ...editForm, po: e.target.value })}
-                          placeholder={isRtl ? 'مثال: PO-2026-0891 أو رقم المستند' : 'e.g. PO-2026-0891'}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                        />
-                      </div>
-
-                      {/* 2. SAP Execution Number */}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                          <FileCheck2 className="w-3.5 h-3.5 text-blue-600" />
-                          <span>{isRtl ? 'رقم تنفيذ الساب (SAP Execution No)' : 'SAP Execution No'}</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.sapExecutionNo}
-                          onChange={(e) => setEditForm({ ...editForm, sapExecutionNo: e.target.value })}
-                          placeholder={isRtl ? 'مثال: 50000xxxxx أو كود التنفيذ' : 'e.g. 50000xxxxx'}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                        />
-                      </div>
-
-                      {/* 3. Region / Farm */}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-sky-600" />
-                          <span>{isRtl ? 'المنطقة / المزرعة / المصدر' : 'Region / Farm'}</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.region}
-                          onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
-                          placeholder={isRtl ? 'اختر أو اكتب المنطقة / المزرعة...' : 'e.g. Siwa, Fayoum...'}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                        />
-                        {/* Preset Region suggestions requested by user */}
-                        <div className="flex items-center gap-1 flex-wrap pt-1">
-                          {[
-                            'الفيوم',
-                            'طريق مصر الاسكندريه الصحراوي',
-                            'الاسماعليه',
-                            'البره الثاني ( راس سدر )',
-                            'العريش',
-                            'المنيا',
-                            'المغره',
-                            'سيويه'
-                          ].map(reg => (
-                            <button
-                              key={reg}
-                              type="button"
-                              onClick={() => setEditForm({ ...editForm, region: reg })}
-                              className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer border ${
-                                editForm.region === reg
-                                  ? 'bg-sky-600 text-white border-sky-700 font-bold'
-                                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-sky-100 hover:text-sky-800 dark:hover:bg-sky-950/60 dark:hover:text-sky-300 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
-                              }`}
-                            >
-                              + {reg}
-                            </button>
-                          ))}
+                <form onSubmit={(e) => { e.preventDefault(); handleSaveRecordDetails(); }} className="space-y-6">
+                    
+                    {/* SECTION 1: Documents & SAP Execution */}
+                    <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                        <div className="w-7 h-7 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-black text-xs">
+                          1
                         </div>
+                        <h5 className="font-black text-sm text-zinc-900 dark:text-white">
+                          {isRtl ? 'بيانات المستندات وأوامر الشراء (PO & SAP)' : 'Documents & PO Data'}
+                        </h5>
                       </div>
 
-                      {/* 4. Base Price per kg */}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                          <DollarSign className="w-3.5 h-3.5 text-amber-600" />
-                          <span>{isRtl ? 'السعر الأساسي للكيلو (ج.م)' : 'Base Price per Kg (EGP)'}</span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={editForm.price}
-                            onChange={(e) => setEditForm({ ...editForm, price: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                            placeholder="0.00"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                          />
-                          <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">ج.م/كجم</span>
-                        </div>
-                      </div>
-
-                      {/* 5. Quality Discount Percent */}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                          <Percent className="w-3.5 h-3.5 text-rose-600" />
-                          <span>{isRtl ? 'نسبة خصم الجودة (%)' : 'Quality Discount (%)'}</span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="100"
-                            value={editForm.qualityDiscountPercent}
-                            onChange={(e) => setEditForm({ ...editForm, qualityDiscountPercent: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                            placeholder="0"
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
-                          />
-                          <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">%</span>
-                        </div>
-                        {/* Quick Discount Presets */}
-                        <div className="flex items-center gap-1 flex-wrap pt-1">
-                          {[0, 1, 2, 3, 5, 7, 10, 15].map(pct => (
-                            <button
-                              key={pct}
-                              type="button"
-                              onClick={() => setEditForm({ ...editForm, qualityDiscountPercent: pct })}
-                              className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer border ${
-                                Number(editForm.qualityDiscountPercent) === pct
-                                  ? 'bg-rose-600 text-white border-rose-700 font-bold'
-                                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-rose-100 hover:text-rose-800 dark:hover:bg-rose-950/60 dark:hover:text-rose-300 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
-                              }`}
-                            >
-                              {pct}%
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* 6. Payment Method (Only Cash or Supply Installments) */}
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-purple-600" />
-                          <span>{isRtl ? 'طريقة السداد' : 'Payment Method'}</span>
-                        </label>
-                        <div className="flex items-center gap-1.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* 1. PO Number */}
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                            <Hash className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{isRtl ? 'رقم أمر الشراء (PO Number)' : 'PO Number'}</span>
+                          </label>
                           <input
                             type="text"
-                            value={editForm.paymentMethod}
-                            onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}
-                            placeholder={isRtl ? 'اختر أو اكتب...' : 'Payment...'}
-                            className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                            value={editForm.po}
+                            onChange={(e) => setEditForm({ ...editForm, po: e.target.value })}
+                            placeholder={isRtl ? 'مثال: PO-2026-0891 أو رقم المستند' : 'e.g. PO-2026-0891'}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                           />
-                          <div className="flex items-center gap-1 shrink-0">
-                            {['نقدي', 'دفعات توريد'].map(pay => (
+                        </div>
+
+                        {/* 2. SAP Execution Number */}
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                            <FileCheck2 className="w-3.5 h-3.5 text-blue-600" />
+                            <span>{isRtl ? 'رقم تنفيذ الساب (SAP Execution No)' : 'SAP Execution No'}</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={editForm.sapExecutionNo}
+                            onChange={(e) => setEditForm({ ...editForm, sapExecutionNo: e.target.value })}
+                            placeholder={isRtl ? 'مثال: 50000xxxxx أو كود التنفيذ' : 'e.g. 50000xxxxx'}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SECTION 2: Source, Pricing & Quality Discount */}
+                    <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                        <div className="w-7 h-7 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 flex items-center justify-center font-black text-xs">
+                          2
+                        </div>
+                        <h5 className="font-black text-sm text-zinc-900 dark:text-white">
+                          {isRtl ? 'المصدر، التسعير وخصم الجودة وطريقة السداد' : 'Source, Pricing & Payment'}
+                        </h5>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* 3. Region / Farm */}
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-sky-600" />
+                            <span>{isRtl ? 'المنطقة / المزرعة / المصدر' : 'Region / Farm'}</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={editForm.region}
+                            onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
+                            placeholder={isRtl ? 'اختر أو اكتب المنطقة / المزرعة...' : 'e.g. Siwa, Fayoum...'}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                          />
+                          {/* Preset Region suggestions requested by user */}
+                          <div className="flex items-center gap-1 flex-wrap pt-1.5">
+                            {[
+                              'الفيوم',
+                              'طريق مصر الاسكندريه الصحراوي',
+                              'الاسماعليه',
+                              'البره الثاني ( راس سدر )',
+                              'العريش',
+                              'المنيا',
+                              'المغره',
+                              'سيويه'
+                            ].map(reg => (
                               <button
-                                key={pay}
+                                key={reg}
                                 type="button"
-                                onClick={() => setEditForm({ ...editForm, paymentMethod: pay })}
-                                className={`px-2.5 py-2 text-[10px] rounded-xl transition-colors cursor-pointer border whitespace-nowrap font-bold ${
-                                  editForm.paymentMethod === pay
-                                    ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
-                                    : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-purple-100 hover:text-purple-800 dark:hover:bg-purple-950/60 dark:hover:text-purple-300 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                                onClick={() => setEditForm({ ...editForm, region: reg })}
+                                className={`px-2.5 py-1 text-[11px] rounded-lg transition-colors cursor-pointer border ${
+                                  editForm.region === reg
+                                    ? 'bg-sky-600 text-white border-sky-700 font-black shadow-2xs'
+                                    : 'bg-white dark:bg-zinc-800 hover:bg-sky-50 dark:hover:bg-sky-950/60 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
                                 }`}
                               >
-                                {pay}
+                                + {reg}
                               </button>
                             ))}
                           </div>
                         </div>
-                      </div>
 
-                    </div>
-
-                    {/* Real-time Calculation Summary Breakdown */}
-                    {(() => {
-                      const baseP = Number(editForm.price) || 0;
-                      const discPct = Number(editForm.qualityDiscountPercent) || 0;
-                      const discAmount = baseP * (discPct / 100);
-                      const netP = Math.max(0, baseP - discAmount);
-                      const totalGross = baseP * selectedRecord.quantityKg;
-                      const totalDiscountVal = discAmount * selectedRecord.quantityKg;
-                      const totalNetVal = netP * selectedRecord.quantityKg;
-
-                      if (baseP <= 0 && discPct <= 0) return null;
-
-                      return (
-                        <div className="p-3.5 bg-gradient-to-r from-amber-50/70 via-emerald-50/70 to-emerald-100/50 dark:from-zinc-800 dark:via-zinc-800/90 dark:to-emerald-950/30 rounded-2xl border border-emerald-300/80 dark:border-emerald-800/60 shadow-2xs">
-                          <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-emerald-200/60 dark:border-zinc-700">
-                            <span className="font-black text-xs text-zinc-900 dark:text-white flex items-center gap-1.5">
-                              <DollarSign className="w-4 h-4 text-emerald-600" />
-                              {isRtl ? 'بيان التسعير وخصم الجودة الحسابي:' : 'Pricing & Quality Discount Breakdown:'}
-                            </span>
-                            {discPct > 0 && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
-                                {isRtl ? `خصم جودة مقتطع: ${discPct}%` : `Discount: ${discPct}%`}
-                              </span>
-                            )}
+                        {/* 4. Base Price per kg */}
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                            <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                            <span>{isRtl ? 'السعر الأساسي للكيلو (ج.م)' : 'Base Price per Kg (EGP)'}</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editForm.price}
+                              onChange={(e) => setEditForm({ ...editForm, price: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                              placeholder="0.00"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                            />
+                            <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">ج.م/كجم</span>
                           </div>
+                        </div>
 
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono text-center">
-                            <div className="p-2 rounded-xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700">
-                              <span className="text-[10px] font-sans font-bold text-zinc-500 block">{isRtl ? 'السعر الأساسي' : 'Base Price'}</span>
-                              <span className="text-xs font-black text-zinc-800 dark:text-zinc-200">{baseP.toFixed(2)} ج.م</span>
-                            </div>
+                        {/* 5. Quality Discount Percent */}
+                        <div className="space-y-1.5">
+                          <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                            <Percent className="w-3.5 h-3.5 text-rose-600" />
+                            <span>{isRtl ? 'نسبة خصم الجودة (%)' : 'Quality Discount (%)'}</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              value={editForm.qualityDiscountPercent}
+                              onChange={(e) => setEditForm({ ...editForm, qualityDiscountPercent: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                              placeholder="0"
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                            />
+                            <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">%</span>
+                          </div>
+                          {/* Quick Discount Presets */}
+                          <div className="flex items-center gap-1 flex-wrap pt-1.5">
+                            {[0, 1, 2, 3, 5, 7, 10, 15].map(pct => (
+                              <button
+                                key={pct}
+                                type="button"
+                                onClick={() => setEditForm({ ...editForm, qualityDiscountPercent: pct })}
+                                className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer border ${
+                                  Number(editForm.qualityDiscountPercent) === pct
+                                    ? 'bg-rose-600 text-white border-rose-700 font-bold'
+                                    : 'bg-white dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                                }`}
+                              >
+                                {pct}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
 
-                            <div className="p-2 rounded-xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700">
-                              <span className="text-[10px] font-sans font-bold text-rose-600 dark:text-rose-400 block">{isRtl ? 'قيمة الخصم/كجم' : 'Discount/Kg'}</span>
-                              <span className="text-xs font-black text-rose-600 dark:text-rose-400">-{discAmount.toFixed(2)} ج.م</span>
-                            </div>
-
-                            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700">
-                              <span className="text-[10px] font-sans font-bold text-emerald-700 dark:text-emerald-300 block">{isRtl ? 'صافي السعر للكيلو' : 'Net Price/Kg'}</span>
-                              <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">{netP.toFixed(2)} ج.م</span>
-                            </div>
-
-                            <div className="p-2 rounded-xl bg-emerald-600 text-white shadow-xs">
-                              <span className="text-[10px] font-sans font-bold text-emerald-100 block">{isRtl ? 'إجمالي القيمة المستحقة' : 'Net Total Value'}</span>
-                              <span className="text-xs font-black">{totalNetVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م</span>
+                        {/* 6. Payment Method */}
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                            <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                            <span>{isRtl ? 'طريقة السداد' : 'Payment Method'}</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editForm.paymentMethod}
+                              onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}
+                              placeholder={isRtl ? 'اختر أو اكتب طريقة السداد...' : 'Payment...'}
+                              className="flex-1 px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                            />
+                            <div className="flex items-center gap-1 shrink-0">
+                              {['نقدي', 'دفعات توريد'].map(pay => (
+                                <button
+                                  key={pay}
+                                  type="button"
+                                  onClick={() => setEditForm({ ...editForm, paymentMethod: pay })}
+                                  className={`px-3 py-2.5 text-xs rounded-xl transition-colors cursor-pointer border whitespace-nowrap font-bold ${
+                                    editForm.paymentMethod === pay
+                                      ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
+                                      : 'bg-white dark:bg-zinc-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700'
+                                  }`}
+                                >
+                                  {pay}
+                                </button>
+                              ))}
                             </div>
                           </div>
                         </div>
-                      );
-                    })()}
 
-                    {/* 5. Initial Quality Analysis */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                          <FlaskConical className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>{isRtl ? 'التحليل الأولي للجودة والمواصفات (اختر النتيجة):' : 'Initial Quality Analysis (Select Result):'}</span>
-                        </label>
+                      </div>
+
+                      {/* Real-time Calculation Summary Breakdown */}
+                      {(() => {
+                        const baseP = Number(editForm.price) || 0;
+                        const discPct = Number(editForm.qualityDiscountPercent) || 0;
+                        const discAmount = baseP * (discPct / 100);
+                        const netP = Math.max(0, baseP - discAmount);
+                        const totalNetVal = netP * selectedRecord.quantityKg;
+
+                        if (baseP <= 0 && discPct <= 0) return null;
+
+                        return (
+                          <div className="p-4 bg-gradient-to-r from-amber-50/80 via-emerald-50/80 to-emerald-100/60 dark:from-zinc-800 dark:via-zinc-800/90 dark:to-emerald-950/40 rounded-2xl border border-emerald-300 dark:border-emerald-800 shadow-2xs mt-2">
+                            <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-emerald-200 dark:border-zinc-700">
+                              <span className="font-black text-xs text-zinc-900 dark:text-white flex items-center gap-1.5">
+                                <DollarSign className="w-4 h-4 text-emerald-600" />
+                                {isRtl ? 'بيان التسعير وخصم الجودة الحسابي التلقائي:' : 'Automated Pricing & Discount Breakdown:'}
+                              </span>
+                              {discPct > 0 && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                  {isRtl ? `خصم جودة مقتطع: ${discPct}%` : `Discount: ${discPct}%`}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono text-center">
+                              <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700">
+                                <span className="text-[10px] font-sans font-bold text-zinc-500 block">{isRtl ? 'السعر الأساسي' : 'Base Price'}</span>
+                                <span className="text-xs font-black text-zinc-800 dark:text-zinc-200">{baseP.toFixed(2)} ج.م</span>
+                              </div>
+
+                              <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700">
+                                <span className="text-[10px] font-sans font-bold text-rose-600 dark:text-rose-400 block">{isRtl ? 'قيمة الخصم/كجم' : 'Discount/Kg'}</span>
+                                <span className="text-xs font-black text-rose-600 dark:text-rose-400">-{discAmount.toFixed(2)} ج.م</span>
+                              </div>
+
+                              <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700">
+                                <span className="text-[10px] font-sans font-bold text-emerald-700 dark:text-emerald-300 block">{isRtl ? 'صافي السعر للكيلو' : 'Net Price/Kg'}</span>
+                                <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">{netP.toFixed(2)} ج.م</span>
+                              </div>
+
+                              <div className="p-2.5 rounded-xl bg-emerald-600 text-white shadow-xs">
+                                <span className="text-[10px] font-sans font-bold text-emerald-100 block">{isRtl ? 'إجمالي القيمة المستحقة' : 'Net Total Value'}</span>
+                                <span className="text-xs font-black">{totalNetVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* SECTION 3: Initial Quality Analysis */}
+                    <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-xl bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 flex items-center justify-center font-black text-xs">
+                            3
+                          </div>
+                          <label className="text-xs font-black text-zinc-900 dark:text-white flex items-center gap-1.5">
+                            <FlaskConical className="w-3.5 h-3.5 text-teal-600" />
+                            <span>{isRtl ? 'التحليل الأولي للجودة والمواصفات (اختر النتيجة):' : 'Initial Quality Analysis:'}</span>
+                          </label>
+                        </div>
                         {editForm.initialAnalysis && (
                           <button
                             type="button"
@@ -4802,8 +4850,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
                       </div>
 
-                      {/* 3 Main Choice Cards: خالي مبيدات | مبيدات | عشوائي */}
-                      <div className="grid grid-cols-3 gap-2.5">
+                      {/* 3 Main Choice Cards */}
+                      <div className="grid grid-cols-3 gap-3">
                         
                         {/* Option 1: خالي مبيدات */}
                         <button
@@ -4814,10 +4862,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                               initialAnalysis: prev.initialAnalysis === 'خالي مبيدات' ? '' : 'خالي مبيدات'
                             }));
                           }}
-                          className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                          className={`p-3.5 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
                             editForm.initialAnalysis === 'خالي مبيدات' || editForm.initialAnalysis.includes('خالي مبيدات')
                               ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20 scale-[1.02]'
-                              : 'bg-white dark:bg-zinc-800/80 border-emerald-200 dark:border-emerald-800/50 hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 text-zinc-800 dark:text-zinc-200'
+                              : 'bg-white dark:bg-zinc-800/80 border-emerald-200 dark:border-emerald-800/50 hover:border-emerald-400 hover:bg-emerald-50/50 text-zinc-800 dark:text-zinc-200'
                           }`}
                         >
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
@@ -4846,10 +4894,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                               initialAnalysis: prev.initialAnalysis === 'مبيدات' ? '' : 'مبيدات'
                             }));
                           }}
-                          className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                          className={`p-3.5 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
                             editForm.initialAnalysis === 'مبيدات' || (editForm.initialAnalysis.includes('مبيدات') && !editForm.initialAnalysis.includes('خالي'))
                               ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20 scale-[1.02]'
-                              : 'bg-white dark:bg-zinc-800/80 border-rose-200 dark:border-rose-800/50 hover:border-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/30 text-zinc-800 dark:text-zinc-200'
+                              : 'bg-white dark:bg-zinc-800/80 border-rose-200 dark:border-rose-800/50 hover:border-rose-400 hover:bg-rose-50/50 text-zinc-800 dark:text-zinc-200'
                           }`}
                         >
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
@@ -4878,10 +4926,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                               initialAnalysis: prev.initialAnalysis === 'عشوائي' ? '' : 'عشوائي'
                             }));
                           }}
-                          className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                          className={`p-3.5 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
                             editForm.initialAnalysis === 'عشوائي' || editForm.initialAnalysis.includes('عشوائي')
                               ? 'bg-indigo-600 text-white border-indigo-700 shadow-md shadow-indigo-600/20 scale-[1.02]'
-                              : 'bg-white dark:bg-zinc-800/80 border-indigo-200 dark:border-indigo-800/50 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 text-zinc-800 dark:text-zinc-200'
+                              : 'bg-white dark:bg-zinc-800/80 border-indigo-200 dark:border-indigo-800/50 hover:border-indigo-400 hover:bg-indigo-50/50 text-zinc-800 dark:text-zinc-200'
                           }`}
                         >
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
@@ -4909,12 +4957,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         value={editForm.initialAnalysis}
                         onChange={(e) => setEditForm({ ...editForm, initialAnalysis: e.target.value })}
                         placeholder={isRtl ? 'أو اكتب نصاً مفصلاً (مثال: خالي مبيدات - نسبة نضج 90%)...' : 'Or enter custom detailed notes...'}
-                        className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                       />
                     </div>
 
-                    {/* 6. Notes */}
-                    <div className="space-y-1.5">
+                    {/* SECTION 4: Additional Notes */}
+                    <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-2">
                       <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-zinc-500" />
                         <span>{isRtl ? 'ملاحظات إضافية' : 'Additional Notes'}</span>
@@ -4924,7 +4972,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         value={editForm.notes}
                         onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                         placeholder={isRtl ? 'أي ملاحظات خاصة بالتسليم أو الحسابات...' : 'Additional delivery/accounting notes...'}
-                        className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                       />
                     </div>
 
@@ -4933,14 +4981,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       <button
                         type="button"
                         onClick={() => setSelectedRecord(null)}
-                        className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-xs cursor-pointer"
+                        className="px-5 py-2.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-xs cursor-pointer"
                       >
                         {isRtl ? 'إلغاء' : 'Cancel'}
                       </button>
                       <button
                         type="submit"
                         disabled={isSavingRecord}
-                        className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-md active:scale-95 disabled:opacity-50"
+                        className="px-7 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-md active:scale-95 disabled:opacity-50"
                       >
                         {isSavingRecord ? (
                           <RefreshCw className="w-4 h-4 animate-spin" />
