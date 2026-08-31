@@ -121,6 +121,7 @@ export interface FreshSupplyRecord {
   vendorDocNo: string;       // رقم مستند المورد
   costCenterCode: string;    // كود مركز التكلفة
   po: string;                // PO (e.g. 4500003008)
+  sapExecutionNo?: string;   // رقم تنفيذ الساب (SAP Execution No)
   initialAnalysis?: string;  // التحليل الأولي (جودة / مواصفات / نسبة العيوب / الفرز الأولي)
   region?: string;           // المنطقة / المزرعة (e.g. طريق مصر إسكندرية الصحراوي، وادي النطرون...)
   price?: number;            // السعر (سعر الكيلو بالجنيه ج.م)
@@ -650,9 +651,33 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Selected row for detail modal
   const [selectedRecord, setSelectedRecord] = useState<FreshSupplyRecord | null>(null);
 
-  // Form state for editing record details (PO, initialAnalysis, region, price, paymentMethod, notes)
+  // User role checking for permission restriction:
+  // Restricted to: مسئول الاعتماد, مسئول التنفيذ, مسئول التسجيل, Admin
+  const userRoles = useMemo(() => {
+    const list: string[] = [];
+    if (user?.role) list.push(user.role);
+    if (Array.isArray(user?.roles)) list.push(...user.roles);
+    return list;
+  }, [user]);
+
+  const canAccessSupplyActions = useMemo(() => {
+    if (!user) return false;
+    const targetRoles = [
+      'Admin',
+      'مسئول الاعتماد',
+      'Approval Officer',
+      'مسئول التنفيذ',
+      'Execution Officer',
+      'مسئول التسجيل',
+      'Registration Officer'
+    ];
+    return userRoles.some(r => targetRoles.includes(r));
+  }, [user, userRoles]);
+
+  // Form state for editing record details (PO, sapExecutionNo, initialAnalysis, region, price, paymentMethod, notes)
   const [editForm, setEditForm] = useState({
     po: '',
+    sapExecutionNo: '',
     initialAnalysis: '',
     region: '',
     price: '' as number | string,
@@ -666,6 +691,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     if (selectedRecord) {
       setEditForm({
         po: selectedRecord.po || '',
+        sapExecutionNo: selectedRecord.sapExecutionNo || '',
         initialAnalysis: selectedRecord.initialAnalysis || '',
         region: selectedRecord.region || '',
         price: selectedRecord.price !== undefined && selectedRecord.price !== null ? selectedRecord.price : '',
@@ -687,8 +713,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     location: true,
     sapCode: true,
     po: true,
+    sapExecutionNo: true,
     region: true,
-    price: true,
+    price: false, // Default hidden from table as requested
     paymentMethod: false,
     initialAnalysis: false,
     postDocument: false,
@@ -736,6 +763,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       
       const updatedData: Partial<FreshSupplyRecord> = {
         po: editForm.po.trim(),
+        sapExecutionNo: editForm.sapExecutionNo.trim(),
         initialAnalysis: editForm.initialAnalysis.trim(),
         region: editForm.region.trim(),
         price: numPrice,
@@ -1077,6 +1105,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       // Check overrides by movementNo or fallback ID or index
       const override = (rawMoveNo && overridesMap[rawMoveNo]) || overridesMap[fallbackId] || overridesMap[`fresh-${idx}`] || {};
       const finalPo = override.po !== undefined && override.po !== '' ? String(override.po) : String(row['PO'] || '').trim();
+      const rawSapExecution = String(row['رقم تنفيذ الساب'] || row['تنفيذ الساب'] || row['SAP Execution'] || row['رقم التنفيذ'] || row['تنفيذ ساب'] || '').trim();
+      const sapExecutionNo = override.sapExecutionNo !== undefined && override.sapExecutionNo !== '' 
+        ? String(override.sapExecutionNo) 
+        : rawSapExecution;
       const initialAnalysis = override.initialAnalysis !== undefined ? String(override.initialAnalysis) : '';
       const region = override.region !== undefined ? String(override.region) : '';
       const price = override.price !== undefined && override.price !== '' ? Number(override.price) : 0;
@@ -1098,6 +1130,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         vendorDocNo: String(row['رقم مستند المورد'] || '').trim(),
         costCenterCode: finalCostCenterCode,
         po: finalPo,
+        sapExecutionNo,
         initialAnalysis,
         region,
         price,
@@ -1312,6 +1345,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           record.driver.toLowerCase().includes(term) ||
           record.movementNo.toLowerCase().includes(term) ||
           record.po.toLowerCase().includes(term) ||
+          (record.sapExecutionNo && record.sapExecutionNo.toLowerCase().includes(term)) ||
           (record.initialAnalysis && record.initialAnalysis.toLowerCase().includes(term)) ||
           (record.region && record.region.toLowerCase().includes(term)) ||
           (record.paymentMethod && record.paymentMethod.toLowerCase().includes(term)) ||
@@ -2467,6 +2501,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         'كود ساب': r.sapCode,
         'كود قديم': r.oldCode,
         'أمر الشراء PO': r.po,
+        'رقم تنفيذ الساب': r.sapExecutionNo || '-',
         'POST DOCUMENT': r.postDocument,
         'RESERVATION': r.reservation,
         'كود مركز التكلفة': r.costCenterCode,
@@ -2492,6 +2527,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         'كود ساب': '',
         'كود قديم': '',
         'أمر الشراء PO': '',
+        'رقم تنفيذ الساب': '',
         'POST DOCUMENT': '',
         'RESERVATION': '',
         'كود مركز التكلفة': '',
@@ -2620,11 +2656,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         r.driver,
         r.location,
         r.sapCode,
-        r.po
+        r.po,
+        r.sapExecutionNo || '-'
       ]);
 
       (doc as any).autoTable({
-        head: [['#', 'Date', 'Move No', 'Item Name', 'KG', 'Tons', 'Supplier / Farm', 'Truck', 'Driver', 'Pkg', 'SAP Code', 'PO No']],
+        head: [['#', 'Date', 'Move No', 'Item Name', 'KG', 'Tons', 'Supplier / Farm', 'Truck', 'Driver', 'Pkg', 'SAP Code', 'PO No', 'SAP Exec No']],
         body: tableData,
         startY: 26,
         styles: { fontSize: 7.5, cellPadding: 1.5 },
@@ -2919,27 +2956,32 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               <span>{isRtl ? 'مزامنة وتحديث' : 'Sync Sheet'}</span>
             </button>
 
-            {/* Export Excel */}
-            <button
-              onClick={handleExportExcel}
-              disabled={filteredData.length === 0}
-              className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-              title={isRtl ? 'تصدير إكسيل .xlsx' : 'Export Excel'}
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="hidden sm:inline">{isRtl ? 'تصدير إكسيل' : 'Excel'}</span>
-            </button>
+            {/* Export Buttons - Restricted to authorized roles */}
+            {canAccessSupplyActions && (
+              <>
+                {/* Export Excel */}
+                <button
+                  onClick={handleExportExcel}
+                  disabled={filteredData.length === 0}
+                  className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                  title={isRtl ? 'تصدير إكسيل .xlsx' : 'Export Excel'}
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="hidden sm:inline">{isRtl ? 'تصدير إكسيل' : 'Excel'}</span>
+                </button>
 
-            {/* Export PDF */}
-            <button
-              onClick={handleExportPDF}
-              disabled={filteredData.length === 0}
-              className="px-3.5 py-2.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-              title={isRtl ? 'طباعة تقرير PDF' : 'Export PDF'}
-            >
-              <FileText className="w-4 h-4 text-red-500" />
-              <span className="hidden sm:inline">{isRtl ? 'تقرير PDF' : 'PDF'}</span>
-            </button>
+                {/* Export PDF */}
+                <button
+                  onClick={handleExportPDF}
+                  disabled={filteredData.length === 0}
+                  className="px-3.5 py-2.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                  title={isRtl ? 'طباعة تقرير PDF' : 'Export PDF'}
+                >
+                  <FileText className="w-4 h-4 text-red-500" />
+                  <span className="hidden sm:inline">{isRtl ? 'تقرير PDF' : 'PDF'}</span>
+                </button>
+              </>
+            )}
 
             {/* Direct Google Sheet Link */}
             <a
@@ -3265,6 +3307,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       location: isRtl ? 'الموقع والتعبئة' : 'Package',
                       sapCode: isRtl ? 'كود ساب' : 'SAP Code',
                       po: isRtl ? 'أمر الشراء (PO)' : 'PO No',
+                      sapExecutionNo: isRtl ? 'رقم تنفيذ الساب' : 'SAP Execution No',
                       region: isRtl ? 'المنطقة / المزرعة' : 'Region',
                       price: isRtl ? 'السعر والقيمة (ج.م)' : 'Price & Value',
                       paymentMethod: isRtl ? 'طريقة السداد' : 'Payment Method',
@@ -3468,6 +3511,18 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                     <th className="py-3.5 px-3">{isRtl ? 'أمر الشراء PO' : 'PO No'}</th>
                   )}
 
+                  {visibleColumns.sapExecutionNo && (
+                    <th 
+                      onClick={() => handleSort('sapExecutionNo')}
+                      className="py-3.5 px-3 cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>{isRtl ? 'رقم تنفيذ الساب' : 'SAP Execution No'}</span>
+                        <ArrowUpDown className="w-3 h-3 text-zinc-400" />
+                      </div>
+                    </th>
+                  )}
+
                   {visibleColumns.region && (
                     <th className="py-3.5 px-3">{isRtl ? 'المنطقة / المزرعة' : 'Region'}</th>
                   )}
@@ -3626,6 +3681,18 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           </td>
                         )}
 
+                        {visibleColumns.sapExecutionNo && (
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {record.sapExecutionNo ? (
+                              <span className="font-mono font-bold text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-[11px]">
+                                {record.sapExecutionNo}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 text-[11px]">-</span>
+                            )}
+                          </td>
+                        )}
+
                         {visibleColumns.region && (
                           <td className="py-3 px-3 whitespace-nowrap">
                             {record.region ? (
@@ -3714,20 +3781,24 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         {visibleColumns.actions && (
                           <td className="py-3 px-3 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => setSelectedRecord(record)}
-                                className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
-                                title={isRtl ? 'عرض واستكمال بيانات التوريد (PO، التحليل، المنطقة، السعر)' : 'View & Edit Details'}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => setSelectedRecord(record)}
-                                className="p-1.5 hover:bg-teal-100 dark:hover:bg-teal-900/50 text-teal-600 dark:text-teal-400 rounded-lg transition-colors cursor-pointer"
-                                title={isRtl ? 'تعديل بيانات الحركة' : 'Edit Movement Data'}
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
+                              {canAccessSupplyActions && (
+                                <>
+                                  <button
+                                    onClick={() => setSelectedRecord(record)}
+                                    className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
+                                    title={isRtl ? 'عرض واستكمال بيانات التوريد (PO، التحليل، المنطقة، السعر)' : 'View & Edit Details'}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setSelectedRecord(record)}
+                                    className="p-1.5 hover:bg-teal-100 dark:hover:bg-teal-900/50 text-teal-600 dark:text-teal-400 rounded-lg transition-colors cursor-pointer"
+                                    title={isRtl ? 'تعديل بيانات الحركة' : 'Edit Movement Data'}
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
                               <button
                                 onClick={() => handleCopyRecord(record)}
                                 className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 rounded-lg transition-colors cursor-pointer"
@@ -4440,7 +4511,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 </div>
 
                 <form onSubmit={(e) => { e.preventDefault(); handleSaveRecordDetails(); }} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       
                       {/* 1. PO Number */}
                       <div className="space-y-1.5">
@@ -4457,7 +4528,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         />
                       </div>
 
-                      {/* 2. Region / Farm */}
+                      {/* 2. SAP Execution Number */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <FileCheck2 className="w-3.5 h-3.5 text-blue-600" />
+                          <span>{isRtl ? 'رقم تنفيذ الساب (SAP Execution No)' : 'SAP Execution No'}</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.sapExecutionNo}
+                          onChange={(e) => setEditForm({ ...editForm, sapExecutionNo: e.target.value })}
+                          placeholder={isRtl ? 'مثال: 50000xxxxx أو كود التنفيذ' : 'e.g. 50000xxxxx'}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                        />
+                      </div>
+
+                      {/* 3. Region / Farm */}
                       <div className="space-y-1.5">
                         <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                           <MapPin className="w-3.5 h-3.5 text-sky-600" />
@@ -4485,7 +4571,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         </div>
                       </div>
 
-                      {/* 3. Price per kg */}
+                      {/* 4. Price per kg */}
                       <div className="space-y-1.5">
                         <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                           <DollarSign className="w-3.5 h-3.5 text-amber-600" />
@@ -4510,7 +4596,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
                       </div>
 
-                      {/* 4. Payment Method */}
+                      {/* 5. Payment Method */}
                       <div className="space-y-1.5">
                         <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                           <CreditCard className="w-3.5 h-3.5 text-purple-600" />
