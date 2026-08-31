@@ -633,7 +633,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
   const [mainCategoryFilter, setMainCategoryFilter] = useState<'ALL' | 'OLIVES' | 'PEPPER' | 'OTHER'>('ALL');
-  const [poFilter, setPoFilter] = useState<'ALL' | 'EXISTS' | 'MISSING'>('ALL');
   const [analysisFilter, setAnalysisFilter] = useState<'ALL' | 'PESTICIDE_FREE' | 'PESTICIDES' | 'RANDOM' | 'NONE'>('ALL');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
@@ -661,7 +660,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     notes: ''
   });
   const [isSavingRecord, setIsSavingRecord] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState<'edit' | 'details' | 'ticket'>('edit');
 
   // Load record data into edit form whenever selectedRecord changes
   useEffect(() => {
@@ -674,7 +672,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         paymentMethod: selectedRecord.paymentMethod || '',
         notes: selectedRecord.notes || ''
       });
-      setActiveModalTab('edit');
     }
   }, [selectedRecord]);
 
@@ -1338,13 +1335,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         if (mainCategoryFilter === 'OTHER' && !isOther) return false;
       }
 
-      // PO Filter
-      if (poFilter !== 'ALL') {
-        const hasPO = record.po && record.po.trim() !== '';
-        if (poFilter === 'EXISTS' && !hasPO) return false;
-        if (poFilter === 'MISSING' && hasPO) return false;
-      }
-
       // Initial Analysis Filter (خالي مبيدات / مبيدات / عشوائي)
       if (analysisFilter !== 'ALL') {
         const analysis = (record.initialAnalysis || '').trim();
@@ -1464,7 +1454,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     data, 
     searchTerm, 
     mainCategoryFilter,
-    poFilter,
     analysisFilter,
     selectedItems, 
     selectedSuppliers, 
@@ -2447,7 +2436,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const handleClearFilters = () => {
     setSearchTerm('');
     setMainCategoryFilter('ALL');
-    setPoFilter('ALL');
+    setAnalysisFilter('ALL');
     setSelectedItems([]);
     setSelectedSuppliers([]);
     setSelectedStores([]);
@@ -3238,7 +3227,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           </div>
 
           {/* Clear Filters Button */}
-          {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || poFilter !== 'ALL') && (
+          {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || analysisFilter !== 'ALL') && (
             <button
               onClick={handleClearFilters}
               className="h-10 px-3.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border border-red-200 dark:border-red-800/60"
@@ -3309,7 +3298,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
         </div>
 
-        {/* Sub-Filters: Category on one side, PO on the other side */}
+        {/* Sub-Filters: Category Filter */}
         <div className="flex items-center justify-between gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex-wrap">
           {/* Main Category Filter (Olives, Pepper, Other) */}
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -3358,95 +3347,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             >
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
               <span>{isRtl ? 'أخرى' : 'Other'}</span>
-            </button>
-          </div>
-
-          {/* PO Filter (يوجد / لا يوجد) */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-black text-zinc-500 dark:text-zinc-400">
-              {isRtl ? 'أمر التوريد (PO):' : 'PO:'}
-            </span>
-            <button
-              onClick={() => setPoFilter('ALL')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                poFilter === 'ALL'
-                  ? 'bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 shadow-xs'
-                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-              }`}
-            >
-              {isRtl ? 'الكل' : 'All'}
-            </button>
-            <button
-              onClick={() => setPoFilter('EXISTS')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                poFilter === 'EXISTS'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>{isRtl ? 'يوجد' : 'Yes'}</span>
-            </button>
-            <button
-              onClick={() => setPoFilter('MISSING')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                poFilter === 'MISSING'
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-              <span>{isRtl ? 'لا يوجد' : 'No'}</span>
-            </button>
-          </div>
-
-          {/* Analysis Filter (خالي مبيدات / مبيدات / عشوائي) */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-black text-zinc-500 dark:text-zinc-400">
-              {isRtl ? 'التحليل الأولي:' : 'Analysis:'}
-            </span>
-            <button
-              onClick={() => setAnalysisFilter('ALL')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                analysisFilter === 'ALL'
-                  ? 'bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 shadow-xs'
-                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-              }`}
-            >
-              {isRtl ? 'الكل' : 'All'}
-            </button>
-            <button
-              onClick={() => setAnalysisFilter('PESTICIDE_FREE')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                analysisFilter === 'PESTICIDE_FREE'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
-              }`}
-            >
-              <Leaf className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-              <span>{isRtl ? 'خالي مبيدات' : 'Pesticide-Free'}</span>
-            </button>
-            <button
-              onClick={() => setAnalysisFilter('PESTICIDES')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                analysisFilter === 'PESTICIDES'
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100'
-              }`}
-            >
-              <ShieldAlert className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-              <span>{isRtl ? 'مبيدات' : 'Pesticides'}</span>
-            </button>
-            <button
-              onClick={() => setAnalysisFilter('RANDOM')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                analysisFilter === 'RANDOM'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100'
-              }`}
-            >
-              <Shuffle className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-              <span>{isRtl ? 'عشوائي' : 'Random'}</span>
             </button>
           </div>
         </div>
@@ -4515,72 +4415,31 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               </button>
             </div>
 
-            {/* Navigation Tabs inside Modal */}
-            <div className="flex items-center gap-2 p-3 bg-zinc-50 dark:bg-zinc-800/80 border-b border-zinc-200 dark:border-zinc-700 shrink-0 flex-wrap">
-              <button
-                onClick={() => setActiveModalTab('edit')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                  activeModalTab === 'edit'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700'
-                }`}
-              >
-                <FileEdit className="w-3.5 h-3.5" />
-                <span>{isRtl ? 'تعديل واستكمال البيانات' : 'Edit & Add Details'}</span>
-              </button>
-
-              <button
-                onClick={() => setActiveModalTab('ticket')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                  activeModalTab === 'ticket'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700'
-                }`}
-              >
-                <Receipt className="w-3.5 h-3.5" />
-                <span>{isRtl ? 'تذكرة الاستلام والمعاينة' : 'Inspection Ticket'}</span>
-              </button>
-
-              <button
-                onClick={() => setActiveModalTab('details')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                  activeModalTab === 'details'
-                    ? 'bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 shadow-xs'
-                    : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>{isRtl ? 'كافة بيانات الحركة' : 'All Movement Fields'}</span>
-              </button>
-            </div>
-
-            {/* Modal Body */}
+            {/* Modal Body - Direct Inspection & Intake Details Entry */}
             <div className="p-6 space-y-5 overflow-y-auto text-xs flex-1" dir={isRtl ? 'rtl' : 'ltr'}>
               
-              {/* TAB 1: EDIT / DATA ENTRY (PO, Initial Analysis, Region, Price, Payment Method) */}
-              {activeModalTab === 'edit' && (
-                <div className="space-y-5">
-                  {/* Summary Bar */}
-                  <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الصنف المستلم:</span>
-                      <h4 className="text-base font-black text-zinc-900 dark:text-white mt-0.5">{selectedRecord.itemName}</h4>
-                      <span className="text-xs text-zinc-500 font-medium block mt-0.5">
-                        المورد: {selectedRecord.costCenter} {selectedRecord.truckNo ? `| سيارة: ${selectedRecord.truckNo}` : ''}
-                      </span>
-                    </div>
-                    <div className="text-left sm:text-right">
-                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الكمية الإجمالية:</span>
-                      <span className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-400 block">
-                        {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
-                      </span>
-                      <span className="text-xs font-mono font-bold text-zinc-500 block">
-                        ({selectedRecord.quantityTons.toFixed(3)} طن)
-                      </span>
-                    </div>
+              <div className="space-y-5">
+                {/* Summary Bar */}
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الصنف المستلم:</span>
+                    <h4 className="text-base font-black text-zinc-900 dark:text-white mt-0.5">{selectedRecord.itemName}</h4>
+                    <span className="text-xs text-zinc-500 font-medium block mt-0.5">
+                      المورد: {selectedRecord.costCenter} {selectedRecord.truckNo ? `| سيارة: ${selectedRecord.truckNo}` : ''}
+                    </span>
                   </div>
+                  <div className="text-left sm:text-right">
+                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الكمية الإجمالية:</span>
+                    <span className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-400 block">
+                      {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
+                    </span>
+                    <span className="text-xs font-mono font-bold text-zinc-500 block">
+                      ({selectedRecord.quantityTons.toFixed(3)} طن)
+                    </span>
+                  </div>
+                </div>
 
-                  <form onSubmit={(e) => { e.preventDefault(); handleSaveRecordDetails(); }} className="space-y-4">
+                <form onSubmit={(e) => { e.preventDefault(); handleSaveRecordDetails(); }} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       
                       {/* 1. PO Number */}
@@ -4850,340 +4709,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
                   </form>
                 </div>
-              )}
-
-              {/* TAB 2: INSPECTION & DELIVERY TICKET (مع الحفاظ على نص نسخة للمعاينة ولا تعد مستند) */}
-              {activeModalTab === 'ticket' && (
-                <div className="space-y-4">
-                  {/* Print / Export Bar */}
-                  <div className="flex items-center justify-between gap-2 p-2 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <Receipt className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                      <span className="font-black text-xs text-zinc-800 dark:text-zinc-200">
-                        {isRtl ? 'تذكرة استلام ومعاينة الفريش المعتمدة' : 'Official Fresh Inspection Ticket'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => window.print()}
-                        className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>{isRtl ? 'طباعة التذكرة' : 'Print Ticket'}</span>
-                      </button>
-                      <button
-                        onClick={() => handleCopyRecord(selectedRecord)}
-                        className="px-3 py-1.5 bg-white dark:bg-zinc-700 hover:bg-zinc-50 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-600 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{isRtl ? 'نسخ نصي' : 'Copy'}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Printable Ticket Card */}
-                  <div className="p-6 bg-white dark:bg-zinc-950 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 shadow-sm space-y-4 relative overflow-hidden">
-                    
-                    {/* Official Notice / Disclaimer Required by User */}
-                    <div className="bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 px-3 py-2 rounded-xl text-center font-bold text-xs flex items-center justify-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-amber-600" />
-                      <span>{isRtl ? 'نسخة للمعاينة ولا تعد مستند' : 'Inspection copy only - Not an official legal document'}</span>
-                    </div>
-
-                    {/* Ticket Header */}
-                    <div className="flex items-center justify-between border-b pb-3 border-zinc-200 dark:border-zinc-800">
-                      <div>
-                        <h4 className="font-black text-sm text-zinc-900 dark:text-white">
-                          {isRtl ? 'إذن استلام ومعاينة أصناف الفريش' : 'Fresh Supply Inspection & Intake Slip'}
-                        </h4>
-                        <span className="text-[11px] text-zinc-500 font-mono">
-                          {isRtl ? `تاريخ الإصدار: ${selectedRecord.date}` : `Date: ${selectedRecord.date}`}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="px-3 py-1 bg-emerald-600 text-white rounded-lg font-mono font-black text-xs">
-                          {isRtl ? `حركة #: ${selectedRecord.movementNo}` : `#${selectedRecord.movementNo}`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 2-Column Core Info */}
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      
-                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <span className="text-zinc-400 block text-[10px]">اسم الصنف</span>
-                        <strong className="text-zinc-900 dark:text-white font-black text-sm block mt-0.5">{selectedRecord.itemName}</strong>
-                        {selectedRecord.sapCode && (
-                          <span className="text-[10px] text-zinc-500 font-mono">كود ساب: {selectedRecord.sapCode}</span>
-                        )}
-                      </div>
-
-                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                        <span className="text-emerald-800 dark:text-emerald-300 block text-[10px] font-bold">الوزن الصافي المستلم</span>
-                        <strong className="text-emerald-700 dark:text-emerald-400 font-mono font-black text-base block mt-0.5">
-                          {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
-                        </strong>
-                        <span className="text-[11px] font-mono text-zinc-500">
-                          (= {selectedRecord.quantityTons.toFixed(3)} طن)
-                        </span>
-                      </div>
-
-                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <span className="text-zinc-400 block text-[10px]">المورد / مركز التكلفة</span>
-                        <strong className="text-zinc-900 dark:text-white font-bold block mt-0.5">{selectedRecord.costCenter || '-'}</strong>
-                      </div>
-
-                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <span className="text-zinc-400 block text-[10px]">السيارة والسائق</span>
-                        <strong className="text-zinc-900 dark:text-white font-mono block mt-0.5">
-                          {selectedRecord.truckNo || '-'} {selectedRecord.driver ? `(${selectedRecord.driver})` : ''}
-                        </strong>
-                      </div>
-
-                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <span className="text-zinc-400 block text-[10px]">رقم أمر الشراء (PO)</span>
-                        <strong className="text-emerald-700 dark:text-emerald-400 font-mono font-bold block mt-0.5">
-                          {selectedRecord.po || 'غير محدد'}
-                        </strong>
-                      </div>
-
-                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <span className="text-zinc-400 block text-[10px]">المنطقة / المزرعة</span>
-                        <strong className="text-sky-700 dark:text-sky-400 font-bold block mt-0.5">
-                          {selectedRecord.region || 'غير محدد'}
-                        </strong>
-                      </div>
-
-                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <span className="text-zinc-400 block text-[10px]">السعر وطريقة السداد</span>
-                        <strong className="text-amber-800 dark:text-amber-300 font-bold block mt-0.5">
-                          {selectedRecord.price ? `${selectedRecord.price} ج.م/كجم` : 'لم يحدد السعر'}
-                          {selectedRecord.paymentMethod ? ` | ${selectedRecord.paymentMethod}` : ''}
-                        </strong>
-                      </div>
-
-                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                        <span className="text-zinc-400 block text-[10px]">الموقع والتعبئة والمخزن</span>
-                        <strong className="text-zinc-900 dark:text-white font-bold block mt-0.5">
-                          {selectedRecord.location || 'برميل'} {selectedRecord.tankNo ? `(تانك ${selectedRecord.tankNo})` : ''} | مخزن {selectedRecord.store || 'GPS'}
-                        </strong>
-                      </div>
-
-                    </div>
-
-                    {/* Initial Quality Box in Ticket */}
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-1.5">
-                      <span className="text-zinc-500 font-black text-[11px] block">نتيجة التحليل الأولي للجودة والمواصفات:</span>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {selectedRecord.initialAnalysis ? (
-                          selectedRecord.initialAnalysis.includes('خالي مبيدات') ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700">
-                              <Leaf className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>خالي مبيدات (Pesticide-Free)</span>
-                            </span>
-                          ) : selectedRecord.initialAnalysis === 'مبيدات' || (selectedRecord.initialAnalysis.includes('مبيدات') && !selectedRecord.initialAnalysis.includes('خالي')) ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-700">
-                              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-                              <span>مبيدات (Contains Pesticides)</span>
-                            </span>
-                          ) : selectedRecord.initialAnalysis.includes('عشوائي') ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-700">
-                              <Shuffle className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>عينة عشوائية (Random Spot Check)</span>
-                            </span>
-                          ) : (
-                            <span className="text-xs text-zinc-800 dark:text-zinc-200 font-bold">{selectedRecord.initialAnalysis}</span>
-                          )
-                        ) : (
-                          <span className="text-xs text-zinc-500 font-medium italic">تم استلام الصنف بحالة ظاهرية جيدة ومطابقة لمواصفات الفريش.</span>
-                        )}
-                        {selectedRecord.initialAnalysis && !['خالي مبيدات', 'مبيدات', 'عشوائي'].includes(selectedRecord.initialAnalysis) && (
-                          <span className="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium">({selectedRecord.initialAnalysis})</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Signatures & Stamp block */}
-                    <div className="grid grid-cols-3 gap-2 pt-4 border-t border-zinc-200 dark:border-zinc-800 text-center text-[10px] text-zinc-500">
-                      <div>
-                        <span>مستلم الفريش</span>
-                        <div className="h-8 border-b border-zinc-300 dark:border-zinc-700 mt-1" />
-                      </div>
-                      <div>
-                        <span>فاحص الجودة والمعاينة</span>
-                        <div className="h-8 border-b border-zinc-300 dark:border-zinc-700 mt-1" />
-                      </div>
-                      <div>
-                        <span>سائق التوريد / المندوب</span>
-                        <div className="h-8 border-b border-zinc-300 dark:border-zinc-700 mt-1" />
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 3: ALL RAW DETAILS & PARAMETERS */}
-              {activeModalTab === 'details' && (
-                <div className="space-y-4">
-                  {/* Main Item & Quantity Box */}
-                  <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">اسم الصنف المستلم (الموحد):</span>
-                      <h4 className="text-base font-black text-zinc-900 dark:text-white mt-0.5">{selectedRecord.itemName}</h4>
-                      {selectedRecord.originalItemName && selectedRecord.originalItemName !== selectedRecord.itemName && (
-                        <span className="text-[10px] text-zinc-500 block mt-0.5">
-                          {isRtl ? `الاسم الأصلي بالملف: ${selectedRecord.originalItemName}` : `Original in sheet: ${selectedRecord.originalItemName}`}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-left sm:text-right">
-                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الوزن المستلم:</span>
-                      <span className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-400">
-                        {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
-                      </span>
-                      <span className="text-xs font-mono font-bold text-zinc-500 block">
-                        ({selectedRecord.quantityTons.toFixed(3)} طن)
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 2x4 Details Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">رقم الحركة</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.movementNo || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">تاريخ الحركة</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.date || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">نوع الحركة</span>
-                      <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{selectedRecord.movementType || 'اضافة'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">رقم السيارة</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-300 dark:border-amber-800 inline-block">
-                        {selectedRecord.truckNo || '-'}
-                      </strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">اسم السائق</span>
-                      <strong className="text-zinc-900 dark:text-white font-bold">{selectedRecord.driver || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">الموقع / التعبئة</span>
-                      <strong className="text-zinc-900 dark:text-white font-bold">
-                        {selectedRecord.location || 'برميل'} {selectedRecord.tankNo ? `(تانك ${selectedRecord.tankNo})` : ''}
-                      </strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 col-span-2">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">المورد / مركز التكلفة</span>
-                      <strong className="text-zinc-900 dark:text-white font-black text-sm">{selectedRecord.costCenter || '-'}</strong>
-                      {selectedRecord.originalCostCenter && selectedRecord.originalCostCenter !== selectedRecord.costCenter && (
-                        <span className="text-[10px] text-zinc-500 block mt-0.5">
-                          {isRtl ? `الاسم الأصلي بالملف: ${selectedRecord.originalCostCenter}` : `Original: ${selectedRecord.originalCostCenter}`}
-                        </span>
-                      )}
-                      {selectedRecord.costCenterCode && (
-                        <span className="text-[10px] text-zinc-500 font-mono block">كود المركز: {selectedRecord.costCenterCode}</span>
-                      )}
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">المخزن المستلم</span>
-                      <strong className="text-zinc-900 dark:text-white font-bold">{selectedRecord.store || 'GPS'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">أمر الشراء (PO)</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.po || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">المنطقة / المصدر</span>
-                      <strong className="text-zinc-900 dark:text-white font-bold text-sm">{selectedRecord.region || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">السعر وطريقة السداد</span>
-                      <strong className="text-zinc-900 dark:text-white font-bold text-sm">
-                        {selectedRecord.price ? `${selectedRecord.price} ج.م` : '-'} {selectedRecord.paymentMethod ? `(${selectedRecord.paymentMethod})` : ''}
-                      </strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">كود ساب (SAP Code)</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.sapCode || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">كود قديم</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.oldCode || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">رقم مستند المورد</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.vendorDocNo || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">POST DOCUMENT</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.postDocument || '-'}</strong>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                      <span className="text-zinc-400 block text-[10px] mb-0.5">RESERVATION</span>
-                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.reservation || '-'}</strong>
-                    </div>
-
-                  </div>
-
-                  {/* Quality & Notes in Details Tab */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 space-y-1">
-                      <span className="text-zinc-400 block text-[10px]">التحليل الأولي للجودة والمواصفات</span>
-                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                        {selectedRecord.initialAnalysis ? (
-                          selectedRecord.initialAnalysis.includes('خالي مبيدات') ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700">
-                              <Leaf className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>خالي مبيدات</span>
-                            </span>
-                          ) : selectedRecord.initialAnalysis === 'مبيدات' || (selectedRecord.initialAnalysis.includes('مبيدات') && !selectedRecord.initialAnalysis.includes('خالي')) ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-black bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-700">
-                              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-                              <span>مبيدات</span>
-                            </span>
-                          ) : selectedRecord.initialAnalysis.includes('عشوائي') ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-700">
-                              <Shuffle className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>عشوائي</span>
-                            </span>
-                          ) : (
-                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{selectedRecord.initialAnalysis}</span>
-                          )
-                        ) : (
-                          <span className="text-xs text-zinc-400">-</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 space-y-1">
-                      <span className="text-zinc-400 block text-[10px]">ملاحظات</span>
-                      <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{selectedRecord.notes || '-'}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
 
             </div>
 
