@@ -16,4 +16,5 @@ export const COLLECTIONS = {
   SETTINGS: 'settings',
   AGRI_RAW_MATERIAL: 'agri_raw_material',
   PURCHASE_ORDERS: 'purchase_orders',
+  FRESH_SUPPLY_OVERRIDES: 'fresh_supply_overrides',
 };

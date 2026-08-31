@@ -61,7 +61,21 @@ import {
   Trophy,
   Award,
   ArrowUpRight,
-  CircleDot
+  CircleDot,
+  Edit3,
+  Save,
+  DollarSign,
+  CreditCard,
+  FlaskConical,
+  Banknote,
+  Receipt,
+  FileEdit,
+  ShieldCheck,
+  ShieldAlert,
+  Shuffle,
+  Leaf,
+  Clock,
+  Printer
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -78,6 +92,9 @@ import {
   AreaChart,
   Area
 } from 'recharts';
+import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { COLLECTIONS } from '../constants';
 import { FreshItemsDashboard } from './FreshItemsDashboard';
 import { FreshSuppliersDashboard } from './FreshSuppliersDashboard';
 import { FreshAnalyticsDashboard } from './FreshAnalyticsDashboard';
@@ -89,6 +106,7 @@ import { toast } from 'sonner';
 const FRESH_GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv";
 const STORAGE_CACHE_KEY = "fresh_supply_data_cache";
 const STORAGE_TIME_KEY = "fresh_supply_last_synced";
+const STORAGE_OVERRIDES_KEY = "fresh_supply_overrides_cache";
 
 export interface FreshSupplyRecord {
   id: string;
@@ -103,6 +121,13 @@ export interface FreshSupplyRecord {
   vendorDocNo: string;       // رقم مستند المورد
   costCenterCode: string;    // كود مركز التكلفة
   po: string;                // PO (e.g. 4500003008)
+  initialAnalysis?: string;  // التحليل الأولي (جودة / مواصفات / نسبة العيوب / الفرز الأولي)
+  region?: string;           // المنطقة / المزرعة (e.g. طريق مصر إسكندرية الصحراوي، وادي النطرون...)
+  price?: number;            // السعر (سعر الكيلو بالجنيه ج.م)
+  paymentMethod?: string;    // طريقة السداد (نقدي / تحويل بنكي / شيك مؤجل / بعد الفرز...)
+  notes?: string;            // ملاحظات إضافية
+  updatedAt?: string;        // تاريخ ووقت آخر تعديل يدوي
+  updatedBy?: string;        // اسم المستخدم الذي قام بالتعديل
   reservation: string;       // RESERVATION
   postDocument: string;      // POST DOCUMENT (e.g. 5000052380)
   oldCode: string;           // كود قديم (e.g. 80003)
@@ -609,6 +634,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [mainCategoryFilter, setMainCategoryFilter] = useState<'ALL' | 'OLIVES' | 'PEPPER' | 'OTHER'>('ALL');
   const [poFilter, setPoFilter] = useState<'ALL' | 'EXISTS' | 'MISSING'>('ALL');
+  const [analysisFilter, setAnalysisFilter] = useState<'ALL' | 'PESTICIDE_FREE' | 'PESTICIDES' | 'RANDOM' | 'NONE'>('ALL');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
@@ -625,6 +651,33 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Selected row for detail modal
   const [selectedRecord, setSelectedRecord] = useState<FreshSupplyRecord | null>(null);
 
+  // Form state for editing record details (PO, initialAnalysis, region, price, paymentMethod, notes)
+  const [editForm, setEditForm] = useState({
+    po: '',
+    initialAnalysis: '',
+    region: '',
+    price: '' as number | string,
+    paymentMethod: '',
+    notes: ''
+  });
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [activeModalTab, setActiveModalTab] = useState<'edit' | 'details' | 'ticket'>('edit');
+
+  // Load record data into edit form whenever selectedRecord changes
+  useEffect(() => {
+    if (selectedRecord) {
+      setEditForm({
+        po: selectedRecord.po || '',
+        initialAnalysis: selectedRecord.initialAnalysis || '',
+        region: selectedRecord.region || '',
+        price: selectedRecord.price !== undefined && selectedRecord.price !== null ? selectedRecord.price : '',
+        paymentMethod: selectedRecord.paymentMethod || '',
+        notes: selectedRecord.notes || ''
+      });
+      setActiveModalTab('edit');
+    }
+  }, [selectedRecord]);
+
   // Visible columns in table
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
     index: true,
@@ -637,14 +690,118 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     location: true,
     sapCode: true,
     po: true,
-    postDocument: true,
-    store: true,
+    region: true,
+    price: true,
+    paymentMethod: false,
+    initialAnalysis: false,
+    postDocument: false,
+    store: false,
     actions: true
   });
   const [showColumnConfig, setShowColumnConfig] = useState(false);
 
+  // Helper to fetch persistent overrides from Firestore & LocalStorage
+  const fetchOverrides = async (): Promise<Record<string, any>> => {
+    const overridesMap: Record<string, any> = {};
+    
+    // 1. Read from localStorage cache first for fast response
+    try {
+      const cached = localStorage.getItem(STORAGE_OVERRIDES_KEY);
+      if (cached) {
+        Object.assign(overridesMap, JSON.parse(cached));
+      }
+    } catch (e) {
+      console.warn("Error reading local overrides cache:", e);
+    }
+
+    // 2. Fetch fresh overrides from Firestore
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES));
+      snapshot.forEach(docSnap => {
+        overridesMap[docSnap.id] = docSnap.data();
+      });
+      // Cache in localStorage
+      localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(overridesMap));
+    } catch (firestoreErr) {
+      console.warn("Firestore fetch overrides warning (offline/cached):", firestoreErr);
+    }
+
+    return overridesMap;
+  };
+
+  // Handler to save/update record details (PO, Initial Analysis, Region, Price, Payment Method)
+  const handleSaveRecordDetails = async () => {
+    if (!selectedRecord) return;
+    setIsSavingRecord(true);
+    try {
+      const overrideKey = selectedRecord.movementNo ? String(selectedRecord.movementNo).trim() : selectedRecord.id;
+      const numPrice = editForm.price !== '' ? Number(editForm.price) || 0 : 0;
+      
+      const updatedData: Partial<FreshSupplyRecord> = {
+        po: editForm.po.trim(),
+        initialAnalysis: editForm.initialAnalysis.trim(),
+        region: editForm.region.trim(),
+        price: numPrice,
+        paymentMethod: editForm.paymentMethod.trim(),
+        notes: editForm.notes.trim(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: user?.displayName || user?.username || (isRtl ? 'مستخدم النظام' : 'System User')
+      };
+
+      const updatedRecord: FreshSupplyRecord = {
+        ...selectedRecord,
+        ...updatedData
+      };
+
+      // 1. Update in-memory state
+      setData(prev => prev.map(item => {
+        const isMatch = (item.movementNo && selectedRecord.movementNo && String(item.movementNo).trim() === String(selectedRecord.movementNo).trim()) ||
+                        item.id === selectedRecord.id;
+        return isMatch ? { ...item, ...updatedData } : item;
+      }));
+
+      setSelectedRecord(updatedRecord);
+
+      // 2. Update localStorage overrides cache
+      try {
+        const cachedStr = localStorage.getItem(STORAGE_OVERRIDES_KEY);
+        const cachedMap = cachedStr ? JSON.parse(cachedStr) : {};
+        cachedMap[overrideKey] = {
+          id: overrideKey,
+          movementNo: selectedRecord.movementNo || '',
+          ...updatedData
+        };
+        localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(cachedMap));
+      } catch (cacheErr) {
+        console.error("Cache save error:", cacheErr);
+      }
+
+      // 3. Persist to Firestore for cloud sync & multi-device collaboration
+      try {
+        await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, overrideKey), {
+          id: overrideKey,
+          movementNo: selectedRecord.movementNo || '',
+          ...updatedData
+        }, { merge: true });
+      } catch (fsErr) {
+        console.warn("Firestore save warning (persisted locally):", fsErr);
+      }
+
+      toast.success(
+        isRtl 
+          ? 'تم حفظ بيانات التوريد (أمر الشراء، التحليل الأولي، المنطقة، السعر، وطريقة السداد) بنجاح!' 
+          : 'Supply details (PO, Analysis, Region, Price, Payment) saved successfully!'
+      );
+    } catch (err: any) {
+      console.error("Save Record Details Error:", err);
+      toast.error(isRtl ? 'حدث خطأ أثناء حفظ البيانات' : 'Failed to save details');
+    } finally {
+      setIsSavingRecord(false);
+    }
+  };
+
   // Parse raw rows into typed objects
-  const processCsvData = (rows: any[]): FreshSupplyRecord[] => {
+  const processCsvData = (rows: any[], overridesMap: Record<string, any> = {}): FreshSupplyRecord[] => {
     const validRows = rows.filter(row => {
       // filter out completely blank rows
       return Object.values(row).some(v => v !== null && v !== undefined && String(v).trim() !== '');
@@ -917,19 +1074,40 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         finalSapCode = finalSapCode || itemInfo.sapCode;
       }
 
+      const rawMoveNo = String(row['رقم الحركة'] || '').trim();
+      const fallbackId = `fresh-${idx}-${rawMoveNo || Math.random().toString(36).substr(2, 9)}`;
+
+      // Check overrides by movementNo or fallback ID or index
+      const override = (rawMoveNo && overridesMap[rawMoveNo]) || overridesMap[fallbackId] || overridesMap[`fresh-${idx}`] || {};
+      const finalPo = override.po !== undefined && override.po !== '' ? String(override.po) : String(row['PO'] || '').trim();
+      const initialAnalysis = override.initialAnalysis !== undefined ? String(override.initialAnalysis) : '';
+      const region = override.region !== undefined ? String(override.region) : '';
+      const price = override.price !== undefined && override.price !== '' ? Number(override.price) : 0;
+      const paymentMethod = override.paymentMethod !== undefined ? String(override.paymentMethod) : '';
+      const notes = override.notes !== undefined ? String(override.notes) : '';
+      const updatedAt = override.updatedAt;
+      const updatedBy = override.updatedBy;
+
       return {
-        id: `fresh-${idx}-${row['رقم الحركة'] || Math.random().toString(36).substr(2, 9)}`,
+        id: fallbackId,
         date: unifiedDate,
         originalDate: dateStr,
         parsedDate: parsedDate,
         store: String(row['المخزن'] || '').trim(),
         movementType: String(row['نوع الحركة'] || '').trim(),
-        movementNo: String(row['رقم الحركة'] || '').trim(),
+        movementNo: rawMoveNo,
         truckNo: String(row['رقم سيارة'] || '').trim(),
         driver: String(row['السائق'] || '').trim(),
         vendorDocNo: String(row['رقم مستند المورد'] || '').trim(),
         costCenterCode: finalCostCenterCode,
-        po: String(row['PO'] || '').trim(),
+        po: finalPo,
+        initialAnalysis,
+        region,
+        price,
+        paymentMethod,
+        notes,
+        updatedAt,
+        updatedBy,
         reservation: String(row['RESERVATION'] || '').trim(),
         postDocument: String(row['POST DOCUMENT'] || '').trim(),
         oldCode: finalOldCode,
@@ -967,6 +1145,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     }
 
     try {
+      // 1. Fetch persistent overrides
+      const overrides = await fetchOverrides();
+
       // Check cache first if initial load
       if (!isManualSync) {
         const cached = localStorage.getItem(STORAGE_CACHE_KEY);
@@ -974,7 +1155,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           try {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setData(processCsvData(parsed));
+              setData(processCsvData(parsed, overrides));
               setLoading(false);
             }
           } catch (e) {
@@ -996,7 +1177,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         skipEmptyLines: true,
         complete: (results) => {
           if (results.data && results.data.length > 0) {
-            const processed = processCsvData(results.data);
+            const processed = processCsvData(results.data, overrides);
             setData(processed);
             localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(results.data));
             const nowFormatted = new Date().toLocaleTimeString(isRtl ? 'ar-EG' : 'en-US', {
@@ -1134,6 +1315,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           record.driver.toLowerCase().includes(term) ||
           record.movementNo.toLowerCase().includes(term) ||
           record.po.toLowerCase().includes(term) ||
+          (record.initialAnalysis && record.initialAnalysis.toLowerCase().includes(term)) ||
+          (record.region && record.region.toLowerCase().includes(term)) ||
+          (record.paymentMethod && record.paymentMethod.toLowerCase().includes(term)) ||
           record.postDocument.toLowerCase().includes(term) ||
           record.sapCode.toLowerCase().includes(term) ||
           record.oldCode.toLowerCase().includes(term) ||
@@ -1159,6 +1343,15 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         const hasPO = record.po && record.po.trim() !== '';
         if (poFilter === 'EXISTS' && !hasPO) return false;
         if (poFilter === 'MISSING' && hasPO) return false;
+      }
+
+      // Initial Analysis Filter (خالي مبيدات / مبيدات / عشوائي)
+      if (analysisFilter !== 'ALL') {
+        const analysis = (record.initialAnalysis || '').trim();
+        if (analysisFilter === 'PESTICIDE_FREE' && !analysis.includes('خالي مبيدات')) return false;
+        if (analysisFilter === 'PESTICIDES' && (!analysis.includes('مبيدات') || analysis.includes('خالي'))) return false;
+        if (analysisFilter === 'RANDOM' && !analysis.includes('عشوائي')) return false;
+        if (analysisFilter === 'NONE' && analysis !== '') return false;
       }
 
       // 3. Item Filter
@@ -1272,6 +1465,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     searchTerm, 
     mainCategoryFilter,
     poFilter,
+    analysisFilter,
     selectedItems, 
     selectedSuppliers, 
     selectedStores, 
@@ -3069,19 +3263,26 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 <div className="text-xs font-black text-zinc-900 dark:text-white pb-1.5 border-b border-zinc-100 dark:border-zinc-800">
                   {isRtl ? 'تخصيص أعمدة الجدول' : 'Customize Columns'}
                 </div>
-                <div className="space-y-1 max-h-56 overflow-y-auto">
+                <div className="space-y-1 max-h-64 overflow-y-auto">
                   {Object.keys(visibleColumns).map(colKey => {
                     const labels: Record<string, string> = {
-                      index: 'م',
-                      date: 'التاريخ',
-                      movementNo: 'رقم الحركة',
-                      itemName: 'اسم الصنف',
-                      quantityKg: 'الكمية (كجم/طن)',
-                      costCenter: 'المورد / مركز التكلفة',
-                      truckDriver: 'السيارة والسائق',
-                      location: 'الموقع والتعبئة',
-                      sapCode: 'كود ساب',
-                      po: 'أمر الشراء PO',
+                      index: isRtl ? 'م' : '#',
+                      date: isRtl ? 'التاريخ' : 'Date',
+                      movementNo: isRtl ? 'رقم الحركة' : 'Move No',
+                      itemName: isRtl ? 'اسم الصنف' : 'Item Name',
+                      quantityKg: isRtl ? 'الكمية (كجم/طن)' : 'Quantity',
+                      costCenter: isRtl ? 'المورد / مركز التكلفة' : 'Supplier',
+                      truckDriver: isRtl ? 'السيارة والسائق' : 'Truck & Driver',
+                      location: isRtl ? 'الموقع والتعبئة' : 'Package',
+                      sapCode: isRtl ? 'كود ساب' : 'SAP Code',
+                      po: isRtl ? 'أمر الشراء (PO)' : 'PO No',
+                      region: isRtl ? 'المنطقة / المزرعة' : 'Region',
+                      price: isRtl ? 'السعر والقيمة (ج.م)' : 'Price & Value',
+                      paymentMethod: isRtl ? 'طريقة السداد' : 'Payment Method',
+                      initialAnalysis: isRtl ? 'التحليل الأولي' : 'Initial Analysis',
+                      postDocument: isRtl ? 'POST DOCUMENT' : 'Post Doc',
+                      store: isRtl ? 'المخزن' : 'Store',
+                      actions: isRtl ? 'الإجراءات' : 'Actions'
                     };
                     return (
                       <label
@@ -3196,6 +3397,56 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             >
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
               <span>{isRtl ? 'لا يوجد' : 'No'}</span>
+            </button>
+          </div>
+
+          {/* Analysis Filter (خالي مبيدات / مبيدات / عشوائي) */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-black text-zinc-500 dark:text-zinc-400">
+              {isRtl ? 'التحليل الأولي:' : 'Analysis:'}
+            </span>
+            <button
+              onClick={() => setAnalysisFilter('ALL')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                analysisFilter === 'ALL'
+                  ? 'bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 shadow-xs'
+                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {isRtl ? 'الكل' : 'All'}
+            </button>
+            <button
+              onClick={() => setAnalysisFilter('PESTICIDE_FREE')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                analysisFilter === 'PESTICIDE_FREE'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+              }`}
+            >
+              <Leaf className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+              <span>{isRtl ? 'خالي مبيدات' : 'Pesticide-Free'}</span>
+            </button>
+            <button
+              onClick={() => setAnalysisFilter('PESTICIDES')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                analysisFilter === 'PESTICIDES'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100'
+              }`}
+            >
+              <ShieldAlert className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+              <span>{isRtl ? 'مبيدات' : 'Pesticides'}</span>
+            </button>
+            <button
+              onClick={() => setAnalysisFilter('RANDOM')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                analysisFilter === 'RANDOM'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100'
+              }`}
+            >
+              <Shuffle className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+              <span>{isRtl ? 'عشوائي' : 'Random'}</span>
             </button>
           </div>
         </div>
@@ -3317,6 +3568,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                     <th className="py-3.5 px-3">{isRtl ? 'أمر الشراء PO' : 'PO No'}</th>
                   )}
 
+                  {visibleColumns.region && (
+                    <th className="py-3.5 px-3">{isRtl ? 'المنطقة / المزرعة' : 'Region'}</th>
+                  )}
+
+                  {visibleColumns.price && (
+                    <th className="py-3.5 px-3">{isRtl ? 'السعر والقيمة' : 'Price & Value'}</th>
+                  )}
+
+                  {visibleColumns.paymentMethod && (
+                    <th className="py-3.5 px-3">{isRtl ? 'طريقة السداد' : 'Payment Method'}</th>
+                  )}
+
+                  {visibleColumns.initialAnalysis && (
+                    <th className="py-3.5 px-3">{isRtl ? 'التحليل الأولي' : 'Initial Analysis'}</th>
+                  )}
+
                   {visibleColumns.postDocument && (
                     <th className="py-3.5 px-3">{isRtl ? 'POST DOCUMENT' : 'Post Doc'}</th>
                   )}
@@ -3335,7 +3602,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               <tbody className="divide-y divide-zinc-200/70 dark:divide-zinc-800 text-xs">
                 {filteredData.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-12 text-center text-zinc-500 dark:text-zinc-400">
+                    <td colSpan={16} className="py-12 text-center text-zinc-500 dark:text-zinc-400">
                       <div className="max-w-xs mx-auto space-y-2">
                         <AlertCircle className="w-8 h-8 text-zinc-400 mx-auto" />
                         <p className="font-bold">{isRtl ? 'لا توجد نتائج مطابقة لخيارات البحث' : 'No records match your filters'}</p>
@@ -3448,8 +3715,85 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.po && (
-                          <td className="py-3 px-3 whitespace-nowrap font-mono font-bold text-zinc-700 dark:text-zinc-300 text-[11px]">
-                            {record.po || '-'}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {record.po ? (
+                              <span className="font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-[11px]">
+                                {record.po}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 text-[11px]">-</span>
+                            )}
+                          </td>
+                        )}
+
+                        {visibleColumns.region && (
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {record.region ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800">
+                                <MapPin className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                                {record.region}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 text-[11px]">-</span>
+                            )}
+                          </td>
+                        )}
+
+                        {visibleColumns.price && (
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {record.price && record.price > 0 ? (
+                              <div>
+                                <div className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-xs">
+                                  {record.price.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-[10px] font-bold text-zinc-500">{isRtl ? 'ج.م/كجم' : 'EGP/kg'}</span>
+                                </div>
+                                <div className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
+                                  {isRtl ? 'إجمالي:' : 'Total:'} {(record.price * record.quantityKg).toLocaleString('en-US', { maximumFractionDigits: 0 })} {isRtl ? 'ج.م' : 'EGP'}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-zinc-400 text-[11px]">-</span>
+                            )}
+                          </td>
+                        )}
+
+                        {visibleColumns.paymentMethod && (
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {record.paymentMethod ? (
+                              <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
+                                {record.paymentMethod}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 text-[11px]">-</span>
+                            )}
+                          </td>
+                        )}
+
+                        {visibleColumns.initialAnalysis && (
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {record.initialAnalysis ? (
+                              record.initialAnalysis.includes('خالي مبيدات') ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs">
+                                  <Leaf className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                  {record.initialAnalysis}
+                                </span>
+                              ) : record.initialAnalysis === 'مبيدات' || (record.initialAnalysis.includes('مبيدات') && !record.initialAnalysis.includes('خالي')) ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-700 shadow-2xs">
+                                  <ShieldAlert className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                  {record.initialAnalysis}
+                                </span>
+                              ) : record.initialAnalysis.includes('عشوائي') ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950/70 dark:text-indigo-300 dark:border-indigo-700 shadow-2xs">
+                                  <Shuffle className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                                  {record.initialAnalysis}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700" title={record.initialAnalysis}>
+                                  {record.initialAnalysis}
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-zinc-400 text-[11px]">-</span>
+                            )}
                           </td>
                         )}
 
@@ -3473,9 +3817,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                               <button
                                 onClick={() => setSelectedRecord(record)}
                                 className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
-                                title={isRtl ? 'عرض تفاصيل الحركة' : 'View movement details'}
+                                title={isRtl ? 'عرض واستكمال بيانات التوريد (PO، التحليل، المنطقة، السعر)' : 'View & Edit Details'}
                               >
                                 <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setSelectedRecord(record)}
+                                className="p-1.5 hover:bg-teal-100 dark:hover:bg-teal-900/50 text-teal-600 dark:text-teal-400 rounded-lg transition-colors cursor-pointer"
+                                title={isRtl ? 'تعديل بيانات الحركة' : 'Edit Movement Data'}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => handleCopyRecord(record)}
@@ -4136,20 +4487,20 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         </div>
       )}
 
-      {/* 7. Detail Modal (عرض تفاصيل الحركة) */}
+      {/* 7. Detail Modal (عرض وتعديل تفاصيل الحركة وتذكرة المعاينة) */}
       {selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-2xl w-full border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-3xl w-full border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-800 text-white p-5 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-800 text-white p-5 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
                   <Sprout className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-black text-base">
-                    {isRtl ? 'تفاصيل إذن استلام الفريش' : 'Fresh Delivery Movement Details'}
+                    {isRtl ? 'بيانات إذن استلام ومعاينة الفريش' : 'Fresh Delivery & Inspection Record'}
                   </h3>
                   <p className="text-xs text-emerald-100 font-mono">
                     {isRtl ? `حركة رقم: ${selectedRecord.movementNo} | تاريخ: ${selectedRecord.date}` : `Move #${selectedRecord.movementNo} | ${selectedRecord.date}`}
@@ -4164,133 +4515,693 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               </button>
             </div>
 
+            {/* Navigation Tabs inside Modal */}
+            <div className="flex items-center gap-2 p-3 bg-zinc-50 dark:bg-zinc-800/80 border-b border-zinc-200 dark:border-zinc-700 shrink-0 flex-wrap">
+              <button
+                onClick={() => setActiveModalTab('edit')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeModalTab === 'edit'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700'
+                }`}
+              >
+                <FileEdit className="w-3.5 h-3.5" />
+                <span>{isRtl ? 'تعديل واستكمال البيانات' : 'Edit & Add Details'}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveModalTab('ticket')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeModalTab === 'ticket'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700'
+                }`}
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                <span>{isRtl ? 'تذكرة الاستلام والمعاينة' : 'Inspection Ticket'}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveModalTab('details')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                  activeModalTab === 'details'
+                    ? 'bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 shadow-xs'
+                    : 'bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>{isRtl ? 'كافة بيانات الحركة' : 'All Movement Fields'}</span>
+              </button>
+            </div>
+
             {/* Modal Body */}
-            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
+            <div className="p-6 space-y-5 overflow-y-auto text-xs flex-1" dir={isRtl ? 'rtl' : 'ltr'}>
               
-              {/* Main Item & Quantity Box */}
-              <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">اسم الصنف المستلم (الموحد):</span>
-                  <h2 className="text-base font-black text-zinc-900 dark:text-white mt-0.5">{selectedRecord.itemName}</h2>
-                  {selectedRecord.originalItemName && selectedRecord.originalItemName !== selectedRecord.itemName && (
-                    <span className="text-[10px] text-zinc-500 block mt-0.5">
-                      {isRtl ? `الاسم الأصلي بالملف: ${selectedRecord.originalItemName}` : `Original in sheet: ${selectedRecord.originalItemName}`}
-                    </span>
-                  )}
-                </div>
-                <div className="text-left">
-                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الوزن المستلم:</span>
-                  <span className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-400">
-                    {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
-                  </span>
-                  <span className="text-xs font-mono font-bold text-zinc-500 block">
-                    ({selectedRecord.quantityTons.toFixed(3)} طن)
-                  </span>
-                </div>
-              </div>
+              {/* TAB 1: EDIT / DATA ENTRY (PO, Initial Analysis, Region, Price, Payment Method) */}
+              {activeModalTab === 'edit' && (
+                <div className="space-y-5">
+                  {/* Summary Bar */}
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الصنف المستلم:</span>
+                      <h4 className="text-base font-black text-zinc-900 dark:text-white mt-0.5">{selectedRecord.itemName}</h4>
+                      <span className="text-xs text-zinc-500 font-medium block mt-0.5">
+                        المورد: {selectedRecord.costCenter} {selectedRecord.truckNo ? `| سيارة: ${selectedRecord.truckNo}` : ''}
+                      </span>
+                    </div>
+                    <div className="text-left sm:text-right">
+                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الكمية الإجمالية:</span>
+                      <span className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-400 block">
+                        {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-zinc-500 block">
+                        ({selectedRecord.quantityTons.toFixed(3)} طن)
+                      </span>
+                    </div>
+                  </div>
 
-              {/* 2x4 Details Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-                
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">رقم الحركة</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.movementNo || '-'}</strong>
-                </div>
+                  <form onSubmit={(e) => { e.preventDefault(); handleSaveRecordDetails(); }} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      
+                      {/* 1. PO Number */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <Hash className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>{isRtl ? 'رقم أمر الشراء (PO Number)' : 'PO Number'}</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.po}
+                          onChange={(e) => setEditForm({ ...editForm, po: e.target.value })}
+                          placeholder={isRtl ? 'مثال: PO-2026-0891 أو رقم المستند' : 'e.g. PO-2026-0891'}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                        />
+                      </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">تاريخ الحركة</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.date || '-'}</strong>
-                </div>
+                      {/* 2. Region / Farm */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-sky-600" />
+                          <span>{isRtl ? 'المنطقة / المزرعة / المصدر' : 'Region / Farm'}</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.region}
+                          onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
+                          placeholder={isRtl ? 'مثال: وادي النطرون، طريق إسكندرية، سيوة...' : 'e.g. Wadi Natrun, Siwa...'}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                        />
+                        {/* Preset Region suggestions */}
+                        <div className="flex items-center gap-1 flex-wrap pt-1">
+                          {['وادي النطرون', 'طريق مصر إسكندرية', 'سيوة', 'الإسماعيلية', 'العريش', 'الفيوم', 'مطروح'].map(reg => (
+                            <button
+                              key={reg}
+                              type="button"
+                              onClick={() => setEditForm({ ...editForm, region: reg })}
+                              className="px-2 py-0.5 text-[10px] bg-zinc-100 dark:bg-zinc-800 hover:bg-sky-100 hover:text-sky-800 dark:hover:bg-sky-950/60 dark:hover:text-sky-300 text-zinc-600 dark:text-zinc-400 rounded-md transition-colors cursor-pointer"
+                            >
+                              + {reg}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">نوع الحركة</span>
-                  <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{selectedRecord.movementType || 'اضافة'}</strong>
-                </div>
+                      {/* 3. Price per kg */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                          <span>{isRtl ? 'السعر للكيلو (ج.م)' : 'Price per Kg (EGP)'}</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editForm.price}
+                            onChange={(e) => setEditForm({ ...editForm, price: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                            placeholder="0.00"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                          />
+                          <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">ج.م/كجم</span>
+                        </div>
+                        {editForm.price !== '' && Number(editForm.price) > 0 && (
+                          <div className="p-2 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-800 text-[11px] font-mono text-amber-900 dark:text-amber-300">
+                            {isRtl ? 'إجمالي القيمة التقديرية:' : 'Total Value:'} <strong>{((Number(editForm.price) || 0) * selectedRecord.quantityKg).toLocaleString('en-US', { maximumFractionDigits: 2 })}</strong> ج.م
+                          </div>
+                        )}
+                      </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">رقم السيارة</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-300 dark:border-amber-800 inline-block">
-                    {selectedRecord.truckNo || '-'}
-                  </strong>
-                </div>
+                      {/* 4. Payment Method */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                          <span>{isRtl ? 'طريقة السداد' : 'Payment Method'}</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.paymentMethod}
+                          onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}
+                          placeholder={isRtl ? 'مثال: نقدي، آجل 30 يوم، شيك، تحويل بنكي...' : 'e.g. Cash, Credit 30 days...'}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                        />
+                        {/* Quick Presets */}
+                        <div className="flex items-center gap-1 flex-wrap pt-1">
+                          {['نقدي', 'آجل 30 يوم', 'آجل 60 يوم', 'شيك بنكي', 'تحويل بنكي', 'دفعات توريد'].map(pay => (
+                            <button
+                              key={pay}
+                              type="button"
+                              onClick={() => setEditForm({ ...editForm, paymentMethod: pay })}
+                              className="px-2 py-0.5 text-[10px] bg-zinc-100 dark:bg-zinc-800 hover:bg-purple-100 hover:text-purple-800 dark:hover:bg-purple-950/60 dark:hover:text-purple-300 text-zinc-600 dark:text-zinc-400 rounded-md transition-colors cursor-pointer"
+                            >
+                              + {pay}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">اسم السائق</span>
-                  <strong className="text-zinc-900 dark:text-white font-bold">{selectedRecord.driver || '-'}</strong>
-                </div>
+                    </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">الموقع / التعبئة</span>
-                  <strong className="text-zinc-900 dark:text-white font-bold">
-                    {selectedRecord.location || 'برميل'} {selectedRecord.tankNo ? `(تانك ${selectedRecord.tankNo})` : ''}
-                  </strong>
-                </div>
+                    {/* 5. Initial Quality Analysis */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <FlaskConical className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>{isRtl ? 'التحليل الأولي للجودة والمواصفات (اختر النتيجة):' : 'Initial Quality Analysis (Select Result):'}</span>
+                        </label>
+                        {editForm.initialAnalysis && (
+                          <button
+                            type="button"
+                            onClick={() => setEditForm({ ...editForm, initialAnalysis: '' })}
+                            className="text-[11px] font-bold text-zinc-400 hover:text-rose-500 transition-colors cursor-pointer"
+                          >
+                            {isRtl ? 'إلغاء التحديد ✕' : 'Clear ✕'}
+                          </button>
+                        )}
+                      </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 col-span-2">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">المورد / مركز التكلفة</span>
-                  <strong className="text-zinc-900 dark:text-white font-black text-sm">{selectedRecord.costCenter || '-'}</strong>
-                  {selectedRecord.originalCostCenter && selectedRecord.originalCostCenter !== selectedRecord.costCenter && (
-                    <span className="text-[10px] text-zinc-500 block mt-0.5">
-                      {isRtl ? `الاسم الأصلي بالملف: ${selectedRecord.originalCostCenter}` : `Original: ${selectedRecord.originalCostCenter}`}
-                    </span>
-                  )}
-                  {selectedRecord.costCenterCode && (
-                    <span className="text-[10px] text-zinc-500 font-mono block">كود المركز: {selectedRecord.costCenterCode}</span>
-                  )}
-                </div>
+                      {/* 3 Main Choice Cards: خالي مبيدات | مبيدات | عشوائي */}
+                      <div className="grid grid-cols-3 gap-2.5">
+                        
+                        {/* Option 1: خالي مبيدات */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditForm(prev => ({
+                              ...prev,
+                              initialAnalysis: prev.initialAnalysis === 'خالي مبيدات' ? '' : 'خالي مبيدات'
+                            }));
+                          }}
+                          className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                            editForm.initialAnalysis === 'خالي مبيدات' || editForm.initialAnalysis.includes('خالي مبيدات')
+                              ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20 scale-[1.02]'
+                              : 'bg-white dark:bg-zinc-800/80 border-emerald-200 dark:border-emerald-800/50 hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 text-zinc-800 dark:text-zinc-200'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                            editForm.initialAnalysis === 'خالي مبيدات' || editForm.initialAnalysis.includes('خالي مبيدات')
+                              ? 'bg-white/20 text-white'
+                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                          }`}>
+                            <Leaf className="w-4 h-4" />
+                          </div>
+                          <span className="font-black text-xs">{isRtl ? 'خالي مبيدات' : 'Pesticide-Free'}</span>
+                          <span className={`text-[10px] ${
+                            editForm.initialAnalysis === 'خالي مبيدات' || editForm.initialAnalysis.includes('خالي مبيدات')
+                              ? 'text-emerald-100'
+                              : 'text-zinc-400'
+                          }`}>
+                            {isRtl ? 'مطابق وسليم' : 'Clean / Safe'}
+                          </span>
+                        </button>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">المخزن المستلم</span>
-                  <strong className="text-zinc-900 dark:text-white font-bold">{selectedRecord.store || 'GPS'}</strong>
-                </div>
+                        {/* Option 2: مبيدات */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditForm(prev => ({
+                              ...prev,
+                              initialAnalysis: prev.initialAnalysis === 'مبيدات' ? '' : 'مبيدات'
+                            }));
+                          }}
+                          className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                            editForm.initialAnalysis === 'مبيدات' || (editForm.initialAnalysis.includes('مبيدات') && !editForm.initialAnalysis.includes('خالي'))
+                              ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20 scale-[1.02]'
+                              : 'bg-white dark:bg-zinc-800/80 border-rose-200 dark:border-rose-800/50 hover:border-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/30 text-zinc-800 dark:text-zinc-200'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                            editForm.initialAnalysis === 'مبيدات' || (editForm.initialAnalysis.includes('مبيدات') && !editForm.initialAnalysis.includes('خالي'))
+                              ? 'bg-white/20 text-white'
+                              : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                          }`}>
+                            <ShieldAlert className="w-4 h-4" />
+                          </div>
+                          <span className="font-black text-xs">{isRtl ? 'مبيدات' : 'Pesticides'}</span>
+                          <span className={`text-[10px] ${
+                            editForm.initialAnalysis === 'مبيدات' || (editForm.initialAnalysis.includes('مبيدات') && !editForm.initialAnalysis.includes('خالي'))
+                              ? 'text-rose-100'
+                              : 'text-zinc-400'
+                          }`}>
+                            {isRtl ? 'يحتوي متبقيات' : 'Contains Res.'}
+                          </span>
+                        </button>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">أمر الشراء (PO)</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.po || '-'}</strong>
-                </div>
+                        {/* Option 3: عشوائي */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditForm(prev => ({
+                              ...prev,
+                              initialAnalysis: prev.initialAnalysis === 'عشوائي' ? '' : 'عشوائي'
+                            }));
+                          }}
+                          className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                            editForm.initialAnalysis === 'عشوائي' || editForm.initialAnalysis.includes('عشوائي')
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-md shadow-indigo-600/20 scale-[1.02]'
+                              : 'bg-white dark:bg-zinc-800/80 border-indigo-200 dark:border-indigo-800/50 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 text-zinc-800 dark:text-zinc-200'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                            editForm.initialAnalysis === 'عشوائي' || editForm.initialAnalysis.includes('عشوائي')
+                              ? 'bg-white/20 text-white'
+                              : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                          }`}>
+                            <Shuffle className="w-4 h-4" />
+                          </div>
+                          <span className="font-black text-xs">{isRtl ? 'عشوائي' : 'Random Spot'}</span>
+                          <span className={`text-[10px] ${
+                            editForm.initialAnalysis === 'عشوائي' || editForm.initialAnalysis.includes('عشوائي')
+                              ? 'text-indigo-100'
+                              : 'text-zinc-400'
+                          }`}>
+                            {isRtl ? 'فحص عينة عشوائية' : 'Spot Check'}
+                          </span>
+                        </button>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">POST DOCUMENT</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.postDocument || '-'}</strong>
-                </div>
+                      </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">كود ساب (SAP Code)</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.sapCode || '-'}</strong>
-                </div>
+                      {/* Optional Notes / Specs Input */}
+                      <input
+                        type="text"
+                        value={editForm.initialAnalysis}
+                        onChange={(e) => setEditForm({ ...editForm, initialAnalysis: e.target.value })}
+                        placeholder={isRtl ? 'أو اكتب نصاً مفصلاً (مثال: خالي مبيدات - نسبة نضج 90%)...' : 'Or enter custom detailed notes...'}
+                        className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">كود قديم</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.oldCode || '-'}</strong>
-                </div>
+                    {/* 6. Notes */}
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>{isRtl ? 'ملاحظات إضافية' : 'Additional Notes'}</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.notes}
+                        onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                        placeholder={isRtl ? 'أي ملاحظات خاصة بالتسليم أو الحسابات...' : 'Additional delivery/accounting notes...'}
+                        className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                      />
+                    </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">رقم مستند المورد</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.vendorDocNo || '-'}</strong>
-                </div>
+                    {/* Save Button */}
+                    <div className="pt-2 flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRecord(null)}
+                        className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-xs cursor-pointer"
+                      >
+                        {isRtl ? 'إلغاء' : 'Cancel'}
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingRecord}
+                        className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-md active:scale-95 disabled:opacity-50"
+                      >
+                        {isSavingRecord ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Save className="w-4 h-4" />
+                        )}
+                        <span>{isRtl ? 'حفظ البيانات والمزامنة' : 'Save Details'}</span>
+                      </button>
+                    </div>
 
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  <span className="text-zinc-400 block text-[10px] mb-0.5">RESERVATION</span>
-                  <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.reservation || '-'}</strong>
+                  </form>
                 </div>
+              )}
 
-              </div>
+              {/* TAB 2: INSPECTION & DELIVERY TICKET (مع الحفاظ على نص نسخة للمعاينة ولا تعد مستند) */}
+              {activeModalTab === 'ticket' && (
+                <div className="space-y-4">
+                  {/* Print / Export Bar */}
+                  <div className="flex items-center justify-between gap-2 p-2 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                      <span className="font-black text-xs text-zinc-800 dark:text-zinc-200">
+                        {isRtl ? 'تذكرة استلام ومعاينة الفريش المعتمدة' : 'Official Fresh Inspection Ticket'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => window.print()}
+                        className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>{isRtl ? 'طباعة التذكرة' : 'Print Ticket'}</span>
+                      </button>
+                      <button
+                        onClick={() => handleCopyRecord(selectedRecord)}
+                        className="px-3 py-1.5 bg-white dark:bg-zinc-700 hover:bg-zinc-50 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-600 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>{isRtl ? 'نسخ نصي' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Printable Ticket Card */}
+                  <div className="p-6 bg-white dark:bg-zinc-950 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 shadow-sm space-y-4 relative overflow-hidden">
+                    
+                    {/* Official Notice / Disclaimer Required by User */}
+                    <div className="bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 px-3 py-2 rounded-xl text-center font-bold text-xs flex items-center justify-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-amber-600" />
+                      <span>{isRtl ? 'نسخة للمعاينة ولا تعد مستند' : 'Inspection copy only - Not an official legal document'}</span>
+                    </div>
+
+                    {/* Ticket Header */}
+                    <div className="flex items-center justify-between border-b pb-3 border-zinc-200 dark:border-zinc-800">
+                      <div>
+                        <h4 className="font-black text-sm text-zinc-900 dark:text-white">
+                          {isRtl ? 'إذن استلام ومعاينة أصناف الفريش' : 'Fresh Supply Inspection & Intake Slip'}
+                        </h4>
+                        <span className="text-[11px] text-zinc-500 font-mono">
+                          {isRtl ? `تاريخ الإصدار: ${selectedRecord.date}` : `Date: ${selectedRecord.date}`}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="px-3 py-1 bg-emerald-600 text-white rounded-lg font-mono font-black text-xs">
+                          {isRtl ? `حركة #: ${selectedRecord.movementNo}` : `#${selectedRecord.movementNo}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 2-Column Core Info */}
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      
+                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-zinc-400 block text-[10px]">اسم الصنف</span>
+                        <strong className="text-zinc-900 dark:text-white font-black text-sm block mt-0.5">{selectedRecord.itemName}</strong>
+                        {selectedRecord.sapCode && (
+                          <span className="text-[10px] text-zinc-500 font-mono">كود ساب: {selectedRecord.sapCode}</span>
+                        )}
+                      </div>
+
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                        <span className="text-emerald-800 dark:text-emerald-300 block text-[10px] font-bold">الوزن الصافي المستلم</span>
+                        <strong className="text-emerald-700 dark:text-emerald-400 font-mono font-black text-base block mt-0.5">
+                          {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
+                        </strong>
+                        <span className="text-[11px] font-mono text-zinc-500">
+                          (= {selectedRecord.quantityTons.toFixed(3)} طن)
+                        </span>
+                      </div>
+
+                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-zinc-400 block text-[10px]">المورد / مركز التكلفة</span>
+                        <strong className="text-zinc-900 dark:text-white font-bold block mt-0.5">{selectedRecord.costCenter || '-'}</strong>
+                      </div>
+
+                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-zinc-400 block text-[10px]">السيارة والسائق</span>
+                        <strong className="text-zinc-900 dark:text-white font-mono block mt-0.5">
+                          {selectedRecord.truckNo || '-'} {selectedRecord.driver ? `(${selectedRecord.driver})` : ''}
+                        </strong>
+                      </div>
+
+                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-zinc-400 block text-[10px]">رقم أمر الشراء (PO)</span>
+                        <strong className="text-emerald-700 dark:text-emerald-400 font-mono font-bold block mt-0.5">
+                          {selectedRecord.po || 'غير محدد'}
+                        </strong>
+                      </div>
+
+                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-zinc-400 block text-[10px]">المنطقة / المزرعة</span>
+                        <strong className="text-sky-700 dark:text-sky-400 font-bold block mt-0.5">
+                          {selectedRecord.region || 'غير محدد'}
+                        </strong>
+                      </div>
+
+                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-zinc-400 block text-[10px]">السعر وطريقة السداد</span>
+                        <strong className="text-amber-800 dark:text-amber-300 font-bold block mt-0.5">
+                          {selectedRecord.price ? `${selectedRecord.price} ج.م/كجم` : 'لم يحدد السعر'}
+                          {selectedRecord.paymentMethod ? ` | ${selectedRecord.paymentMethod}` : ''}
+                        </strong>
+                      </div>
+
+                      <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                        <span className="text-zinc-400 block text-[10px]">الموقع والتعبئة والمخزن</span>
+                        <strong className="text-zinc-900 dark:text-white font-bold block mt-0.5">
+                          {selectedRecord.location || 'برميل'} {selectedRecord.tankNo ? `(تانك ${selectedRecord.tankNo})` : ''} | مخزن {selectedRecord.store || 'GPS'}
+                        </strong>
+                      </div>
+
+                    </div>
+
+                    {/* Initial Quality Box in Ticket */}
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-1.5">
+                      <span className="text-zinc-500 font-black text-[11px] block">نتيجة التحليل الأولي للجودة والمواصفات:</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {selectedRecord.initialAnalysis ? (
+                          selectedRecord.initialAnalysis.includes('خالي مبيدات') ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700">
+                              <Leaf className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>خالي مبيدات (Pesticide-Free)</span>
+                            </span>
+                          ) : selectedRecord.initialAnalysis === 'مبيدات' || (selectedRecord.initialAnalysis.includes('مبيدات') && !selectedRecord.initialAnalysis.includes('خالي')) ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-700">
+                              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                              <span>مبيدات (Contains Pesticides)</span>
+                            </span>
+                          ) : selectedRecord.initialAnalysis.includes('عشوائي') ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-700">
+                              <Shuffle className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>عينة عشوائية (Random Spot Check)</span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-zinc-800 dark:text-zinc-200 font-bold">{selectedRecord.initialAnalysis}</span>
+                          )
+                        ) : (
+                          <span className="text-xs text-zinc-500 font-medium italic">تم استلام الصنف بحالة ظاهرية جيدة ومطابقة لمواصفات الفريش.</span>
+                        )}
+                        {selectedRecord.initialAnalysis && !['خالي مبيدات', 'مبيدات', 'عشوائي'].includes(selectedRecord.initialAnalysis) && (
+                          <span className="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium">({selectedRecord.initialAnalysis})</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Signatures & Stamp block */}
+                    <div className="grid grid-cols-3 gap-2 pt-4 border-t border-zinc-200 dark:border-zinc-800 text-center text-[10px] text-zinc-500">
+                      <div>
+                        <span>مستلم الفريش</span>
+                        <div className="h-8 border-b border-zinc-300 dark:border-zinc-700 mt-1" />
+                      </div>
+                      <div>
+                        <span>فاحص الجودة والمعاينة</span>
+                        <div className="h-8 border-b border-zinc-300 dark:border-zinc-700 mt-1" />
+                      </div>
+                      <div>
+                        <span>سائق التوريد / المندوب</span>
+                        <div className="h-8 border-b border-zinc-300 dark:border-zinc-700 mt-1" />
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: ALL RAW DETAILS & PARAMETERS */}
+              {activeModalTab === 'details' && (
+                <div className="space-y-4">
+                  {/* Main Item & Quantity Box */}
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">اسم الصنف المستلم (الموحد):</span>
+                      <h4 className="text-base font-black text-zinc-900 dark:text-white mt-0.5">{selectedRecord.itemName}</h4>
+                      {selectedRecord.originalItemName && selectedRecord.originalItemName !== selectedRecord.itemName && (
+                        <span className="text-[10px] text-zinc-500 block mt-0.5">
+                          {isRtl ? `الاسم الأصلي بالملف: ${selectedRecord.originalItemName}` : `Original in sheet: ${selectedRecord.originalItemName}`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-left sm:text-right">
+                      <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 block">الوزن المستلم:</span>
+                      <span className="text-xl font-mono font-black text-emerald-700 dark:text-emerald-400">
+                        {selectedRecord.quantityKg.toLocaleString()} {selectedRecord.unit || 'كجم'}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-zinc-500 block">
+                        ({selectedRecord.quantityTons.toFixed(3)} طن)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2x4 Details Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">رقم الحركة</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.movementNo || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">تاريخ الحركة</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.date || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">نوع الحركة</span>
+                      <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{selectedRecord.movementType || 'اضافة'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">رقم السيارة</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.2 rounded border border-amber-300 dark:border-amber-800 inline-block">
+                        {selectedRecord.truckNo || '-'}
+                      </strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">اسم السائق</span>
+                      <strong className="text-zinc-900 dark:text-white font-bold">{selectedRecord.driver || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">الموقع / التعبئة</span>
+                      <strong className="text-zinc-900 dark:text-white font-bold">
+                        {selectedRecord.location || 'برميل'} {selectedRecord.tankNo ? `(تانك ${selectedRecord.tankNo})` : ''}
+                      </strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 col-span-2">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">المورد / مركز التكلفة</span>
+                      <strong className="text-zinc-900 dark:text-white font-black text-sm">{selectedRecord.costCenter || '-'}</strong>
+                      {selectedRecord.originalCostCenter && selectedRecord.originalCostCenter !== selectedRecord.costCenter && (
+                        <span className="text-[10px] text-zinc-500 block mt-0.5">
+                          {isRtl ? `الاسم الأصلي بالملف: ${selectedRecord.originalCostCenter}` : `Original: ${selectedRecord.originalCostCenter}`}
+                        </span>
+                      )}
+                      {selectedRecord.costCenterCode && (
+                        <span className="text-[10px] text-zinc-500 font-mono block">كود المركز: {selectedRecord.costCenterCode}</span>
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">المخزن المستلم</span>
+                      <strong className="text-zinc-900 dark:text-white font-bold">{selectedRecord.store || 'GPS'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">أمر الشراء (PO)</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.po || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">المنطقة / المصدر</span>
+                      <strong className="text-zinc-900 dark:text-white font-bold text-sm">{selectedRecord.region || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">السعر وطريقة السداد</span>
+                      <strong className="text-zinc-900 dark:text-white font-bold text-sm">
+                        {selectedRecord.price ? `${selectedRecord.price} ج.م` : '-'} {selectedRecord.paymentMethod ? `(${selectedRecord.paymentMethod})` : ''}
+                      </strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">كود ساب (SAP Code)</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.sapCode || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">كود قديم</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.oldCode || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">رقم مستند المورد</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.vendorDocNo || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">POST DOCUMENT</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.postDocument || '-'}</strong>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px] mb-0.5">RESERVATION</span>
+                      <strong className="text-zinc-900 dark:text-white font-mono text-sm">{selectedRecord.reservation || '-'}</strong>
+                    </div>
+
+                  </div>
+
+                  {/* Quality & Notes in Details Tab */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 space-y-1">
+                      <span className="text-zinc-400 block text-[10px]">التحليل الأولي للجودة والمواصفات</span>
+                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                        {selectedRecord.initialAnalysis ? (
+                          selectedRecord.initialAnalysis.includes('خالي مبيدات') ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-700">
+                              <Leaf className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>خالي مبيدات</span>
+                            </span>
+                          ) : selectedRecord.initialAnalysis === 'مبيدات' || (selectedRecord.initialAnalysis.includes('مبيدات') && !selectedRecord.initialAnalysis.includes('خالي')) ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-black bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-700">
+                              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                              <span>مبيدات</span>
+                            </span>
+                          ) : selectedRecord.initialAnalysis.includes('عشوائي') ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-700">
+                              <Shuffle className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>عشوائي</span>
+                            </span>
+                          ) : (
+                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{selectedRecord.initialAnalysis}</span>
+                          )
+                        ) : (
+                          <span className="text-xs text-zinc-400">-</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 space-y-1">
+                      <span className="text-zinc-400 block text-[10px]">ملاحظات</span>
+                      <p className="text-xs font-medium text-zinc-800 dark:text-zinc-200">{selectedRecord.notes || '-'}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-850 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-              <button
-                onClick={() => handleCopyRecord(selectedRecord)}
-                className="px-4 py-2 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span>{isRtl ? 'نسخ البيانات' : 'Copy'}</span>
-              </button>
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-850 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCopyRecord(selectedRecord)}
+                  className="px-4 py-2 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{isRtl ? 'نسخ البيانات' : 'Copy'}</span>
+                </button>
+              </div>
 
               <button
                 onClick={() => setSelectedRecord(null)}
-                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md"
+                className="px-6 py-2 bg-zinc-800 hover:bg-zinc-900 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md"
               >
                 {isRtl ? 'إغلاق' : 'Close'}
               </button>

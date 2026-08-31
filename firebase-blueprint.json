@@ -201,6 +201,24 @@
         "lastUpdatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "pricingDate", "region", "supplierName", "itemType", "quantity", "price", "totalAmount", "status", "createdBy", "createdAt"]
+    },
+    "FreshSupplyOverride": {
+      "title": "FreshSupplyOverride",
+      "description": "Custom editable attributes for fresh supply movements including PO, initial analysis, region, price, and payment method",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "movementNo": { "type": "string" },
+        "po": { "type": "string" },
+        "initialAnalysis": { "type": "string" },
+        "region": { "type": "string" },
+        "price": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "updatedAt"]
     }
   },
   "firestore": {
@@ -213,6 +231,7 @@
     "barrel_movements": { "schema": "BarrelMovement", "description": "Barrel movements collection" },
     "third_party_processing": { "schema": "ProcessingJob", "description": "Third-party processing jobs collection" },
     "agri_raw_material": { "schema": "AgriRawMaterial", "description": "Agricultural raw materials movements collection" },
-    "purchase_orders": { "schema": "PurchaseOrder", "description": "Purchase orders workflow collection" }
+    "purchase_orders": { "schema": "PurchaseOrder", "description": "Purchase orders workflow collection" },
+    "fresh_supply_overrides": { "schema": "FreshSupplyOverride", "description": "Fresh supply movement custom data and overrides" }
   }
 }
