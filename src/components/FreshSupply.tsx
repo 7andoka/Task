@@ -124,8 +124,9 @@ export interface FreshSupplyRecord {
   sapExecutionNo?: string;   // رقم تنفيذ الساب (SAP Execution No)
   initialAnalysis?: string;  // التحليل الأولي (جودة / مواصفات / نسبة العيوب / الفرز الأولي)
   region?: string;           // المنطقة / المزرعة (e.g. طريق مصر إسكندرية الصحراوي، وادي النطرون...)
-  price?: number;            // السعر (سعر الكيلو بالجنيه ج.م)
-  paymentMethod?: string;    // طريقة السداد (نقدي / تحويل بنكي / شيك مؤجل / بعد الفرز...)
+  price?: number;            // السعر الأساسي (سعر الكيلو بالجنيه ج.م)
+  qualityDiscountPercent?: number; // نسبة خصم الجودة % (تؤثر على السعر الصافي والقيمة)
+  paymentMethod?: string;    // طريقة السداد (نقدي / دفعات توريد)
   notes?: string;            // ملاحظات إضافية
   updatedAt?: string;        // تاريخ ووقت آخر تعديل يدوي
   updatedBy?: string;        // اسم المستخدم الذي قام بالتعديل
@@ -674,13 +675,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     return userRoles.some(r => targetRoles.includes(r));
   }, [user, userRoles]);
 
-  // Form state for editing record details (PO, sapExecutionNo, initialAnalysis, region, price, paymentMethod, notes)
+  // Form state for editing record details (PO, sapExecutionNo, initialAnalysis, region, price, qualityDiscountPercent, paymentMethod, notes)
   const [editForm, setEditForm] = useState({
     po: '',
     sapExecutionNo: '',
     initialAnalysis: '',
     region: '',
     price: '' as number | string,
+    qualityDiscountPercent: '' as number | string,
     paymentMethod: '',
     notes: ''
   });
@@ -695,6 +697,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         initialAnalysis: selectedRecord.initialAnalysis || '',
         region: selectedRecord.region || '',
         price: selectedRecord.price !== undefined && selectedRecord.price !== null ? selectedRecord.price : '',
+        qualityDiscountPercent: selectedRecord.qualityDiscountPercent !== undefined && selectedRecord.qualityDiscountPercent !== null ? selectedRecord.qualityDiscountPercent : '',
         paymentMethod: selectedRecord.paymentMethod || '',
         notes: selectedRecord.notes || ''
       });
@@ -715,7 +718,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     po: true,
     sapExecutionNo: true,
     region: true,
-    price: false, // Default hidden from table as requested
+    price: true, // Show price in table by default as requested
     paymentMethod: false,
     initialAnalysis: false,
     postDocument: false,
@@ -753,13 +756,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     return overridesMap;
   };
 
-  // Handler to save/update record details (PO, Initial Analysis, Region, Price, Payment Method)
+  // Handler to save/update record details (PO, Initial Analysis, Region, Price, Quality Discount, Payment Method)
   const handleSaveRecordDetails = async () => {
     if (!selectedRecord) return;
     setIsSavingRecord(true);
     try {
-      const overrideKey = selectedRecord.movementNo ? String(selectedRecord.movementNo).trim() : selectedRecord.id;
+      const overrideKey = selectedRecord.id;
       const numPrice = editForm.price !== '' ? Number(editForm.price) || 0 : 0;
+      const numDiscount = editForm.qualityDiscountPercent !== '' ? Number(editForm.qualityDiscountPercent) || 0 : 0;
       
       const updatedData: Partial<FreshSupplyRecord> = {
         po: editForm.po.trim(),
@@ -767,6 +771,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         initialAnalysis: editForm.initialAnalysis.trim(),
         region: editForm.region.trim(),
         price: numPrice,
+        qualityDiscountPercent: numDiscount,
         paymentMethod: editForm.paymentMethod.trim(),
         notes: editForm.notes.trim(),
         updatedAt: new Date().toISOString(),
@@ -778,10 +783,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         ...updatedData
       };
 
-      // 1. Update in-memory state
+      // 1. Update in-memory state only for the specific selected row id
       setData(prev => prev.map(item => {
-        const isMatch = (item.movementNo && selectedRecord.movementNo && String(item.movementNo).trim() === String(selectedRecord.movementNo).trim()) ||
-                        item.id === selectedRecord.id;
+        const isMatch = item.id === selectedRecord.id;
         return isMatch ? { ...item, ...updatedData } : item;
       }));
 
@@ -1102,8 +1106,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const rawMoveNo = String(row['رقم الحركة'] || '').trim();
       const fallbackId = `fresh-${idx}-${rawMoveNo || Math.random().toString(36).substr(2, 9)}`;
 
-      // Check overrides by movementNo or fallback ID or index
-      const override = (rawMoveNo && overridesMap[rawMoveNo]) || overridesMap[fallbackId] || overridesMap[`fresh-${idx}`] || {};
+      // Check overrides by fallbackId (unique row ID) first, then movementNo
+      const override = overridesMap[fallbackId] || (rawMoveNo && overridesMap[rawMoveNo]) || overridesMap[`fresh-${idx}`] || {};
       const finalPo = override.po !== undefined && override.po !== '' ? String(override.po) : String(row['PO'] || '').trim();
       const rawSapExecution = String(row['رقم تنفيذ الساب'] || row['تنفيذ الساب'] || row['SAP Execution'] || row['رقم التنفيذ'] || row['تنفيذ ساب'] || '').trim();
       const sapExecutionNo = override.sapExecutionNo !== undefined && override.sapExecutionNo !== '' 
@@ -1112,6 +1116,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const initialAnalysis = override.initialAnalysis !== undefined ? String(override.initialAnalysis) : '';
       const region = override.region !== undefined ? String(override.region) : '';
       const price = override.price !== undefined && override.price !== '' ? Number(override.price) : 0;
+      const qualityDiscountPercent = override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '' 
+        ? Number(override.qualityDiscountPercent) 
+        : (Number(row['نسبة خصم الجودة'] || row['خصم الجودة'] || row['نسبة الخصم'] || 0) || 0);
       const paymentMethod = override.paymentMethod !== undefined ? String(override.paymentMethod) : '';
       const notes = override.notes !== undefined ? String(override.notes) : '';
       const updatedAt = override.updatedAt;
@@ -1134,6 +1141,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         initialAnalysis,
         region,
         price,
+        qualityDiscountPercent,
         paymentMethod,
         notes,
         updatedAt,
@@ -2483,55 +2491,81 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Export to Excel
   const handleExportExcel = () => {
     try {
-      const exportRows = filteredData.map((r, idx) => ({
-        'م': idx + 1,
-        'التاريخ': r.date,
-        'المخزن': r.store,
-        'نوع الحركة': r.movementType,
-        'رقم الحركة': r.movementNo,
-        'اسم الصنف': r.itemName,
-        'الكمية (كجم)': r.quantityKg,
-        'الكمية (طن)': parseFloat(r.quantityTons.toFixed(3)),
-        'الوحدة': r.unit,
-        'مركز التكلفة / المورد': r.costCenter,
-        'رقم سيارة': r.truckNo,
-        'السائق': r.driver,
-        'الموقع / التعبئة': r.location,
-        'رقم التانك': r.tankNo,
-        'كود ساب': r.sapCode,
-        'كود قديم': r.oldCode,
-        'أمر الشراء PO': r.po,
-        'رقم تنفيذ الساب': r.sapExecutionNo || '-',
-        'POST DOCUMENT': r.postDocument,
-        'RESERVATION': r.reservation,
-        'كود مركز التكلفة': r.costCenterCode,
-        'رقم مستند المورد': r.vendorDocNo
-      }));
+      let grandTotalValue = 0;
+
+      const exportRows = filteredData.map((r, idx) => {
+        const basePrice = r.price && r.price > 0 ? r.price : 0;
+        const discountPct = r.qualityDiscountPercent && r.qualityDiscountPercent > 0 ? r.qualityDiscountPercent : 0;
+        const netPrice = basePrice > 0 ? (discountPct > 0 ? basePrice * (1 - discountPct / 100) : basePrice) : 0;
+        const totalValue = netPrice > 0 ? netPrice * r.quantityKg : 0;
+        if (totalValue > 0) {
+          grandTotalValue += totalValue;
+        }
+
+        return {
+          'م': idx + 1,
+          'التاريخ': r.date,
+          'رقم الحركة': r.movementNo || '-',
+          'اسم الصنف': r.itemName,
+          'كود ساب': r.sapCode || '-',
+          'كود قديم': r.oldCode || '-',
+          'الكمية (كجم)': r.quantityKg,
+          'الكمية (طن)': parseFloat(r.quantityTons.toFixed(3)),
+          'الوحدة': r.unit || 'كجم',
+          'المورد / مركز التكلفة': r.costCenter || '-',
+          'كود مركز التكلفة': r.costCenterCode || '-',
+          'رقم سيارة': r.truckNo || '-',
+          'السائق': r.driver || '-',
+          'الموقع / التعبئة': r.location || '-',
+          'رقم التانك': r.tankNo || '-',
+          'أمر الشراء PO': r.po || '-',
+          'رقم تنفيذ الساب': r.sapExecutionNo || '-',
+          'المنطقة / المزرعة': r.region || '-',
+          'التحليل الأولي': r.initialAnalysis || '-',
+          'السعر الأساسي (ج.م/كجم)': basePrice > 0 ? basePrice : '-',
+          'نسبة خصم الجودة %': discountPct > 0 ? `${discountPct}%` : '0%',
+          'صافي السعر بعد الخصم (ج.م/كجم)': netPrice > 0 ? parseFloat(netPrice.toFixed(2)) : '-',
+          'إجمالي القيمة المستحقة (ج.م)': totalValue > 0 ? parseFloat(totalValue.toFixed(2)) : '-',
+          'طريقة السداد': r.paymentMethod || '-',
+          'المخزن': r.store || 'GPS',
+          'POST DOCUMENT': r.postDocument || '-',
+          'RESERVATION': r.reservation || '-',
+          'رقم مستند المورد': r.vendorDocNo || '-',
+          'ملاحظات': r.notes || '-'
+        };
+      });
 
       // Add summary row
       exportRows.push({
         'م': 'الإجمالي' as any,
         'التاريخ': '',
-        'المخزن': '',
-        'نوع الحركة': '',
         'رقم الحركة': '',
         'اسم الصنف': `عدد الأصناف: ${stats.uniqueItems}`,
+        'كود ساب': '',
+        'كود قديم': '',
         'الكمية (كجم)': stats.totalKg,
         'الكمية (طن)': parseFloat(stats.totalTons.toFixed(3)),
         'الوحدة': 'كجم',
-        'مركز التكلفة / المورد': `عدد الموردين: ${stats.uniqueSuppliers}`,
+        'المورد / مركز التكلفة': `عدد الموردين: ${stats.uniqueSuppliers}`,
+        'كود مركز التكلفة': '',
         'رقم سيارة': `عدد السيارات: ${stats.uniqueTrucks}`,
         'السائق': `عدد السائقين: ${stats.uniqueDrivers}`,
         'الموقع / التعبئة': '',
         'رقم التانك': '',
-        'كود ساب': '',
-        'كود قديم': '',
         'أمر الشراء PO': '',
         'رقم تنفيذ الساب': '',
+        'المنطقة / المزرعة': '',
+        'التحليل الأولي': '',
+        'السعر الأساسي (ج.م/كجم)': '' as any,
+        'نسبة خصم الجودة %': '',
+        'صافي السعر بعد الخصم (ج.م/كجم)': '' as any,
+        'إجمالي القيمة المستحقة (ج.م)': grandTotalValue > 0 ? parseFloat(grandTotalValue.toFixed(2)) : ('' as any),
+        'طريقة السداد': '',
+        'المخزن': '',
         'POST DOCUMENT': '',
         'RESERVATION': '',
-        'كود مركز التكلفة': '',
-        'رقم مستند المورد': ''
+        'رقم مستند المورد': '',
+        'ملاحظات': ''
       });
 
       const worksheet = XLSX.utils.json_to_sheet(exportRows);
@@ -2542,25 +2576,33 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       worksheet['!cols'] = [
         { wch: 5 },  // index
         { wch: 12 }, // date
-        { wch: 10 }, // store
-        { wch: 10 }, // move type
         { wch: 12 }, // move no
-        { wch: 30 }, // item name
-        { wch: 15 }, // kg
-        { wch: 15 }, // tons
-        { wch: 10 }, // unit
-        { wch: 25 }, // supplier
-        { wch: 12 }, // truck
-        { wch: 20 }, // driver
-        { wch: 12 }, // location
-        { wch: 12 }, // tank
-        { wch: 15 }, // sap
+        { wch: 28 }, // item name
+        { wch: 14 }, // sap code
         { wch: 12 }, // old code
-        { wch: 15 }, // PO
-        { wch: 18 }, // post doc
-        { wch: 15 }, // res
+        { wch: 15 }, // kg
+        { wch: 14 }, // tons
+        { wch: 8 },  // unit
+        { wch: 25 }, // supplier
         { wch: 15 }, // cost center code
-        { wch: 18 }  // vendor doc
+        { wch: 12 }, // truck
+        { wch: 18 }, // driver
+        { wch: 14 }, // location
+        { wch: 12 }, // tank
+        { wch: 15 }, // PO
+        { wch: 16 }, // sap exec
+        { wch: 22 }, // region
+        { wch: 16 }, // initial analysis
+        { wch: 16 }, // base price
+        { wch: 15 }, // quality discount %
+        { wch: 18 }, // net price
+        { wch: 18 }, // total value
+        { wch: 15 }, // payment method
+        { wch: 10 }, // store
+        { wch: 16 }, // post doc
+        { wch: 14 }, // res
+        { wch: 16 }, // vendor doc
+        { wch: 20 }  // notes
       ];
 
       const fileName = `تقرير_توريد_الفريش_${new Date().toISOString().slice(0, 10)}.xlsx`;
@@ -3602,58 +3644,66 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.itemName && (
-                          <td className="py-3 px-3">
-                            <div className="font-black text-zinc-900 dark:text-white leading-tight">
-                              {record.itemName}
-                            </div>
-                            {record.oldCode && (
-                              <span className="text-[10px] text-zinc-400 font-mono">
-                                كود: {record.oldCode}
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
+                              <span className="font-black text-zinc-900 dark:text-white">
+                                {record.itemName}
                               </span>
-                            )}
+                              {record.oldCode && (
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  ({record.oldCode})
+                                </span>
+                              )}
+                            </div>
                           </td>
                         )}
 
                         {visibleColumns.quantityKg && (
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <div className="font-mono font-black text-zinc-900 dark:text-white text-sm">
-                              {record.quantityKg.toLocaleString('en-US')} <span className="text-[10px] font-bold text-zinc-500">{record.unit || 'كجم'}</span>
-                            </div>
-                            <div className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                              = {record.quantityTons.toFixed(3)} طن
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 font-mono whitespace-nowrap">
+                              <span className="font-black text-zinc-900 dark:text-white text-xs">
+                                {record.quantityKg.toLocaleString('en-US')} <span className="text-[10px] font-bold text-zinc-500">{record.unit || 'كجم'}</span>
+                              </span>
+                              <span className="text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                                ({record.quantityTons.toFixed(3)} طن)
+                              </span>
                             </div>
                           </td>
                         )}
 
                         {visibleColumns.costCenter && (
-                          <td className="py-3 px-3">
-                            <div className="font-bold text-zinc-800 dark:text-zinc-200">
-                              {record.costCenter || '-'}
-                            </div>
-                            {record.costCenterCode && (
-                              <span className="text-[10px] text-zinc-400 font-mono">
-                                كود: {record.costCenterCode}
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
+                              <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                                {record.costCenter || '-'}
                               </span>
-                            )}
+                              {record.costCenterCode && (
+                                <span className="text-[10px] text-zinc-400 font-mono">
+                                  ({record.costCenterCode})
+                                </span>
+                              )}
+                            </div>
                           </td>
                         )}
 
                         {visibleColumns.truckDriver && (
-                          <td className="py-3 px-3">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono font-black text-amber-900 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 px-1.5 py-0.2 rounded border border-amber-300 dark:border-amber-800 text-[11px]">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
+                              <span className="font-mono font-bold text-amber-900 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-800 text-[11px]">
                                 {record.truckNo || '-'}
                               </span>
-                              <span className="text-zinc-600 dark:text-zinc-400 text-[11px]">
-                                {record.driver || ''}
-                              </span>
+                              {record.driver && (
+                                <span className="text-zinc-600 dark:text-zinc-400 text-[11px]">
+                                  {record.driver}
+                                </span>
+                              )}
                             </div>
                           </td>
                         )}
 
                         {visibleColumns.location && (
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold border whitespace-nowrap ${
                               record.location.includes('تانك')
                                 ? 'bg-cyan-50 text-cyan-800 border-cyan-300 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800'
                                 : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800'
@@ -3664,13 +3714,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.sapCode && (
-                          <td className="py-3 px-3 whitespace-nowrap font-mono font-bold text-zinc-600 dark:text-zinc-400 text-[11px]">
+                          <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-zinc-600 dark:text-zinc-400 text-[11px]">
                             {record.sapCode || '-'}
                           </td>
                         )}
 
                         {visibleColumns.po && (
-                          <td className="py-3 px-3 whitespace-nowrap">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
                             {record.po ? (
                               <span className="font-mono font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-[11px]">
                                 {record.po}
@@ -3682,7 +3732,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.sapExecutionNo && (
-                          <td className="py-3 px-3 whitespace-nowrap">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
                             {record.sapExecutionNo ? (
                               <span className="font-mono font-bold text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-[11px]">
                                 {record.sapExecutionNo}
@@ -3694,10 +3744,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.region && (
-                          <td className="py-3 px-3 whitespace-nowrap">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
                             {record.region ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800">
-                                <MapPin className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-sky-50 text-sky-800 border border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800 whitespace-nowrap">
+                                <MapPin className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
                                 {record.region}
                               </span>
                             ) : (
@@ -3707,26 +3757,41 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.price && (
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            {record.price && record.price > 0 ? (
-                              <div>
-                                <div className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-xs">
-                                  {record.price.toLocaleString('en-US', { minimumFractionDigits: 2 })} <span className="text-[10px] font-bold text-zinc-500">{isRtl ? 'ج.م/كجم' : 'EGP/kg'}</span>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            {(() => {
+                              const base = record.price && record.price > 0 ? record.price : 0;
+                              const discountPct = record.qualityDiscountPercent && record.qualityDiscountPercent > 0 ? record.qualityDiscountPercent : 0;
+                              const net = base > 0 ? (discountPct > 0 ? base * (1 - discountPct / 100) : base) : 0;
+                              const total = net > 0 ? net * record.quantityKg : 0;
+
+                              if (base === 0) return <span className="text-zinc-400 text-[11px]">-</span>;
+
+                              return (
+                                <div className="flex items-center gap-1.5 font-mono text-xs whitespace-nowrap">
+                                  <span className="font-black text-emerald-700 dark:text-emerald-400">
+                                    {net.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] font-bold text-zinc-500">{isRtl ? 'ج.م' : 'EGP'}</span>
+                                  </span>
+                                  {discountPct > 0 && (
+                                    <span 
+                                      className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 px-1 py-0.5 rounded border border-rose-200 dark:border-rose-800" 
+                                      title={`السعر الأساسي: ${base} ج.م | خصم جودة: ${discountPct}%`}
+                                    >
+                                      (-{discountPct}%)
+                                    </span>
+                                  )}
+                                  <span className="text-[10.5px] font-bold text-zinc-500 dark:text-zinc-400">
+                                    [{(total).toLocaleString('en-US', { maximumFractionDigits: 0 })} {isRtl ? 'ج.م' : 'EGP'}]
+                                  </span>
                                 </div>
-                                <div className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
-                                  {isRtl ? 'إجمالي:' : 'Total:'} {(record.price * record.quantityKg).toLocaleString('en-US', { maximumFractionDigits: 0 })} {isRtl ? 'ج.م' : 'EGP'}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-zinc-400 text-[11px]">-</span>
-                            )}
+                              );
+                            })()}
                           </td>
                         )}
 
                         {visibleColumns.paymentMethod && (
-                          <td className="py-3 px-3 whitespace-nowrap">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
                             {record.paymentMethod ? (
-                              <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800">
+                              <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 whitespace-nowrap">
                                 {record.paymentMethod}
                               </span>
                             ) : (
@@ -3736,25 +3801,25 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.initialAnalysis && (
-                          <td className="py-3 px-3 whitespace-nowrap">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
                             {record.initialAnalysis ? (
                               record.initialAnalysis.includes('خالي مبيدات') ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs">
-                                  <Leaf className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border-emerald-700 shadow-2xs whitespace-nowrap">
+                                  <Leaf className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                   {record.initialAnalysis}
                                 </span>
                               ) : record.initialAnalysis === 'مبيدات' || (record.initialAnalysis.includes('مبيدات') && !record.initialAnalysis.includes('خالي')) ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-700 shadow-2xs">
-                                  <ShieldAlert className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950/70 dark:text-rose-300 dark:border-rose-700 shadow-2xs whitespace-nowrap">
+                                  <ShieldAlert className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
                                   {record.initialAnalysis}
                                 </span>
                               ) : record.initialAnalysis.includes('عشوائي') ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950/70 dark:text-indigo-300 dark:border-indigo-700 shadow-2xs">
-                                  <Shuffle className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-950/70 dark:text-indigo-300 dark:border-indigo-700 shadow-2xs whitespace-nowrap">
+                                  <Shuffle className="w-3 h-3 text-indigo-600 dark:text-indigo-400 shrink-0" />
                                   {record.initialAnalysis}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700" title={record.initialAnalysis}>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 whitespace-nowrap" title={record.initialAnalysis}>
                                   {record.initialAnalysis}
                                 </span>
                               )
@@ -3765,14 +3830,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.postDocument && (
-                          <td className="py-3 px-3 whitespace-nowrap font-mono text-zinc-500 dark:text-zinc-400 text-[10.5px]">
+                          <td className="py-2.5 px-3 whitespace-nowrap font-mono text-zinc-500 dark:text-zinc-400 text-[10.5px]">
                             {record.postDocument || '-'}
                           </td>
                         )}
 
                         {visibleColumns.store && (
-                          <td className="py-3 px-3 whitespace-nowrap">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
                               {record.store || 'GPS'}
                             </span>
                           </td>
@@ -3782,22 +3847,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           <td className="py-3 px-3 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1">
                               {canAccessSupplyActions && (
-                                <>
-                                  <button
-                                    onClick={() => setSelectedRecord(record)}
-                                    className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
-                                    title={isRtl ? 'عرض واستكمال بيانات التوريد (PO، التحليل، المنطقة، السعر)' : 'View & Edit Details'}
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => setSelectedRecord(record)}
-                                    className="p-1.5 hover:bg-teal-100 dark:hover:bg-teal-900/50 text-teal-600 dark:text-teal-400 rounded-lg transition-colors cursor-pointer"
-                                    title={isRtl ? 'تعديل بيانات الحركة' : 'Edit Movement Data'}
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                </>
+                                <button
+                                  onClick={() => setSelectedRecord(record)}
+                                  className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
+                                  title={isRtl ? 'عرض واستكمال بيانات التوريد' : 'View & Complete Supply'}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
                               )}
                               <button
                                 onClick={() => handleCopyRecord(record)}
@@ -4553,17 +4609,30 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           type="text"
                           value={editForm.region}
                           onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
-                          placeholder={isRtl ? 'مثال: وادي النطرون، طريق إسكندرية، سيوة...' : 'e.g. Wadi Natrun, Siwa...'}
+                          placeholder={isRtl ? 'اختر أو اكتب المنطقة / المزرعة...' : 'e.g. Siwa, Fayoum...'}
                           className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                         />
-                        {/* Preset Region suggestions */}
+                        {/* Preset Region suggestions requested by user */}
                         <div className="flex items-center gap-1 flex-wrap pt-1">
-                          {['وادي النطرون', 'طريق مصر إسكندرية', 'سيوة', 'الإسماعيلية', 'العريش', 'الفيوم', 'مطروح'].map(reg => (
+                          {[
+                            'الفيوم',
+                            'طريق مصر الاسكندريه الصحراوي',
+                            'الاسماعليه',
+                            'البره الثاني ( راس سدر )',
+                            'العريش',
+                            'المنيا',
+                            'المغره',
+                            'سيويه'
+                          ].map(reg => (
                             <button
                               key={reg}
                               type="button"
                               onClick={() => setEditForm({ ...editForm, region: reg })}
-                              className="px-2 py-0.5 text-[10px] bg-zinc-100 dark:bg-zinc-800 hover:bg-sky-100 hover:text-sky-800 dark:hover:bg-sky-950/60 dark:hover:text-sky-300 text-zinc-600 dark:text-zinc-400 rounded-md transition-colors cursor-pointer"
+                              className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer border ${
+                                editForm.region === reg
+                                  ? 'bg-sky-600 text-white border-sky-700 font-bold'
+                                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-sky-100 hover:text-sky-800 dark:hover:bg-sky-950/60 dark:hover:text-sky-300 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                              }`}
                             >
                               + {reg}
                             </button>
@@ -4571,11 +4640,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         </div>
                       </div>
 
-                      {/* 4. Price per kg */}
+                      {/* 4. Base Price per kg */}
                       <div className="space-y-1.5">
                         <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                           <DollarSign className="w-3.5 h-3.5 text-amber-600" />
-                          <span>{isRtl ? 'السعر للكيلو (ج.م)' : 'Price per Kg (EGP)'}</span>
+                          <span>{isRtl ? 'السعر الأساسي للكيلو (ج.م)' : 'Base Price per Kg (EGP)'}</span>
                         </label>
                         <div className="relative">
                           <input
@@ -4589,42 +4658,131 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           />
                           <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">ج.م/كجم</span>
                         </div>
-                        {editForm.price !== '' && Number(editForm.price) > 0 && (
-                          <div className="p-2 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-800 text-[11px] font-mono text-amber-900 dark:text-amber-300">
-                            {isRtl ? 'إجمالي القيمة التقديرية:' : 'Total Value:'} <strong>{((Number(editForm.price) || 0) * selectedRecord.quantityKg).toLocaleString('en-US', { maximumFractionDigits: 2 })}</strong> ج.م
-                          </div>
-                        )}
                       </div>
 
-                      {/* 5. Payment Method */}
+                      {/* 5. Quality Discount Percent */}
                       <div className="space-y-1.5">
                         <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-purple-600" />
-                          <span>{isRtl ? 'طريقة السداد' : 'Payment Method'}</span>
+                          <Percent className="w-3.5 h-3.5 text-rose-600" />
+                          <span>{isRtl ? 'نسبة خصم الجودة (%)' : 'Quality Discount (%)'}</span>
                         </label>
-                        <input
-                          type="text"
-                          value={editForm.paymentMethod}
-                          onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}
-                          placeholder={isRtl ? 'مثال: نقدي، آجل 30 يوم، شيك، تحويل بنكي...' : 'e.g. Cash, Credit 30 days...'}
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                        />
-                        {/* Quick Presets */}
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={editForm.qualityDiscountPercent}
+                            onChange={(e) => setEditForm({ ...editForm, qualityDiscountPercent: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                            placeholder="0"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                          />
+                          <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">%</span>
+                        </div>
+                        {/* Quick Discount Presets */}
                         <div className="flex items-center gap-1 flex-wrap pt-1">
-                          {['نقدي', 'آجل 30 يوم', 'آجل 60 يوم', 'شيك بنكي', 'تحويل بنكي', 'دفعات توريد'].map(pay => (
+                          {[0, 1, 2, 3, 5, 7, 10, 15].map(pct => (
                             <button
-                              key={pay}
+                              key={pct}
                               type="button"
-                              onClick={() => setEditForm({ ...editForm, paymentMethod: pay })}
-                              className="px-2 py-0.5 text-[10px] bg-zinc-100 dark:bg-zinc-800 hover:bg-purple-100 hover:text-purple-800 dark:hover:bg-purple-950/60 dark:hover:text-purple-300 text-zinc-600 dark:text-zinc-400 rounded-md transition-colors cursor-pointer"
+                              onClick={() => setEditForm({ ...editForm, qualityDiscountPercent: pct })}
+                              className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer border ${
+                                Number(editForm.qualityDiscountPercent) === pct
+                                  ? 'bg-rose-600 text-white border-rose-700 font-bold'
+                                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-rose-100 hover:text-rose-800 dark:hover:bg-rose-950/60 dark:hover:text-rose-300 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                              }`}
                             >
-                              + {pay}
+                              {pct}%
                             </button>
                           ))}
                         </div>
                       </div>
 
+                      {/* 6. Payment Method (Only Cash or Supply Installments) */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                          <span>{isRtl ? 'طريقة السداد' : 'Payment Method'}</span>
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={editForm.paymentMethod}
+                            onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}
+                            placeholder={isRtl ? 'اختر أو اكتب...' : 'Payment...'}
+                            className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                          />
+                          <div className="flex items-center gap-1 shrink-0">
+                            {['نقدي', 'دفعات توريد'].map(pay => (
+                              <button
+                                key={pay}
+                                type="button"
+                                onClick={() => setEditForm({ ...editForm, paymentMethod: pay })}
+                                className={`px-2.5 py-2 text-[10px] rounded-xl transition-colors cursor-pointer border whitespace-nowrap font-bold ${
+                                  editForm.paymentMethod === pay
+                                    ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
+                                    : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-purple-100 hover:text-purple-800 dark:hover:bg-purple-950/60 dark:hover:text-purple-300 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                                }`}
+                              >
+                                {pay}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
                     </div>
+
+                    {/* Real-time Calculation Summary Breakdown */}
+                    {(() => {
+                      const baseP = Number(editForm.price) || 0;
+                      const discPct = Number(editForm.qualityDiscountPercent) || 0;
+                      const discAmount = baseP * (discPct / 100);
+                      const netP = Math.max(0, baseP - discAmount);
+                      const totalGross = baseP * selectedRecord.quantityKg;
+                      const totalDiscountVal = discAmount * selectedRecord.quantityKg;
+                      const totalNetVal = netP * selectedRecord.quantityKg;
+
+                      if (baseP <= 0 && discPct <= 0) return null;
+
+                      return (
+                        <div className="p-3.5 bg-gradient-to-r from-amber-50/70 via-emerald-50/70 to-emerald-100/50 dark:from-zinc-800 dark:via-zinc-800/90 dark:to-emerald-950/30 rounded-2xl border border-emerald-300/80 dark:border-emerald-800/60 shadow-2xs">
+                          <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-emerald-200/60 dark:border-zinc-700">
+                            <span className="font-black text-xs text-zinc-900 dark:text-white flex items-center gap-1.5">
+                              <DollarSign className="w-4 h-4 text-emerald-600" />
+                              {isRtl ? 'بيان التسعير وخصم الجودة الحسابي:' : 'Pricing & Quality Discount Breakdown:'}
+                            </span>
+                            {discPct > 0 && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                {isRtl ? `خصم جودة مقتطع: ${discPct}%` : `Discount: ${discPct}%`}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono text-center">
+                            <div className="p-2 rounded-xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700">
+                              <span className="text-[10px] font-sans font-bold text-zinc-500 block">{isRtl ? 'السعر الأساسي' : 'Base Price'}</span>
+                              <span className="text-xs font-black text-zinc-800 dark:text-zinc-200">{baseP.toFixed(2)} ج.م</span>
+                            </div>
+
+                            <div className="p-2 rounded-xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700">
+                              <span className="text-[10px] font-sans font-bold text-rose-600 dark:text-rose-400 block">{isRtl ? 'قيمة الخصم/كجم' : 'Discount/Kg'}</span>
+                              <span className="text-xs font-black text-rose-600 dark:text-rose-400">-{discAmount.toFixed(2)} ج.م</span>
+                            </div>
+
+                            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700">
+                              <span className="text-[10px] font-sans font-bold text-emerald-700 dark:text-emerald-300 block">{isRtl ? 'صافي السعر للكيلو' : 'Net Price/Kg'}</span>
+                              <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">{netP.toFixed(2)} ج.م</span>
+                            </div>
+
+                            <div className="p-2 rounded-xl bg-emerald-600 text-white shadow-xs">
+                              <span className="text-[10px] font-sans font-bold text-emerald-100 block">{isRtl ? 'إجمالي القيمة المستحقة' : 'Net Total Value'}</span>
+                              <span className="text-xs font-black">{totalNetVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* 5. Initial Quality Analysis */}
                     <div className="space-y-2">
