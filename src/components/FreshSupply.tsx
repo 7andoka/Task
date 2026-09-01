@@ -75,7 +75,9 @@ import {
   Shuffle,
   Leaf,
   Clock,
-  Printer
+  Printer,
+  Route,
+  Upload
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -127,6 +129,7 @@ export interface FreshSupplyRecord {
   price?: number;            // السعر الأساسي (سعر الكيلو بالجنيه ج.م)
   qualityDiscountPercent?: number; // نسبة خصم الجودة % (تؤثر على السعر الصافي والقيمة)
   paymentMethod?: string;    // طريقة السداد (نقدي / دفعات توريد)
+  routing?: string;          // التوجيه (مياه وملح / مطبوخ / زيت / أخري)
   notes?: string;            // ملاحظات إضافية
   updatedAt?: string;        // تاريخ ووقت آخر تعديل يدوي
   updatedBy?: string;        // اسم المستخدم الذي قام بالتعديل
@@ -684,6 +687,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     price: '' as number | string,
     qualityDiscountPercent: '' as number | string,
     paymentMethod: '',
+    routing: '',
     notes: ''
   });
   const [isSavingRecord, setIsSavingRecord] = useState(false);
@@ -699,6 +703,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         price: selectedRecord.price !== undefined && selectedRecord.price !== null ? selectedRecord.price : '',
         qualityDiscountPercent: selectedRecord.qualityDiscountPercent !== undefined && selectedRecord.qualityDiscountPercent !== null ? selectedRecord.qualityDiscountPercent : '',
         paymentMethod: selectedRecord.paymentMethod || '',
+        routing: selectedRecord.routing || '',
         notes: selectedRecord.notes || ''
       });
     }
@@ -773,6 +778,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         price: numPrice,
         qualityDiscountPercent: numDiscount,
         paymentMethod: editForm.paymentMethod.trim(),
+        routing: editForm.routing.trim(),
         notes: editForm.notes.trim(),
         updatedAt: new Date().toISOString(),
         updatedBy: user?.displayName || user?.username || (isRtl ? 'مستخدم النظام' : 'System User')
@@ -846,28 +852,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         .filter(Boolean)
     ));
 
-    // A) Link by same non-empty Cost Center Code (كود مركز التكلفة)
-    const codeToFirstSupplier = new Map<string, string>();
-    validRows.forEach(row => {
-      const raw = String(row['مركز التكلفة'] || '').trim();
-      const code = String(row['كود مركز التكلفة'] || '').trim();
-      if (raw && code) {
-        if (!codeToFirstSupplier.has(code)) {
-          codeToFirstSupplier.set(code, raw);
-        } else {
-          supplierUf.union(raw, codeToFirstSupplier.get(code)!);
-        }
-      }
-    });
 
-    // B) Link by exact normalized key and token subset / extension (e.g. "الروضة" vs "الروضة-شبانة-عبدالعليم)")
+
+    // B) Link by exact normalized key (e.g. ignoring spacing, punctuation, word order, and letter variances)
     for (let i = 0; i < uniqueRawSuppliers.length; i++) {
       const rawA = uniqueRawSuppliers[i];
       const normKeyA = normalizeSupplierKey(rawA);
-      const tokensA = extractSupplierTokens(rawA);
-      const filteredTokensA = tokensA.filter(t => !GENERIC_SUPPLIER_STOPWORDS.has(t));
-      const effectiveTokensA = filteredTokensA.length > 0 ? filteredTokensA : tokensA;
-      const setA = new Set(effectiveTokensA);
 
       for (let j = i + 1; j < uniqueRawSuppliers.length; j++) {
         const rawB = uniqueRawSuppliers[j];
@@ -876,36 +866,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         // Exact match of normalized words in any order
         if (normKeyA && normKeyA === normKeyB) {
           supplierUf.union(rawA, rawB);
-          continue;
-        }
-
-        const tokensB = extractSupplierTokens(rawB);
-        const filteredTokensB = tokensB.filter(t => !GENERIC_SUPPLIER_STOPWORDS.has(t));
-        const effectiveTokensB = filteredTokensB.length > 0 ? filteredTokensB : tokensB;
-        const setB = new Set(effectiveTokensB);
-
-        // Token subset match (e.g. ['روضه'] is a subset of ['روضه', 'شبانه', 'عبدالعليم'])
-        const isASubsetOfB = effectiveTokensA.length > 0 && effectiveTokensA.every(t => setB.has(t));
-        const isBSubsetOfA = effectiveTokensB.length > 0 && effectiveTokensB.every(t => setA.has(t));
-
-        if (isASubsetOfB || isBSubsetOfA) {
-          const shorter = isASubsetOfB ? effectiveTokensA : effectiveTokensB;
-          if (shorter.length >= 2 || (shorter.length === 1 && !COMMON_GENERIC_NAMES.has(shorter[0]) && shorter[0].length >= 3)) {
-            supplierUf.union(rawA, rawB);
-            continue;
-          }
-        }
-
-        // Substring match in normalized compact form
-        const compactA = normKeyA.replace(/\s+/g, '');
-        const compactB = normKeyB.replace(/\s+/g, '');
-        if (compactA && compactB) {
-          if ((compactA.length >= 4 && compactB.includes(compactA)) || (compactB.length >= 4 && compactA.includes(compactB))) {
-            const shorterCompact = compactA.length <= compactB.length ? compactA : compactB;
-            if (!COMMON_GENERIC_NAMES.has(shorterCompact)) {
-              supplierUf.union(rawA, rawB);
-            }
-          }
         }
       }
     }
@@ -1120,6 +1080,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         ? Number(override.qualityDiscountPercent) 
         : (Number(row['نسبة خصم الجودة'] || row['خصم الجودة'] || row['نسبة الخصم'] || 0) || 0);
       const paymentMethod = override.paymentMethod !== undefined ? String(override.paymentMethod) : '';
+      const routing = override.routing !== undefined ? String(override.routing) : String(row['توجيه'] || row['التوجيه'] || '').trim();
       const notes = override.notes !== undefined ? String(override.notes) : '';
       const updatedAt = override.updatedAt;
       const updatedBy = override.updatedBy;
@@ -1143,6 +1104,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         price,
         qualityDiscountPercent,
         paymentMethod,
+        routing,
         notes,
         updatedAt,
         updatedBy,
@@ -2488,6 +2450,130 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     toast.info(isRtl ? 'تمت إعادة ضبط جميع الفلاتر' : 'All filters reset');
   };
 
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const dataBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(dataBuffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json<any>(worksheet);
+
+      if (!rows || rows.length === 0) {
+        toast.error(isRtl ? 'ملف الإكسيل فارغ أو غير صالح' : 'Excel file is empty or invalid');
+        setIsImporting(false);
+        return;
+      }
+
+      const cachedStr = localStorage.getItem(STORAGE_OVERRIDES_KEY);
+      const cachedMap = cachedStr ? JSON.parse(cachedStr) : {};
+      let updatedCount = 0;
+
+      rows.forEach((row, idx) => {
+        const moveNo = String(row['رقم الحركة'] || '').trim();
+        const rowIdx = idx;
+        
+        const matchedRecord = data.find(r => 
+          (moveNo && r.movementNo === moveNo) || 
+          (`fresh-${rowIdx}` === r.id) ||
+          (r.itemName === row['اسم الصنف'] && r.date === row['التاريخ'] && r.quantityKg === Number(row['الكمية (كجم)']))
+        );
+
+        if (matchedRecord) {
+          const overrideKey = matchedRecord.id;
+          
+          const po = row['أمر الشراء PO'] !== undefined ? String(row['أمر الشراء PO']).trim() : matchedRecord.po;
+          const sapExecutionNo = row['رقم تنفيذ الساب'] !== undefined ? String(row['رقم تنفيذ الساب']).trim() : matchedRecord.sapExecutionNo;
+          const region = row['المنطقة / المزرعة'] !== undefined ? String(row['المنطقة / المزرعة']).trim() : matchedRecord.region;
+          const initialAnalysis = row['التحليل الأولي'] !== undefined ? String(row['التحليل الأولي']).trim() : matchedRecord.initialAnalysis;
+          
+          const rawPrice = row['السعر الأساسي (ج.م/كجم)'];
+          const price = rawPrice !== undefined && rawPrice !== '-' && rawPrice !== '' ? Number(rawPrice) || 0 : matchedRecord.price;
+          
+          const rawDiscount = row['نسبة خصم الجودة %'];
+          let qualityDiscountPercent = matchedRecord.qualityDiscountPercent;
+          if (rawDiscount !== undefined && rawDiscount !== '-' && rawDiscount !== '') {
+            const discStr = String(rawDiscount).replace('%', '').trim();
+            qualityDiscountPercent = Number(discStr) || 0;
+          }
+
+          const paymentMethod = row['طريقة السداد'] !== undefined && row['طريقة السداد'] !== '-' ? String(row['طريقة السداد']).trim() : matchedRecord.paymentMethod;
+          const routing = row['التوجيه'] !== undefined && row['التوجيه'] !== '-' ? String(row['التوجيه']).trim() : matchedRecord.routing;
+          const notes = row['ملاحظات'] !== undefined && row['ملاحظات'] !== '-' ? String(row['ملاحظات']).trim() : matchedRecord.notes;
+
+          const updatedData = {
+            po,
+            sapExecutionNo,
+            region,
+            initialAnalysis,
+            price,
+            qualityDiscountPercent,
+            paymentMethod,
+            routing,
+            notes,
+            updatedAt: new Date().toISOString(),
+            updatedBy: user?.displayName || user?.username || (isRtl ? 'مستخدم النظام' : 'System User')
+          };
+
+          cachedMap[overrideKey] = {
+            id: overrideKey,
+            movementNo: matchedRecord.movementNo || '',
+            ...updatedData
+          };
+
+          setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, overrideKey), {
+            id: overrideKey,
+            movementNo: matchedRecord.movementNo || '',
+            ...updatedData
+          }, { merge: true }).catch(err => console.warn("Firestore import save warning:", err));
+
+          updatedCount++;
+        }
+      });
+
+      localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(cachedMap));
+
+      setData(prev => prev.map(item => {
+        const ov = cachedMap[item.id] || (item.movementNo && cachedMap[item.movementNo]);
+        if (ov) {
+          return {
+            ...item,
+            po: ov.po !== undefined ? ov.po : item.po,
+            sapExecutionNo: ov.sapExecutionNo !== undefined ? ov.sapExecutionNo : item.sapExecutionNo,
+            region: ov.region !== undefined ? ov.region : item.region,
+            initialAnalysis: ov.initialAnalysis !== undefined ? ov.initialAnalysis : item.initialAnalysis,
+            price: ov.price !== undefined ? ov.price : item.price,
+            qualityDiscountPercent: ov.qualityDiscountPercent !== undefined ? ov.qualityDiscountPercent : item.qualityDiscountPercent,
+            paymentMethod: ov.paymentMethod !== undefined ? ov.paymentMethod : item.paymentMethod,
+            routing: ov.routing !== undefined ? ov.routing : item.routing,
+            notes: ov.notes !== undefined ? ov.notes : item.notes,
+          };
+        }
+        return item;
+      }));
+
+      toast.success(
+        isRtl 
+          ? `تم استيراد وتحديث (${updatedCount}) سجل بنجاح من شيت الإكسيل!` 
+          : `Successfully imported and updated (${updatedCount}) records from Excel!`
+      );
+    } catch (err: any) {
+      console.error("Excel Import Error:", err);
+      toast.error(isRtl ? 'فشل استيراد ملف الإكسيل. تأكد من صحة تنسيق الملف.' : 'Failed to import Excel file. Please check format.');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   // Export to Excel
   const handleExportExcel = () => {
     try {
@@ -3010,6 +3096,24 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span className="hidden sm:inline">{isRtl ? 'تصدير إكسيل' : 'Excel'}</span>
+                </button>
+
+                {/* Import Excel */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImportExcel}
+                  accept=".xlsx, .xls, .csv"
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-sm"
+                  title={isRtl ? 'استيراد وتحديث البيانات من شيت إكسيل معدل' : 'Import & update data from modified Excel'}
+                >
+                  <Upload className={`w-4 h-4 ${isImporting ? 'animate-bounce' : ''}`} />
+                  <span className="hidden sm:inline">{isRtl ? 'استيراد تعديل الإكسيل' : 'Import Excel'}</span>
                 </button>
 
                 {/* Export PDF */}
@@ -4961,7 +5065,74 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       />
                     </div>
 
-                    {/* SECTION 4: Additional Notes */}
+                    {/* SECTION 4: Processing Routing (التوجيه) */}
+                    <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 flex items-center justify-center font-black text-xs">
+                            4
+                          </div>
+                          <label className="text-xs font-black text-zinc-900 dark:text-white flex items-center gap-1.5">
+                            <Route className="w-3.5 h-3.5 text-purple-600" />
+                            <span>{isRtl ? 'توجيه المعالجة والتصنيع:' : 'Processing Routing:'}</span>
+                          </label>
+                        </div>
+                        {editForm.routing && (
+                          <button
+                            type="button"
+                            onClick={() => setEditForm({ ...editForm, routing: '' })}
+                            className="text-[11px] font-bold text-zinc-400 hover:text-rose-500 transition-colors cursor-pointer"
+                          >
+                            {isRtl ? 'إلغاء التحديد ✕' : 'Clear ✕'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Routing Preset Buttons */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {[
+                          { key: 'مياه وملح', label: isRtl ? 'مياه وملح' : 'Water & Salt', desc: isRtl ? 'تخليل / حفظ' : 'Pickling' },
+                          { key: 'مطبوخ', label: isRtl ? 'مطبوخ' : 'Cooked', desc: isRtl ? 'حراري / تسوية' : 'Cooked' },
+                          { key: 'زيت', label: isRtl ? 'زيت' : 'Oil Extraction', desc: isRtl ? 'عصر زيتون' : 'Oil Pressing' },
+                          { key: 'أخري', label: isRtl ? 'أخري' : 'Other', desc: isRtl ? 'توجيه آخر' : 'Other Routing' },
+                        ].map(item => {
+                          const isSelected = editForm.routing === item.key || editForm.routing.includes(item.key);
+                          return (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() => {
+                                setEditForm(prev => ({
+                                  ...prev,
+                                  routing: prev.routing === item.key ? '' : item.key
+                                }));
+                              }}
+                              className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                                isSelected
+                                  ? 'bg-purple-600 text-white border-purple-700 shadow-md shadow-purple-600/20 scale-[1.02]'
+                                  : 'bg-white dark:bg-zinc-800/80 border-purple-200 dark:border-purple-800/50 hover:border-purple-400 hover:bg-purple-50/50 text-zinc-800 dark:text-zinc-200'
+                              }`}
+                            >
+                              <span className="font-black text-xs">{item.label}</span>
+                              <span className={`text-[10px] ${isSelected ? 'text-purple-100' : 'text-zinc-400'}`}>
+                                {item.desc}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Custom Routing Input */}
+                      <input
+                        type="text"
+                        value={editForm.routing}
+                        onChange={(e) => setEditForm({ ...editForm, routing: e.target.value })}
+                        placeholder={isRtl ? 'أو اكتب تفاصيل التوجيه أو ملاحظات التصنيع...' : 'Or enter custom routing details...'}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden mt-2"
+                      />
+                    </div>
+
+                    {/* SECTION 5: Additional Notes */}
                     <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-2">
                       <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-zinc-500" />
