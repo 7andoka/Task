@@ -738,7 +738,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     paymentMethod: false,
     initialAnalysis: false,
     postDocument: false,
-    store: false,
+    store: true,
     actions: true
   });
   const [showColumnConfig, setShowColumnConfig] = useState(false);
@@ -921,85 +921,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     });
 
     // ==========================================
-    // 1. ADVANCED SUPPLIER CLUSTERING & UNIFICATION
-    // ==========================================
-    const supplierUf = new UnionFind<string>();
-    const uniqueRawSuppliers = Array.from(new Set(
-      validRows
-        .map(r => String(r['مركز التكلفة'] || '').trim())
-        .filter(Boolean)
-    ));
-
-
-
-    // B) Link by exact normalized key (e.g. ignoring spacing, punctuation, word order, and letter variances)
-    for (let i = 0; i < uniqueRawSuppliers.length; i++) {
-      const rawA = uniqueRawSuppliers[i];
-      const normKeyA = normalizeSupplierKey(rawA);
-
-      for (let j = i + 1; j < uniqueRawSuppliers.length; j++) {
-        const rawB = uniqueRawSuppliers[j];
-        const normKeyB = normalizeSupplierKey(rawB);
-
-        // Exact match of normalized words in any order
-        if (normKeyA && normKeyA === normKeyB) {
-          supplierUf.union(rawA, rawB);
-        }
-      }
-    }
-
-    // Build supplier cluster statistics
-    interface SupplierClusterInfo {
-      rawVariants: Map<string, number>;
-      costCenterCodes: Set<string>;
-    }
-    const supplierClusters = new Map<string, SupplierClusterInfo>();
-
-    validRows.forEach(row => {
-      const raw = String(row['مركز التكلفة'] || '').trim();
-      const code = String(row['كود مركز التكلفة'] || '').trim();
-      if (!raw) return;
-
-      const root = supplierUf.find(raw);
-      if (!supplierClusters.has(root)) {
-        supplierClusters.set(root, {
-          rawVariants: new Map(),
-          costCenterCodes: new Set()
-        });
-      }
-      const cluster = supplierClusters.get(root)!;
-      cluster.rawVariants.set(raw, (cluster.rawVariants.get(raw) || 0) + 1);
-      if (code) {
-        cluster.costCenterCodes.add(code);
-      }
-    });
-
-    // Map each raw supplier to its canonical clean name and code
-    const canonicalSupplierMap = new Map<string, { name: string; code: string }>();
-
-    supplierClusters.forEach((cluster, root) => {
-      let bestName = '';
-      let bestScore = -1;
-
-      cluster.rawVariants.forEach((count, rawName) => {
-        const formatted = formatCleanSupplierName(rawName);
-        const tokens = extractSupplierTokens(formatted);
-        const score = (tokens.length * 100) + count;
-        if (score > bestScore) {
-          bestScore = score;
-          bestName = formatted;
-        }
-      });
-
-      const bestCode = Array.from(cluster.costCenterCodes)[0] || '';
-      const result = { name: bestName || root, code: bestCode };
-
-      cluster.rawVariants.forEach((_, rawName) => {
-        canonicalSupplierMap.set(rawName, result);
-      });
-    });
-
-    // ==========================================
     // 2. ITEM CODE UNIFICATION (ربط الصنف بالكود)
     // ==========================================
     // 2. UNIFIED ITEM NAME & CODE CANONICALIZATION
@@ -1113,14 +1034,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const rawOldCode = String(row['كود قديم'] || row['الكود القديم'] || '').trim();
       const rawItemName = String(row['اسم الصنف'] || row['الصنف'] || row['Item Name'] || row['الوصف'] || '').trim();
 
-      // Resolve supplier identity
-      let finalCostCenter = rawCostCenter;
-      let finalCostCenterCode = rawCostCenterCode;
-      if (rawCostCenter && canonicalSupplierMap.has(rawCostCenter)) {
-        const supp = canonicalSupplierMap.get(rawCostCenter)!;
-        finalCostCenter = supp.name;
-        finalCostCenterCode = finalCostCenterCode || supp.code;
-      }
+      // Resolve supplier identity independently (not bound to supplier code or merged across variants)
+      const finalCostCenter = formatCleanSupplierName(rawCostCenter) || rawCostCenter;
+      const finalCostCenterCode = rawCostCenterCode;
 
       // Resolve unified item identity by code
       let finalItemName = rawItemName;
@@ -1151,13 +1067,28 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const sapExecutionNo = override.sapExecutionNo !== undefined && override.sapExecutionNo !== '' 
         ? String(override.sapExecutionNo) 
         : rawSapExecution;
-      const initialAnalysis = override.initialAnalysis !== undefined ? String(override.initialAnalysis) : '';
-      const region = override.region !== undefined ? String(override.region) : '';
-      const price = override.price !== undefined && override.price !== '' ? Number(override.price) : 0;
-      const qualityDiscountPercent = override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '' 
-        ? Number(override.qualityDiscountPercent) 
-        : (Number(row['نسبة خصم الجودة'] || row['خصم الجودة'] || row['نسبة الخصم'] || 0) || 0);
-      const paymentMethod = override.paymentMethod !== undefined ? String(override.paymentMethod) : '';
+      const initialAnalysis = override.initialAnalysis !== undefined && override.initialAnalysis !== '' 
+        ? String(override.initialAnalysis) 
+        : String(row['التحليل الأولي'] || '').trim();
+      const region = override.region !== undefined && override.region !== '' 
+        ? String(override.region) 
+        : String(row['المنطقة / المزرعة'] || row['المنطقة'] || row['المزرعة'] || '').trim();
+      const rawPrice = override.price !== undefined && override.price !== '' 
+        ? override.price 
+        : (row['السعر الأساسي (ج.م/كجم)'] || row['السعر الأساسي'] || row['السعر']);
+      const price = rawPrice !== undefined && rawPrice !== '-' && rawPrice !== '' ? Number(rawPrice) || 0 : 0;
+      
+      const rawDiscount = override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '' 
+        ? override.qualityDiscountPercent 
+        : (row['نسبة خصم الجودة %'] || row['نسبة خصم الجودة'] || row['خصم الجودة'] || row['نسبة الخصم']);
+      let qualityDiscountPercent = 0;
+      if (rawDiscount !== undefined && rawDiscount !== '-' && rawDiscount !== '') {
+        const discStr = String(rawDiscount).replace('%', '').trim();
+        qualityDiscountPercent = Number(discStr) || 0;
+      }
+      const paymentMethod = override.paymentMethod !== undefined && override.paymentMethod !== '' 
+        ? String(override.paymentMethod) 
+        : String(row['طريقة السداد'] || '').trim();
       const routing = override.routing !== undefined ? String(override.routing) : String(row['توجيه'] || row['التوجيه'] || '').trim();
       const notes = override.notes !== undefined ? String(override.notes) : '';
       const updatedAt = override.updatedAt;
@@ -1503,14 +1434,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       // PO Filter
       if (poFilter !== 'ALL') {
-        const hasPo = record.po && record.po.trim() !== '' && record.po !== '-';
+        const poVal = record.po !== undefined && record.po !== null ? String(record.po).trim() : '';
+        const hasPo = poVal !== '' && poVal !== '-';
         if (poFilter === 'EXISTS' && !hasPo) return false;
         if (poFilter === 'EMPTY' && hasPo) return false;
       }
 
       // SAP Execution Filter
       if (sapFilter !== 'ALL') {
-        const hasSap = record.sapExecutionNo && record.sapExecutionNo.trim() !== '' && record.sapExecutionNo !== '-';
+        const sapVal = record.sapExecutionNo !== undefined && record.sapExecutionNo !== null ? String(record.sapExecutionNo).trim() : '';
+        const hasSap = sapVal !== '' && sapVal !== '-';
         if (sapFilter === 'EXISTS' && !hasSap) return false;
         if (sapFilter === 'EMPTY' && hasSap) return false;
       }
@@ -1558,7 +1491,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     selectedVarieties, 
     dateFilter, 
     sortField, 
-    sortOrder
+    sortOrder,
+    poFilter,
+    sapFilter
   ]);
 
   // Fixed Totals Independent of Filters (like OliveStock)
@@ -3539,7 +3474,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           </div>
 
           {/* Clear Filters Button */}
-          {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || analysisFilter !== 'ALL') && (
+          {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || analysisFilter !== 'ALL' || poFilter !== 'ALL' || sapFilter !== 'ALL') && (
             <button
               onClick={handleClearFilters}
               className="h-10 px-3.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border border-red-200 dark:border-red-800/60"
