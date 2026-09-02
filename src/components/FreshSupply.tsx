@@ -77,7 +77,8 @@ import {
   Clock,
   Printer,
   Route,
-  Upload
+  Upload,
+  Edit
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -655,6 +656,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Selected row for detail modal
   const [selectedRecord, setSelectedRecord] = useState<FreshSupplyRecord | null>(null);
 
+  // Bulk selection & edit state
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [bulkEditForm, setBulkEditForm] = useState({
+    po: '',
+    sapExecutionNo: ''
+  });
+
   // User role checking for permission restriction:
   // Restricted to: مسئول الاعتماد, مسئول التنفيذ, مسئول التسجيل, Admin
   const userRoles = useMemo(() => {
@@ -832,6 +841,73 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       toast.error(isRtl ? 'حدث خطأ أثناء حفظ البيانات' : 'Failed to save details');
     } finally {
       setIsSavingRecord(false);
+    }
+  };
+
+  const handleBulkSave = async () => {
+    if (selectedRowIds.length === 0) return;
+    try {
+      const cachedStr = localStorage.getItem(STORAGE_OVERRIDES_KEY);
+      const cachedMap = cachedStr ? JSON.parse(cachedStr) : {};
+
+      const updatedData: any = {};
+      if (bulkEditForm.po.trim() !== '') {
+        updatedData.po = bulkEditForm.po.trim();
+      }
+      if (bulkEditForm.sapExecutionNo.trim() !== '') {
+        updatedData.sapExecutionNo = bulkEditForm.sapExecutionNo.trim();
+      }
+
+      if (Object.keys(updatedData).length === 0) {
+        toast.error(isRtl ? 'يرجى إدخال قيمة لتحديث أمر الشراء أو رقم ساب' : 'Please enter PO or SAP Execution No to update');
+        return;
+      }
+
+      updatedData.updatedAt = new Date().toISOString();
+      updatedData.updatedBy = user?.displayName || user?.username || (isRtl ? 'مستخدم النظام' : 'System User');
+
+      selectedRowIds.forEach(id => {
+        const record = data.find(r => r.id === id);
+        if (record) {
+          cachedMap[id] = {
+            id,
+            movementNo: record.movementNo || '',
+            ...(cachedMap[id] || {}),
+            ...updatedData
+          };
+
+          setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, id), {
+            id,
+            movementNo: record.movementNo || '',
+            ...updatedData
+          }, { merge: true }).catch(err => console.warn("Firestore bulk save warning:", err));
+        }
+      });
+
+      localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(cachedMap));
+
+      setData(prev => prev.map(item => {
+        if (selectedRowIds.includes(item.id)) {
+          return {
+            ...item,
+            ...updatedData
+          };
+        }
+        return item;
+      }));
+
+      toast.success(
+        isRtl 
+          ? `تم تحديث (${selectedRowIds.length}) صف بنجاح!` 
+          : `Successfully updated (${selectedRowIds.length}) rows!`
+      );
+
+      setIsBulkEditModalOpen(false);
+      setSelectedRowIds([]);
+      setBulkEditForm({ po: '', sapExecutionNo: '' });
+    } catch (err: any) {
+      console.error("Bulk save error:", err);
+      toast.error(isRtl ? 'فشل التحديث الجماعي' : 'Bulk update failed');
     }
   };
 
@@ -3098,23 +3174,27 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   <span className="hidden sm:inline">{isRtl ? 'تصدير إكسيل' : 'Excel'}</span>
                 </button>
 
-                {/* Import Excel */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImportExcel}
-                  accept=".xlsx, .xls, .csv"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting}
-                  className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-sm"
-                  title={isRtl ? 'استيراد وتحديث البيانات من شيت إكسيل معدل' : 'Import & update data from modified Excel'}
-                >
-                  <Upload className={`w-4 h-4 ${isImporting ? 'animate-bounce' : ''}`} />
-                  <span className="hidden sm:inline">{isRtl ? 'استيراد تعديل الإكسيل' : 'Import Excel'}</span>
-                </button>
+                {/* Import Excel - Restricted to Admin Only */}
+                {userRoles.includes('Admin') && (
+                  <>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImportExcel}
+                      accept=".xlsx, .xls, .csv"
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isImporting}
+                      className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-sm"
+                      title={isRtl ? 'استيراد وتحديث البيانات من شيت إكسيل معدل (متاح للادمن فقط)' : 'Import & update data from modified Excel (Admin Only)'}
+                    >
+                      <Upload className={`w-4 h-4 ${isImporting ? 'animate-bounce' : ''}`} />
+                      <span className="hidden sm:inline">{isRtl ? 'استيراد تعديل الإكسيل' : 'Import Excel'}</span>
+                    </button>
+                  </>
+                )}
 
                 {/* Export PDF */}
                 <button
@@ -3555,7 +3635,37 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       {/* View 1: Main Table View (Single Continuous Scrollable Page) */}
       {!loading && activeView === 'table' && (
-        <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col">
+        <div className="space-y-4">
+          {/* Floating Bulk Selection Action Bar */}
+          {selectedRowIds.length > 0 && (
+            <div className="bg-purple-900 text-white px-6 py-3.5 rounded-2xl shadow-xl flex items-center justify-between flex-wrap gap-3 animate-fade-in">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-black text-xs">
+                  {selectedRowIds.length}
+                </div>
+                <span className="font-bold text-xs">
+                  {isRtl ? `تم تحديد (${selectedRowIds.length}) صف لتعديل أمر التوريد ورقم الساب` : `Selected (${selectedRowIds.length}) rows for bulk update`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsBulkEditModalOpen(true)}
+                  className="px-4 py-2 bg-white text-purple-900 hover:bg-purple-50 font-black text-xs rounded-xl shadow transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>{isRtl ? 'تعديل جماعي (أمر توريد / ساب)' : 'Bulk Edit (PO / SAP)'}</span>
+                </button>
+                <button
+                  onClick={() => setSelectedRowIds([])}
+                  className="px-3 py-2 bg-purple-800 hover:bg-purple-700 text-purple-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  {isRtl ? 'إلغاء التحديد ✕' : 'Clear Selection ✕'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex flex-col">
           
           {/* Scrollable Table Container */}
           <div 
@@ -3567,7 +3677,24 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 <tr className="bg-zinc-100/95 dark:bg-zinc-800/95 backdrop-blur text-zinc-700 dark:text-zinc-300 text-[11px] font-black border-b border-zinc-200 dark:border-zinc-700 select-none">
                   
                   {visibleColumns.index && (
-                    <th className="py-3.5 px-3 w-12 text-center">#</th>
+                    <th className="py-3.5 px-3 w-16 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={filteredData.length > 0 && selectedRowIds.length === filteredData.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedRowIds(filteredData.map(r => r.id));
+                            } else {
+                              setSelectedRowIds([]);
+                            }
+                          }}
+                          className="rounded border-zinc-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                          title={isRtl ? 'تحديد الكل' : 'Select All'}
+                        />
+                        <span>#</span>
+                      </div>
+                    </th>
                   )}
 
                   {visibleColumns.date && (
@@ -3727,7 +3854,21 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         
                         {visibleColumns.index && (
                           <td className="py-3 px-3 text-center font-mono text-zinc-400 text-[11px]">
-                            {rowNumber}
+                            <div className="flex items-center justify-center gap-1.5">
+                              <input
+                                type="checkbox"
+                                checked={selectedRowIds.includes(record.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedRowIds(prev => [...prev, record.id]);
+                                  } else {
+                                    setSelectedRowIds(prev => prev.filter(id => id !== record.id));
+                                  }
+                                }}
+                                className="rounded border-zinc-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                              />
+                              <span>{rowNumber}</span>
+                            </div>
                           </td>
                         )}
 
@@ -4030,6 +4171,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 <span>{isRtl ? 'أسفل الجدول' : 'Bottom'}</span>
               </button>
             </div>
+
+          </div>
 
           </div>
 
@@ -5286,6 +5429,77 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Bulk Edit Modal */}
+      {isBulkEditModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-200 dark:border-zinc-800 space-y-5 animate-scale-up">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+              <h3 className="text-base font-black text-zinc-900 dark:text-white flex items-center gap-2">
+                <Edit className="w-4 h-4 text-purple-600" />
+                <span>{isRtl ? `تعديل جماعي لـ (${selectedRowIds.length}) صف` : `Bulk Edit (${selectedRowIds.length}) Rows`}</span>
+              </h3>
+              <button
+                onClick={() => setIsBulkEditModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-black text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  {isRtl ? 'رقم أمر الشراء / التوريد (PO):' : 'Purchase Order (PO):'}
+                </label>
+                <input
+                  type="text"
+                  value={bulkEditForm.po}
+                  onChange={(e) => setBulkEditForm({ ...bulkEditForm, po: e.target.value })}
+                  placeholder={isRtl ? 'أدخل رقم أمر الشراء المشترك (اختياري)...' : 'Enter common PO number (optional)...'}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  {isRtl ? 'رقم تنفيذ الساب (SAP Execution):' : 'SAP Execution No:'}
+                </label>
+                <input
+                  type="text"
+                  value={bulkEditForm.sapExecutionNo}
+                  onChange={(e) => setBulkEditForm({ ...bulkEditForm, sapExecutionNo: e.target.value })}
+                  placeholder={isRtl ? 'أدخل رقم تنفيذ الساب المشترك (اختياري)...' : 'Enter common SAP execution no (optional)...'}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                />
+              </div>
+
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 p-3 rounded-xl leading-relaxed">
+                {isRtl 
+                  ? 'ملاحظة: سيتم تطبيق القيم المدخلة على جميع الصفوف المحددة وتحديثها في التخزين السحابي والمحلي فوراً.' 
+                  : 'Note: Entered values will be applied to all selected rows and updated in cloud & local storage immediately.'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setIsBulkEditModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkSave}
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20 transition-all cursor-pointer"
+              >
+                {isRtl ? 'تطبيق وحفظ التعديلات' : 'Apply & Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
