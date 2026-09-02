@@ -640,6 +640,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [mainCategoryFilter, setMainCategoryFilter] = useState<'ALL' | 'OLIVES' | 'PEPPER' | 'OTHER'>('ALL');
   const [analysisFilter, setAnalysisFilter] = useState<'ALL' | 'PESTICIDE_FREE' | 'PESTICIDES' | 'RANDOM' | 'NONE'>('ALL');
+  const [poFilter, setPoFilter] = useState<string>('ALL');
+  const [sapFilter, setSapFilter] = useState<string>('ALL');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
@@ -1497,6 +1499,20 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           if (startD && record.parsedDate < startD) return false;
           if (endD && record.parsedDate > endD) return false;
         }
+      }
+
+      // PO Filter
+      if (poFilter !== 'ALL') {
+        const hasPo = record.po && record.po.trim() !== '' && record.po !== '-';
+        if (poFilter === 'EXISTS' && !hasPo) return false;
+        if (poFilter === 'EMPTY' && hasPo) return false;
+      }
+
+      // SAP Execution Filter
+      if (sapFilter !== 'ALL') {
+        const hasSap = record.sapExecutionNo && record.sapExecutionNo.trim() !== '' && record.sapExecutionNo !== '-';
+        if (sapFilter === 'EXISTS' && !hasSap) return false;
+        if (sapFilter === 'EMPTY' && hasSap) return false;
       }
 
       return true;
@@ -2517,6 +2533,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     setSearchTerm('');
     setMainCategoryFilter('ALL');
     setAnalysisFilter('ALL');
+    setPoFilter('ALL');
+    setSapFilter('ALL');
     setSelectedItems([]);
     setSelectedSuppliers([]);
     setSelectedStores([]);
@@ -3492,6 +3510,32 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               buttonClassName="h-10 px-3.5 py-2 text-xs"
               placeholder={isRtl ? 'تصفية بالتاريخ / الفترة' : 'Filter Date / Period'}
             />
+          </div>
+
+          {/* PO Filter */}
+          <div className="shrink-0">
+            <select
+              value={poFilter}
+              onChange={(e) => setPoFilter(e.target.value)}
+              className="h-10 px-3.5 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-900 dark:text-zinc-100 text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-hidden cursor-pointer"
+            >
+              <option value="ALL">{isRtl ? '📦 أمر الشراء (الكل)' : 'All PO'}</option>
+              <option value="EXISTS">{isRtl ? '✔️ يوجد أمر شراء (PO)' : 'PO Exists'}</option>
+              <option value="EMPTY">{isRtl ? '❌ لا يوجد أمر شراء' : 'PO Empty'}</option>
+            </select>
+          </div>
+
+          {/* SAP Execution Filter */}
+          <div className="shrink-0">
+            <select
+              value={sapFilter}
+              onChange={(e) => setSapFilter(e.target.value)}
+              className="h-10 px-3.5 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-900 dark:text-zinc-100 text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-hidden cursor-pointer"
+            >
+              <option value="ALL">{isRtl ? '⚙️ تنفيذ ساب (الكل)' : 'All SAP'}</option>
+              <option value="EXISTS">{isRtl ? '✔️ يوجد تنفيذ ساب' : 'SAP Exists'}</option>
+              <option value="EMPTY">{isRtl ? '❌ لا يوجد تنفيذ ساب' : 'SAP Empty'}</option>
+            </select>
           </div>
 
           {/* Clear Filters Button */}
