@@ -274,6 +274,33 @@ export const COMMON_GENERIC_NAMES = new Set([
 ]);
 
 /**
+ * Robustly extract a value from a row object regardless of spacing, punctuation, case, or column header aliases
+ */
+export const getRowValueFlexible = (row: any, ...aliases: string[]): string => {
+  if (!row || typeof row !== 'object') return '';
+  // 1. Direct key match
+  for (const alias of aliases) {
+    if (row[alias] !== undefined && row[alias] !== null) {
+      const val = String(row[alias]).trim();
+      if (val !== '') return val;
+    }
+  }
+  // 2. Normalized key match (ignoring spaces, punctuation, underscores, dashes, hashes, case)
+  const rowKeys = Object.keys(row);
+  for (const alias of aliases) {
+    const normAlias = alias.replace(/[\s_\-\.\:\/\\#%]+/g, '').toLowerCase();
+    for (const rk of rowKeys) {
+      const normRk = rk.replace(/[\s_\-\.\:\/\\#%]+/g, '').toLowerCase();
+      if (normAlias === normRk && row[rk] !== undefined && row[rk] !== null) {
+        const val = String(row[rk]).trim();
+        if (val !== '') return val;
+      }
+    }
+  }
+  return '';
+};
+
+/**
  * Format raw supplier name into clean presentation string (removes stray brackets/dashes)
  */
 export const formatCleanSupplierName = (rawName: string): string => {
@@ -663,7 +690,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   const [bulkEditForm, setBulkEditForm] = useState({
     po: '',
-    sapExecutionNo: ''
+    sapExecutionNo: '',
+    postDocument: ''
   });
 
   // User role checking for permission restriction:
@@ -689,10 +717,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     return userRoles.some(r => targetRoles.includes(r));
   }, [user, userRoles]);
 
-  // Form state for editing record details (PO, sapExecutionNo, initialAnalysis, region, price, qualityDiscountPercent, paymentMethod, notes)
+  // Form state for editing record details (PO, sapExecutionNo, postDocument, initialAnalysis, region, price, qualityDiscountPercent, paymentMethod, notes)
   const [editForm, setEditForm] = useState({
     po: '',
     sapExecutionNo: '',
+    postDocument: '',
     initialAnalysis: '',
     region: '',
     price: '' as number | string,
@@ -709,6 +738,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       setEditForm({
         po: selectedRecord.po || '',
         sapExecutionNo: selectedRecord.sapExecutionNo || '',
+        postDocument: selectedRecord.postDocument || '',
         initialAnalysis: selectedRecord.initialAnalysis || '',
         region: selectedRecord.region || '',
         price: selectedRecord.price !== undefined && selectedRecord.price !== null ? selectedRecord.price : '',
@@ -737,7 +767,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     price: true, // Show price in table by default as requested
     paymentMethod: false,
     initialAnalysis: false,
-    postDocument: false,
+    postDocument: true, // Enable POST DOCUMENT in table by default
     store: true,
     actions: true
   });
@@ -781,9 +811,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const numPrice = editForm.price !== '' ? Number(editForm.price) || 0 : 0;
       const numDiscount = editForm.qualityDiscountPercent !== '' ? Number(editForm.qualityDiscountPercent) || 0 : 0;
       
+      const execVal = (editForm.postDocument || editForm.sapExecutionNo || '').trim();
       const updatedData: Partial<FreshSupplyRecord> = {
         po: editForm.po.trim(),
-        sapExecutionNo: editForm.sapExecutionNo.trim(),
+        sapExecutionNo: execVal,
+        postDocument: execVal,
         initialAnalysis: editForm.initialAnalysis.trim(),
         region: editForm.region.trim(),
         price: numPrice,
@@ -835,8 +867,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       toast.success(
         isRtl 
-          ? 'تم حفظ بيانات التوريد (أمر الشراء، التحليل الأولي، المنطقة، السعر، وطريقة السداد) بنجاح!' 
-          : 'Supply details (PO, Analysis, Region, Price, Payment) saved successfully!'
+          ? 'تم حفظ بيانات التوريد (أمر الشراء، تنفيذ الساب، مستند الترحيل POST DOCUMENT، والتحليل) بنجاح!' 
+          : 'Supply details (PO, SAP Exec, POST DOC, Analysis, Price) saved successfully!'
       );
     } catch (err: any) {
       console.error("Save Record Details Error:", err);
@@ -856,12 +888,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       if (bulkEditForm.po.trim() !== '') {
         updatedData.po = bulkEditForm.po.trim();
       }
-      if (bulkEditForm.sapExecutionNo.trim() !== '') {
-        updatedData.sapExecutionNo = bulkEditForm.sapExecutionNo.trim();
+      if (bulkEditForm.postDocument.trim() !== '' || bulkEditForm.sapExecutionNo.trim() !== '') {
+        const execVal = (bulkEditForm.postDocument || bulkEditForm.sapExecutionNo).trim();
+        updatedData.sapExecutionNo = execVal;
+        updatedData.postDocument = execVal;
       }
 
       if (Object.keys(updatedData).length === 0) {
-        toast.error(isRtl ? 'يرجى إدخال قيمة لتحديث أمر الشراء أو رقم ساب' : 'Please enter PO or SAP Execution No to update');
+        toast.error(isRtl ? 'يرجى إدخال قيمة لتحديث أمر الشراء أو رقم تنفيذ الساب / مستند الترحيل' : 'Please enter PO or SAP Execution / POST DOCUMENT to update');
         return;
       }
 
@@ -906,7 +940,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       setIsBulkEditModalOpen(false);
       setSelectedRowIds([]);
-      setBulkEditForm({ po: '', sapExecutionNo: '' });
+      setBulkEditForm({ po: '', sapExecutionNo: '', postDocument: '' });
     } catch (err: any) {
       console.error("Bulk save error:", err);
       toast.error(isRtl ? 'فشل التحديث الجماعي' : 'Bulk update failed');
@@ -1062,37 +1096,133 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       // Check overrides by fallbackId (unique row ID) first, then movementNo
       const override = overridesMap[fallbackId] || (rawMoveNo && overridesMap[rawMoveNo]) || overridesMap[`fresh-${idx}`] || {};
-      const finalPo = override.po !== undefined && override.po !== '' ? String(override.po) : String(row['PO'] || '').trim();
-      const rawSapExecution = String(row['رقم تنفيذ الساب'] || row['تنفيذ الساب'] || row['SAP Execution'] || row['رقم التنفيذ'] || row['تنفيذ ساب'] || '').trim();
-      const sapExecutionNo = override.sapExecutionNo !== undefined && override.sapExecutionNo !== '' 
-        ? String(override.sapExecutionNo) 
-        : rawSapExecution;
-      const initialAnalysis = override.initialAnalysis !== undefined && override.initialAnalysis !== '' 
-        ? String(override.initialAnalysis) 
-        : String(row['التحليل الأولي'] || '').trim();
-      const region = override.region !== undefined && override.region !== '' 
-        ? String(override.region) 
-        : String(row['المنطقة / المزرعة'] || row['المنطقة'] || row['المزرعة'] || '').trim();
-      const rawPrice = override.price !== undefined && override.price !== '' 
-        ? override.price 
-        : (row['السعر الأساسي (ج.م/كجم)'] || row['السعر الأساسي'] || row['السعر']);
-      const price = rawPrice !== undefined && rawPrice !== '-' && rawPrice !== '' ? Number(rawPrice) || 0 : 0;
+      const rawPo = getRowValueFlexible(
+        row,
+        'PO',
+        'أمر الشراء PO',
+        'أمر الشراء',
+        'امر الشراء',
+        'رقم أمر الشراء',
+        'رقم امر الشراء',
+        'PO Number',
+        'PO No',
+        'Purchase Order'
+      );
+      const finalPo = override.po !== undefined && override.po !== '' ? String(override.po).trim() : rawPo;
       
-      const rawDiscount = override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '' 
+      const rawSapExecution = getRowValueFlexible(
+        row,
+        'رقم تنفيذ الساب',
+        'تنفيذ الساب',
+        'رقم تنفيذ ساب',
+        'تنفيذ ساب',
+        'رقم التنفيذ',
+        'تنفيذ',
+        'رقم امر تنفيذ الساب',
+        'رقم أمر تنفيذ الساب',
+        'امر تنفيذ الساب',
+        'أمر تنفيذ الساب',
+        'SAP Execution',
+        'SAP Execution No',
+        'SAP Execution No.',
+        'SAP Execution Number',
+        'SAP_EXECUTION',
+        'SAP_EXECUTION_NO',
+        'SAP Execution #'
+      );
+      const sapExecutionNo = override.sapExecutionNo !== undefined && override.sapExecutionNo !== '' 
+        ? String(override.sapExecutionNo).trim() 
+        : rawSapExecution;
+
+      const rawInitialAnalysis = getRowValueFlexible(
+        row,
+        'التحليل الأولي',
+        'التحليل الاولي',
+        'تحليل أولي',
+        'تحليل اولي',
+        'التحليل',
+        'مبيدات / خالي',
+        'Initial Analysis'
+      );
+      const initialAnalysis = override.initialAnalysis !== undefined && override.initialAnalysis !== '' 
+        ? String(override.initialAnalysis).trim() 
+        : rawInitialAnalysis;
+
+      const rawRegion = getRowValueFlexible(
+        row,
+        'المنطقة / المزرعة',
+        'المنطقة',
+        'المزرعة',
+        'الموقع الزراعي',
+        'Region',
+        'Farm'
+      );
+      const region = override.region !== undefined && override.region !== '' 
+        ? String(override.region).trim() 
+        : rawRegion;
+
+      const rawPriceVal = override.price !== undefined && override.price !== '' 
+        ? override.price 
+        : getRowValueFlexible(row, 'السعر الأساسي (ج.م/كجم)', 'السعر الأساسي', 'السعر الاساسي', 'السعر', 'سعر الكيلو', 'Base Price', 'Price');
+      const price = rawPriceVal !== undefined && rawPriceVal !== '-' && rawPriceVal !== '' ? Number(rawPriceVal) || 0 : 0;
+      
+      const rawDiscountVal = override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '' 
         ? override.qualityDiscountPercent 
-        : (row['نسبة خصم الجودة %'] || row['نسبة خصم الجودة'] || row['خصم الجودة'] || row['نسبة الخصم']);
+        : getRowValueFlexible(row, 'نسبة خصم الجودة %', 'نسبة خصم الجودة', 'خصم الجودة', 'نسبة الخصم', 'الخصم', 'Quality Discount');
       let qualityDiscountPercent = 0;
-      if (rawDiscount !== undefined && rawDiscount !== '-' && rawDiscount !== '') {
-        const discStr = String(rawDiscount).replace('%', '').trim();
+      if (rawDiscountVal !== undefined && rawDiscountVal !== '-' && rawDiscountVal !== '') {
+        const discStr = String(rawDiscountVal).replace('%', '').trim();
         qualityDiscountPercent = Number(discStr) || 0;
       }
+
+      const rawPaymentMethod = getRowValueFlexible(
+        row,
+        'طريقة السداد',
+        'السداد',
+        'طريقة الدفع',
+        'الدفع',
+        'Payment Method'
+      );
       const paymentMethod = override.paymentMethod !== undefined && override.paymentMethod !== '' 
-        ? String(override.paymentMethod) 
-        : String(row['طريقة السداد'] || '').trim();
-      const routing = override.routing !== undefined ? String(override.routing) : String(row['توجيه'] || row['التوجيه'] || '').trim();
-      const notes = override.notes !== undefined ? String(override.notes) : '';
+        ? String(override.paymentMethod).trim() 
+        : rawPaymentMethod;
+
+      const rawRouting = getRowValueFlexible(row, 'توجيه', 'التوجيه', 'Routing');
+      const routing = override.routing !== undefined ? String(override.routing).trim() : rawRouting;
+      const notes = override.notes !== undefined ? String(override.notes).trim() : '';
       const updatedAt = override.updatedAt;
       const updatedBy = override.updatedBy;
+
+      const rawPostDocument = getRowValueFlexible(
+        row,
+        'POST DOCUMENT',
+        'POST_DOCUMENT',
+        'POSTDOCUMENT',
+        'Post Document',
+        'Post Doc',
+        'POST DOC',
+        'مستند الترحيل',
+        'رقم مستند الترحيل',
+        'مستند الصرف',
+        'رقم مستند الصرف',
+        'مستند الاستلام',
+        'مستند ترحيل'
+      );
+      const postDocument = override.postDocument !== undefined && override.postDocument !== '' 
+        ? String(override.postDocument).trim() 
+        : rawPostDocument;
+
+      const rawReservation = getRowValueFlexible(
+        row,
+        'RESERVATION',
+        'Reservation',
+        'حجز',
+        'رقم الحجز',
+        'RES'
+      );
+      const reservation = override.reservation !== undefined && override.reservation !== '' 
+        ? String(override.reservation).trim() 
+        : rawReservation;
 
       return {
         id: fallbackId,
@@ -1117,8 +1247,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         notes,
         updatedAt,
         updatedBy,
-        reservation: String(row['RESERVATION'] || '').trim(),
-        postDocument: String(row['POST DOCUMENT'] || '').trim(),
+        reservation,
+        postDocument,
         oldCode: finalOldCode,
         sapCode: finalSapCode,
         itemName: finalItemName,
@@ -1258,6 +1388,33 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         if (excludeKey !== 'location' && selectedLocations.length > 0 && !selectedLocations.includes(record.location)) {
           return false;
         }
+        if (poFilter !== 'ALL') {
+          const poVal = record.po !== undefined && record.po !== null ? String(record.po).trim() : '';
+          const hasPo = poVal !== '' && 
+                        poVal !== '-' && 
+                        poVal !== '--' && 
+                        poVal !== '0' && 
+                        poVal.toLowerCase() !== 'null' && 
+                        poVal.toLowerCase() !== 'undefined' && 
+                        poVal.toLowerCase() !== 'n/a' && 
+                        poVal.toLowerCase() !== 'none';
+          if (poFilter === 'EXISTS' && !hasPo) return false;
+          if (poFilter === 'EMPTY' && hasPo) return false;
+        }
+        if (sapFilter !== 'ALL') {
+          const rawSap = (record.postDocument || record.sapExecutionNo);
+          const sapVal = rawSap !== undefined && rawSap !== null ? String(rawSap).trim() : '';
+          const hasSap = sapVal !== '' && 
+                         sapVal !== '-' && 
+                         sapVal !== '--' && 
+                         sapVal !== '0' && 
+                         sapVal.toLowerCase() !== 'null' && 
+                         sapVal.toLowerCase() !== 'undefined' && 
+                         sapVal.toLowerCase() !== 'n/a' && 
+                         sapVal.toLowerCase() !== 'none';
+          if (sapFilter === 'EXISTS' && !hasSap) return false;
+          if (sapFilter === 'EMPTY' && hasSap) return false;
+        }
         return true;
       });
     };
@@ -1306,7 +1463,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       locations: Array.from(locationsSet).sort(),
       dates: sortedUniqueDates
     };
-  }, [data, mainCategoryFilter, selectedItems, selectedSuppliers, selectedStores, selectedLocations, isRtl]);
+  }, [data, mainCategoryFilter, selectedItems, selectedSuppliers, selectedStores, selectedLocations, poFilter, sapFilter, isRtl]);
 
   // Filtered & Sorted Records
   const filteredData = useMemo(() => {
@@ -1435,15 +1592,30 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       // PO Filter
       if (poFilter !== 'ALL') {
         const poVal = record.po !== undefined && record.po !== null ? String(record.po).trim() : '';
-        const hasPo = poVal !== '' && poVal !== '-';
+        const hasPo = poVal !== '' && 
+                      poVal !== '-' && 
+                      poVal !== '--' && 
+                      poVal !== '0' && 
+                      poVal.toLowerCase() !== 'null' && 
+                      poVal.toLowerCase() !== 'undefined' && 
+                      poVal.toLowerCase() !== 'n/a' && 
+                      poVal.toLowerCase() !== 'none';
         if (poFilter === 'EXISTS' && !hasPo) return false;
         if (poFilter === 'EMPTY' && hasPo) return false;
       }
 
-      // SAP Execution Filter
+      // SAP Execution Filter (رقم تنفيذ الساب / POST DOCUMENT)
       if (sapFilter !== 'ALL') {
-        const sapVal = record.sapExecutionNo !== undefined && record.sapExecutionNo !== null ? String(record.sapExecutionNo).trim() : '';
-        const hasSap = sapVal !== '' && sapVal !== '-';
+        const rawSap = (record.postDocument || record.sapExecutionNo);
+        const sapVal = rawSap !== undefined && rawSap !== null ? String(rawSap).trim() : '';
+        const hasSap = sapVal !== '' && 
+                       sapVal !== '-' && 
+                       sapVal !== '--' && 
+                       sapVal !== '0' && 
+                       sapVal.toLowerCase() !== 'null' && 
+                       sapVal.toLowerCase() !== 'undefined' && 
+                       sapVal.toLowerCase() !== 'n/a' && 
+                       sapVal.toLowerCase() !== 'none';
         if (sapFilter === 'EXISTS' && !hasSap) return false;
         if (sapFilter === 'EMPTY' && hasSap) return false;
       }
@@ -2519,6 +2691,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           
           const po = row['أمر الشراء PO'] !== undefined ? String(row['أمر الشراء PO']).trim() : matchedRecord.po;
           const sapExecutionNo = row['رقم تنفيذ الساب'] !== undefined ? String(row['رقم تنفيذ الساب']).trim() : matchedRecord.sapExecutionNo;
+          const postDocument = row['POST DOCUMENT'] !== undefined && row['POST DOCUMENT'] !== '-' 
+            ? String(row['POST DOCUMENT']).trim() 
+            : (row['مستند الصرف'] !== undefined && row['مستند الصرف'] !== '-' ? String(row['مستند الصرف']).trim() : matchedRecord.postDocument);
           const region = row['المنطقة / المزرعة'] !== undefined ? String(row['المنطقة / المزرعة']).trim() : matchedRecord.region;
           const initialAnalysis = row['التحليل الأولي'] !== undefined ? String(row['التحليل الأولي']).trim() : matchedRecord.initialAnalysis;
           
@@ -2539,6 +2714,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           const updatedData = {
             po,
             sapExecutionNo,
+            postDocument,
             region,
             initialAnalysis,
             price,
@@ -2575,6 +2751,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             ...item,
             po: ov.po !== undefined ? ov.po : item.po,
             sapExecutionNo: ov.sapExecutionNo !== undefined ? ov.sapExecutionNo : item.sapExecutionNo,
+            postDocument: ov.postDocument !== undefined ? ov.postDocument : item.postDocument,
             region: ov.region !== undefined ? ov.region : item.region,
             initialAnalysis: ov.initialAnalysis !== undefined ? ov.initialAnalysis : item.initialAnalysis,
             price: ov.price !== undefined ? ov.price : item.price,
@@ -3467,9 +3644,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               onChange={(e) => setSapFilter(e.target.value)}
               className="h-10 px-3.5 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-900 dark:text-zinc-100 text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-hidden cursor-pointer"
             >
-              <option value="ALL">{isRtl ? '⚙️ تنفيذ ساب (الكل)' : 'All SAP'}</option>
-              <option value="EXISTS">{isRtl ? '✔️ يوجد تنفيذ ساب' : 'SAP Exists'}</option>
-              <option value="EMPTY">{isRtl ? '❌ لا يوجد تنفيذ ساب' : 'SAP Empty'}</option>
+              <option value="ALL">{isRtl ? '⚙️ تنفيذ ساب / POST DOC (الكل)' : 'All SAP / POST DOC'}</option>
+              <option value="EXISTS">{isRtl ? '✔️ يوجد تنفيذ ساب (POST DOC)' : 'POST DOC Exists'}</option>
+              <option value="EMPTY">{isRtl ? '❌ لا يوجد تنفيذ ساب' : 'No POST DOC'}</option>
             </select>
           </div>
 
@@ -3517,7 +3694,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       price: isRtl ? 'السعر والقيمة (ج.م)' : 'Price & Value',
                       paymentMethod: isRtl ? 'طريقة السداد' : 'Payment Method',
                       initialAnalysis: isRtl ? 'التحليل الأولي' : 'Initial Analysis',
-                      postDocument: isRtl ? 'POST DOCUMENT' : 'Post Doc',
+                      postDocument: isRtl ? 'رقم تنفيذ الساب (POST DOCUMENT)' : 'POST DOCUMENT',
                       store: isRtl ? 'المخزن' : 'Store',
                       actions: isRtl ? 'الإجراءات' : 'Actions'
                     };
@@ -3792,7 +3969,20 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   )}
 
                   {visibleColumns.postDocument && (
-                    <th className="py-3.5 px-3">{isRtl ? 'POST DOCUMENT' : 'Post Doc'}</th>
+                    <th 
+                      onClick={() => handleSort('postDocument')}
+                      className={`py-3.5 px-3 cursor-pointer transition-colors ${
+                        sortField === 'postDocument' 
+                          ? 'bg-indigo-100/70 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-300 font-black' 
+                          : 'hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60'
+                      }`}
+                      title={isRtl ? 'انقر للترتيب حسب رقم تنفيذ الساب / POST DOCUMENT' : 'Sort by POST DOCUMENT'}
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>{isRtl ? 'رقم تنفيذ الساب (POST DOCUMENT)' : 'POST DOCUMENT'}</span>
+                        <ArrowUpDown className="w-3 h-3 text-zinc-400" />
+                      </div>
+                    </th>
                   )}
 
                   {visibleColumns.store && (
@@ -4054,8 +4244,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         )}
 
                         {visibleColumns.postDocument && (
-                          <td className="py-2.5 px-3 whitespace-nowrap font-mono text-zinc-500 dark:text-zinc-400 text-[10.5px]">
-                            {record.postDocument || '-'}
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            {record.postDocument ? (
+                              <span className="font-mono font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[11px]">
+                                {record.postDocument}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 text-[11px]">-</span>
+                            )}
                           </td>
                         )}
 
@@ -4840,18 +5036,21 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           />
                         </div>
 
-                        {/* 2. SAP Execution Number */}
+                        {/* 2. SAP Execution / POST DOCUMENT */}
                         <div className="space-y-1.5">
                           <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                            <FileCheck2 className="w-3.5 h-3.5 text-blue-600" />
-                            <span>{isRtl ? 'رقم تنفيذ الساب (SAP Execution No)' : 'SAP Execution No'}</span>
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>{isRtl ? 'رقم تنفيذ الساب (POST DOCUMENT)' : 'SAP Execution (POST DOCUMENT)'}</span>
                           </label>
                           <input
                             type="text"
-                            value={editForm.sapExecutionNo}
-                            onChange={(e) => setEditForm({ ...editForm, sapExecutionNo: e.target.value })}
-                            placeholder={isRtl ? 'مثال: 50000xxxxx أو كود التنفيذ' : 'e.g. 50000xxxxx'}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                            value={editForm.postDocument || editForm.sapExecutionNo}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditForm({ ...editForm, postDocument: val, sapExecutionNo: val });
+                            }}
+                            placeholder={isRtl ? 'مثال: 5000052380 أو كود الترحيل' : 'e.g. 5000052380'}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                           />
                         </div>
                       </div>
@@ -5442,13 +5641,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
               <div>
                 <label className="block text-xs font-black text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  {isRtl ? 'رقم تنفيذ الساب (SAP Execution):' : 'SAP Execution No:'}
+                  {isRtl ? 'رقم تنفيذ الساب (POST DOCUMENT):' : 'SAP Execution (POST DOCUMENT):'}
                 </label>
                 <input
                   type="text"
-                  value={bulkEditForm.sapExecutionNo}
-                  onChange={(e) => setBulkEditForm({ ...bulkEditForm, sapExecutionNo: e.target.value })}
-                  placeholder={isRtl ? 'أدخل رقم تنفيذ الساب المشترك (اختياري)...' : 'Enter common SAP execution no (optional)...'}
+                  value={bulkEditForm.postDocument || bulkEditForm.sapExecutionNo}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setBulkEditForm({ ...bulkEditForm, postDocument: val, sapExecutionNo: val });
+                  }}
+                  placeholder={isRtl ? 'أدخل رقم تنفيذ الساب / مستند الترحيل المشترك...' : 'Enter common POST DOCUMENT / SAP execution no...'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
                 />
               </div>
