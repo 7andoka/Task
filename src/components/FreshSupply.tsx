@@ -78,7 +78,10 @@ import {
   Printer,
   Route,
   Upload,
-  Edit
+  Edit,
+  Lock,
+  Laptop,
+  Plus
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -98,6 +101,7 @@ import {
 import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
+import { fixedSupplyPricesSnapshot } from '../data/fixedSupplyPrices';
 import { FreshItemsDashboard } from './FreshItemsDashboard';
 import { FreshSuppliersDashboard } from './FreshSuppliersDashboard';
 import { FreshAnalyticsDashboard } from './FreshAnalyticsDashboard';
@@ -132,6 +136,9 @@ export interface FreshSupplyRecord {
   paymentMethod?: string;    // طريقة السداد (نقدي / دفعات توريد)
   routing?: string;          // التوجيه (مياه وملح / مطبوخ / زيت / أخري)
   notes?: string;            // ملاحظات إضافية
+  isPriceFixed?: boolean;    // مثبت حتى 31/08/2026 (حسب طلب المستخدم)
+  isPricedInProgram?: boolean; // محدد ومسجل عبر البرنامج
+  isFromCurrentPeriod?: boolean; // من تاريخ 01/09/2026 فصاعداً (الوقت الحالي)
   updatedAt?: string;        // تاريخ ووقت آخر تعديل يدوي
   updatedBy?: string;        // اسم المستخدم الذي قام بالتعديل
   reservation: string;       // RESERVATION
@@ -691,8 +698,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const [bulkEditForm, setBulkEditForm] = useState({
     po: '',
     sapExecutionNo: '',
-    postDocument: ''
+    postDocument: '',
+    price: '',
+    initialAnalysis: '',
+    region: '',
+    paymentMethod: '',
+    qualityDiscountPercent: ''
   });
+
+  // Filter for pricing status (Fixed up to 31/08/2026, Priced in App, Pending Pricing)
+  const [pricingStatusFilter, setPricingStatusFilter] = useState<'ALL' | 'FIXED_PERIOD' | 'APP_PRICED' | 'PENDING_PRICING'>('ALL');
 
   // User role checking for permission restriction:
   // Restricted to: مسئول الاعتماد, مسئول التنفيذ, مسئول التسجيل, Admin
@@ -715,6 +730,31 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       'Registration Officer'
     ];
     return userRoles.some(r => targetRoles.includes(r));
+  }, [user, userRoles]);
+
+  // Restrict Prices to only: مسئول التسجيل, مسئول الاعتماد, مسئول التنفيذ, Admin
+  const canViewPrice = useMemo(() => {
+    if (!user) return false;
+    const allowed = [
+      'admin',
+      'Admin',
+      'ADMIN',
+      'مدير النظام',
+      'مسئول التسجيل',
+      'مسؤول التسجيل',
+      'Registration Officer',
+      'مسئول الاعتماد',
+      'مسؤول الاعتماد',
+      'Approval Officer',
+      'مسئول التنفيذ',
+      'مسؤول التنفيذ',
+      'Execution Officer'
+    ];
+    return userRoles.some(r => {
+      if (!r) return false;
+      const clean = String(r).trim();
+      return allowed.some(a => a.toLowerCase() === clean.toLowerCase());
+    });
   }, [user, userRoles]);
 
   // Form state for editing record details (PO, sapExecutionNo, postDocument, initialAnalysis, region, price, qualityDiscountPercent, paymentMethod, notes)
@@ -823,6 +863,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         paymentMethod: editForm.paymentMethod.trim(),
         routing: editForm.routing.trim(),
         notes: editForm.notes.trim(),
+        isPricedInProgram: true,
         updatedAt: new Date().toISOString(),
         updatedBy: user?.displayName || user?.username || (isRtl ? 'مستخدم النظام' : 'System User')
       };
@@ -849,6 +890,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           movementNo: selectedRecord.movementNo || '',
           ...updatedData
         };
+        if (selectedRecord.movementNo) {
+          cachedMap[selectedRecord.movementNo] = {
+            id: selectedRecord.movementNo,
+            movementNo: selectedRecord.movementNo,
+            ...updatedData
+          };
+        }
         localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(cachedMap));
       } catch (cacheErr) {
         console.error("Cache save error:", cacheErr);
@@ -861,14 +909,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           movementNo: selectedRecord.movementNo || '',
           ...updatedData
         }, { merge: true });
+
+        if (selectedRecord.movementNo) {
+          setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, selectedRecord.movementNo), {
+            id: selectedRecord.movementNo,
+            movementNo: selectedRecord.movementNo,
+            ...updatedData
+          }, { merge: true }).catch(() => {});
+        }
       } catch (fsErr) {
         console.warn("Firestore save warning (persisted locally):", fsErr);
       }
 
       toast.success(
         isRtl 
-          ? 'تم حفظ بيانات التوريد (أمر الشراء، تنفيذ الساب، مستند الترحيل POST DOCUMENT، والتحليل) بنجاح!' 
-          : 'Supply details (PO, SAP Exec, POST DOC, Analysis, Price) saved successfully!'
+          ? 'تم حفظ وتحديث بيانات التوريد (السعر الأساسي، التحليل، المنطقة، السداد، أمر الشراء ومستند الترحيل) بنجاح!' 
+          : 'Supply details (Price, Analysis, Region, Payment, PO, POST DOC) saved successfully!'
       );
     } catch (err: any) {
       console.error("Save Record Details Error:", err);
@@ -893,10 +949,29 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         updatedData.sapExecutionNo = execVal;
         updatedData.postDocument = execVal;
       }
+      if (canViewPrice && bulkEditForm.price !== '') {
+        updatedData.price = Number(bulkEditForm.price) || 0;
+      }
+      if (canViewPrice && bulkEditForm.qualityDiscountPercent !== '') {
+        updatedData.qualityDiscountPercent = Number(bulkEditForm.qualityDiscountPercent) || 0;
+      }
+      if (bulkEditForm.initialAnalysis.trim() !== '') {
+        updatedData.initialAnalysis = bulkEditForm.initialAnalysis.trim();
+      }
+      if (bulkEditForm.region.trim() !== '') {
+        updatedData.region = bulkEditForm.region.trim();
+      }
+      if (bulkEditForm.paymentMethod.trim() !== '') {
+        updatedData.paymentMethod = bulkEditForm.paymentMethod.trim();
+      }
 
       if (Object.keys(updatedData).length === 0) {
-        toast.error(isRtl ? 'يرجى إدخال قيمة لتحديث أمر الشراء أو رقم تنفيذ الساب / مستند الترحيل' : 'Please enter PO or SAP Execution / POST DOCUMENT to update');
+        toast.error(isRtl ? 'يرجى إدخال قيمة في أحد الحقول لتحديث الحركات المحددة' : 'Please enter a value in any field to update selected records');
         return;
+      }
+
+      if (canViewPrice && (bulkEditForm.price !== '' || bulkEditForm.initialAnalysis !== '' || bulkEditForm.region !== '' || bulkEditForm.paymentMethod !== '' || bulkEditForm.qualityDiscountPercent !== '')) {
+        updatedData.isPricedInProgram = true;
       }
 
       updatedData.updatedAt = new Date().toISOString();
@@ -912,11 +987,28 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             ...updatedData
           };
 
+          if (record.movementNo) {
+            cachedMap[record.movementNo] = {
+              id: record.movementNo,
+              movementNo: record.movementNo,
+              ...(cachedMap[record.movementNo] || {}),
+              ...updatedData
+            };
+          }
+
           setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, id), {
             id,
             movementNo: record.movementNo || '',
             ...updatedData
           }, { merge: true }).catch(err => console.warn("Firestore bulk save warning:", err));
+
+          if (record.movementNo) {
+            setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, record.movementNo), {
+              id: record.movementNo,
+              movementNo: record.movementNo,
+              ...updatedData
+            }, { merge: true }).catch(() => {});
+          }
         }
       });
 
@@ -934,13 +1026,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       toast.success(
         isRtl 
-          ? `تم تحديث (${selectedRowIds.length}) صف بنجاح!` 
-          : `Successfully updated (${selectedRowIds.length}) rows!`
+          ? `تم تحديث بيانات (${selectedRowIds.length}) حركة توريد بالبرنامج بنجاح!` 
+          : `Successfully updated (${selectedRowIds.length}) records in app!`
       );
 
       setIsBulkEditModalOpen(false);
       setSelectedRowIds([]);
-      setBulkEditForm({ po: '', sapExecutionNo: '', postDocument: '' });
+      setBulkEditForm({
+        po: '',
+        sapExecutionNo: '',
+        postDocument: '',
+        price: '',
+        initialAnalysis: '',
+        region: '',
+        paymentMethod: '',
+        qualityDiscountPercent: ''
+      });
     } catch (err: any) {
       console.error("Bulk save error:", err);
       toast.error(isRtl ? 'فشل التحديث الجماعي' : 'Bulk update failed');
@@ -1092,10 +1193,45 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       }
 
       const rawMoveNo = String(row['رقم الحركة'] || '').trim();
-      const fallbackId = `fresh-${idx}-${rawMoveNo || Math.random().toString(36).substr(2, 9)}`;
+      const rawTruck = String(row['رقم سيارة'] || '').trim();
+      const cleanItem = finalSapCode || finalItemName || '';
+      const cleanQty = String(row['اضافة'] || row['الكمية'] || '').replace(/,/g, '').trim();
 
-      // Check overrides by fallbackId (unique row ID) first, then movementNo
-      const override = overridesMap[fallbackId] || (rawMoveNo && overridesMap[rawMoveNo]) || overridesMap[`fresh-${idx}`] || {};
+      // Deterministic stable ID for the movement
+      const stableId = rawMoveNo 
+        ? `move_${rawMoveNo}_${cleanItem}_${rawTruck}_${cleanQty}`.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
+        : `fresh-${idx}-${cleanItem}`;
+      const fallbackOldId = `fresh-${idx}-${rawMoveNo || Math.random().toString(36).substr(2, 9)}`;
+
+      // Check overrides by stableId first, then movementNo, then legacy fallback IDs
+      const override = overridesMap[stableId] 
+        || (rawMoveNo && overridesMap[`${rawMoveNo}_${cleanItem}`])
+        || (rawMoveNo && overridesMap[rawMoveNo]) 
+        || overridesMap[fallbackOldId] 
+        || overridesMap[`fresh-${idx}`] 
+        || {};
+
+      // Determine if movement belongs to the fixed price period (on or before 31/08/2026)
+      const isPriceFixedPeriod = (() => {
+        if (parsedDate && !isNaN(parsedDate.getTime())) {
+          // Cutoff: 31 August 2026 end of day
+          const cutoff = new Date(2026, 7, 31, 23, 59, 59, 999);
+          return parsedDate.getTime() <= cutoff.getTime();
+        }
+        const cleanD = String(dateStr).toLowerCase();
+        if (cleanD.includes('sep') || cleanD.includes('/09/') || cleanD.includes('-09-')) return false;
+        if (cleanD.includes('oct') || cleanD.includes('/10/')) return false;
+        if (cleanD.includes('nov') || cleanD.includes('/11/')) return false;
+        if (cleanD.includes('dec') || cleanD.includes('/12/')) return false;
+        return true;
+      })();
+
+      // Snapshot entry for fixed prices up to 31/08/2026
+      const snapshotKey = `${rawMoveNo}_${finalSapCode || finalItemName}`;
+      const fixedSnapshot = isPriceFixedPeriod
+        ? ((fixedSupplyPricesSnapshot as Record<string, any>)[snapshotKey] || (fixedSupplyPricesSnapshot as Record<string, any>)[rawMoveNo] || null)
+        : null;
+
       const rawPo = getRowValueFlexible(
         row,
         'PO',
@@ -1146,7 +1282,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       );
       const initialAnalysis = override.initialAnalysis !== undefined && override.initialAnalysis !== '' 
         ? String(override.initialAnalysis).trim() 
-        : rawInitialAnalysis;
+        : (fixedSnapshot?.initialAnalysis ? String(fixedSnapshot.initialAnalysis).trim() : rawInitialAnalysis);
 
       const rawRegion = getRowValueFlexible(
         row,
@@ -1159,16 +1295,20 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       );
       const region = override.region !== undefined && override.region !== '' 
         ? String(override.region).trim() 
-        : rawRegion;
+        : (fixedSnapshot?.region ? String(fixedSnapshot.region).trim() : rawRegion);
 
       const rawPriceVal = override.price !== undefined && override.price !== '' 
         ? override.price 
-        : getRowValueFlexible(row, 'السعر الأساسي (ج.م/كجم)', 'السعر الأساسي', 'السعر الاساسي', 'السعر', 'سعر الكيلو', 'Base Price', 'Price');
+        : (fixedSnapshot?.price !== undefined && fixedSnapshot.price > 0 
+            ? fixedSnapshot.price 
+            : getRowValueFlexible(row, 'السعر الأساسي (ج.م/كجم)', 'السعر الأساسي', 'السعر الاساسي', 'السعر', 'سعر الكيلو', 'Base Price', 'Price'));
       const price = rawPriceVal !== undefined && rawPriceVal !== '-' && rawPriceVal !== '' ? Number(rawPriceVal) || 0 : 0;
       
       const rawDiscountVal = override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '' 
         ? override.qualityDiscountPercent 
-        : getRowValueFlexible(row, 'نسبة خصم الجودة %', 'نسبة خصم الجودة', 'خصم الجودة', 'نسبة الخصم', 'الخصم', 'Quality Discount');
+        : (fixedSnapshot?.qualityDiscountPercent !== undefined && fixedSnapshot.qualityDiscountPercent > 0
+            ? fixedSnapshot.qualityDiscountPercent
+            : getRowValueFlexible(row, 'نسبة خصم الجودة %', 'نسبة خصم الجودة', 'خصم الجودة', 'نسبة الخصم', 'الخصم', 'Quality Discount'));
       let qualityDiscountPercent = 0;
       if (rawDiscountVal !== undefined && rawDiscountVal !== '-' && rawDiscountVal !== '') {
         const discStr = String(rawDiscountVal).replace('%', '').trim();
@@ -1185,7 +1325,15 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       );
       const paymentMethod = override.paymentMethod !== undefined && override.paymentMethod !== '' 
         ? String(override.paymentMethod).trim() 
-        : rawPaymentMethod;
+        : (fixedSnapshot?.paymentMethod ? String(fixedSnapshot.paymentMethod).trim() : rawPaymentMethod);
+
+      const isPricedInProgram = !isPriceFixedPeriod && (
+        (override.price !== undefined && override.price !== '') ||
+        (override.initialAnalysis !== undefined && override.initialAnalysis !== '') ||
+        (override.region !== undefined && override.region !== '') ||
+        (override.paymentMethod !== undefined && override.paymentMethod !== '') ||
+        (override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '')
+      );
 
       const rawRouting = getRowValueFlexible(row, 'توجيه', 'التوجيه', 'Routing');
       const routing = override.routing !== undefined ? String(override.routing).trim() : rawRouting;
@@ -1225,7 +1373,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         : rawReservation;
 
       return {
-        id: fallbackId,
+        id: stableId,
         date: unifiedDate,
         originalDate: dateStr,
         parsedDate: parsedDate,
@@ -1245,6 +1393,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         paymentMethod,
         routing,
         notes,
+        isPriceFixed: isPriceFixedPeriod,
+        isPricedInProgram,
+        isFromCurrentPeriod: !isPriceFixedPeriod,
         updatedAt,
         updatedBy,
         reservation,
@@ -1620,6 +1771,17 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         if (sapFilter === 'EMPTY' && hasSap) return false;
       }
 
+      // Pricing Status Filter (Restricted to authorized roles)
+      if (canViewPrice && pricingStatusFilter !== 'ALL') {
+        if (pricingStatusFilter === 'FIXED_PERIOD') {
+          if (!record.isPriceFixed) return false;
+        } else if (pricingStatusFilter === 'APP_PRICED') {
+          if (record.isPriceFixed || !record.price || record.price <= 0) return false;
+        } else if (pricingStatusFilter === 'PENDING_PRICING') {
+          if (record.isPriceFixed || (record.price !== undefined && record.price > 0)) return false;
+        }
+      }
+
       return true;
     }).sort((a, b) => {
       // Specialized sorting for Date
@@ -1665,7 +1827,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     sortField, 
     sortOrder,
     poFilter,
-    sapFilter
+    sapFilter,
+    pricingStatusFilter,
+    canViewPrice
   ]);
 
   // Fixed Totals Independent of Filters (like OliveStock)
@@ -2642,6 +2806,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     setAnalysisFilter('ALL');
     setPoFilter('ALL');
     setSapFilter('ALL');
+    setPricingStatusFilter('ALL');
     setSelectedItems([]);
     setSelectedSuppliers([]);
     setSelectedStores([]);
@@ -2794,7 +2959,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           grandTotalValue += totalValue;
         }
 
-        return {
+        const row: Record<string, any> = {
           'م': idx + 1,
           'التاريخ': r.date,
           'رقم الحركة': r.movementNo || '-',
@@ -2813,22 +2978,28 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           'أمر الشراء PO': r.po || '-',
           'رقم تنفيذ الساب': r.sapExecutionNo || '-',
           'المنطقة / المزرعة': r.region || '-',
-          'التحليل الأولي': r.initialAnalysis || '-',
-          'السعر الأساسي (ج.م/كجم)': basePrice > 0 ? basePrice : '-',
-          'نسبة خصم الجودة %': discountPct > 0 ? `${discountPct}%` : '0%',
-          'صافي السعر بعد الخصم (ج.م/كجم)': netPrice > 0 ? parseFloat(netPrice.toFixed(2)) : '-',
-          'إجمالي القيمة المستحقة (ج.م)': totalValue > 0 ? parseFloat(totalValue.toFixed(2)) : '-',
-          'طريقة السداد': r.paymentMethod || '-',
-          'المخزن': r.store || 'GPS',
-          'POST DOCUMENT': r.postDocument || '-',
-          'RESERVATION': r.reservation || '-',
-          'رقم مستند المورد': r.vendorDocNo || '-',
-          'ملاحظات': r.notes || '-'
+          'التحليل الأولي': r.initialAnalysis || '-'
         };
+
+        if (canViewPrice) {
+          row['السعر الأساسي (ج.م/كجم)'] = basePrice > 0 ? basePrice : '-';
+          row['نسبة خصم الجودة %'] = discountPct > 0 ? `${discountPct}%` : '0%';
+          row['صافي السعر بعد الخصم (ج.م/كجم)'] = netPrice > 0 ? parseFloat(netPrice.toFixed(2)) : '-';
+          row['إجمالي القيمة المستحقة (ج.م)'] = totalValue > 0 ? parseFloat(totalValue.toFixed(2)) : '-';
+        }
+
+        row['طريقة السداد'] = r.paymentMethod || '-';
+        row['المخزن'] = r.store || 'GPS';
+        row['POST DOCUMENT'] = r.postDocument || '-';
+        row['RESERVATION'] = r.reservation || '-';
+        row['رقم مستند المورد'] = r.vendorDocNo || '-';
+        row['ملاحظات'] = r.notes || '-';
+
+        return row;
       });
 
       // Add summary row
-      exportRows.push({
+      const summaryRow: Record<string, any> = {
         'م': 'الإجمالي' as any,
         'التاريخ': '',
         'رقم الحركة': '',
@@ -2847,25 +3018,31 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         'أمر الشراء PO': '',
         'رقم تنفيذ الساب': '',
         'المنطقة / المزرعة': '',
-        'التحليل الأولي': '',
-        'السعر الأساسي (ج.م/كجم)': '' as any,
-        'نسبة خصم الجودة %': '',
-        'صافي السعر بعد الخصم (ج.م/كجم)': '' as any,
-        'إجمالي القيمة المستحقة (ج.م)': grandTotalValue > 0 ? parseFloat(grandTotalValue.toFixed(2)) : ('' as any),
-        'طريقة السداد': '',
-        'المخزن': '',
-        'POST DOCUMENT': '',
-        'RESERVATION': '',
-        'رقم مستند المورد': '',
-        'ملاحظات': ''
-      });
+        'التحليل الأولي': ''
+      };
+
+      if (canViewPrice) {
+        summaryRow['السعر الأساسي (ج.م/كجم)'] = '' as any;
+        summaryRow['نسبة خصم الجودة %'] = '';
+        summaryRow['صافي السعر بعد الخصم (ج.م/كجم)'] = '' as any;
+        summaryRow['إجمالي القيمة المستحقة (ج.م)'] = grandTotalValue > 0 ? parseFloat(grandTotalValue.toFixed(2)) : ('' as any);
+      }
+
+      summaryRow['طريقة السداد'] = '';
+      summaryRow['المخزن'] = '';
+      summaryRow['POST DOCUMENT'] = '';
+      summaryRow['RESERVATION'] = '';
+      summaryRow['رقم مستند المورد'] = '';
+      summaryRow['ملاحظات'] = '';
+
+      exportRows.push(summaryRow);
 
       const worksheet = XLSX.utils.json_to_sheet(exportRows);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'توريد الفريش');
 
       // Set column widths
-      worksheet['!cols'] = [
+      const colWidths = [
         { wch: 5 },  // index
         { wch: 12 }, // date
         { wch: 12 }, // move no
@@ -2884,18 +3061,28 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         { wch: 15 }, // PO
         { wch: 16 }, // sap exec
         { wch: 22 }, // region
-        { wch: 16 }, // initial analysis
-        { wch: 16 }, // base price
-        { wch: 15 }, // quality discount %
-        { wch: 18 }, // net price
-        { wch: 18 }, // total value
+        { wch: 16 }  // initial analysis
+      ];
+
+      if (canViewPrice) {
+        colWidths.push(
+          { wch: 16 }, // base price
+          { wch: 15 }, // quality discount %
+          { wch: 18 }, // net price
+          { wch: 18 }  // total value
+        );
+      }
+
+      colWidths.push(
         { wch: 15 }, // payment method
         { wch: 10 }, // store
         { wch: 16 }, // post doc
         { wch: 14 }, // res
         { wch: 16 }, // vendor doc
         { wch: 20 }  // notes
-      ];
+      );
+
+      worksheet['!cols'] = colWidths;
 
       const fileName = `تقرير_توريد_الفريش_${new Date().toISOString().slice(0, 10)}.xlsx`;
       XLSX.writeFile(workbook, fileName);
@@ -3650,8 +3837,24 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             </select>
           </div>
 
+          {/* Pricing Status Filter (Restricted to authorized roles) */}
+          {canViewPrice && (
+            <div className="shrink-0">
+              <select
+                value={pricingStatusFilter}
+                onChange={(e) => setPricingStatusFilter(e.target.value as any)}
+                className="h-10 px-3.5 py-2 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-950/30 text-amber-950 dark:text-amber-200 text-xs font-bold focus:ring-2 focus:ring-amber-500 focus:outline-hidden cursor-pointer"
+              >
+                <option value="ALL">{isRtl ? '💰 حالة الأسعار والتسعير (الكل)' : 'Pricing Status (All)'}</option>
+                <option value="FIXED_PERIOD">{isRtl ? '🔒 مثبت حتى 31/08/2026' : 'Fixed (Up to 31/08/2026)'}</option>
+                <option value="APP_PRICED">{isRtl ? '💻 مسعر بالبرنامج (من 01/09)' : 'Priced in App'}</option>
+                <option value="PENDING_PRICING">{isRtl ? '⚠️ بانتظار التسعير بالبرنامج' : 'Pending Pricing in App'}</option>
+              </select>
+            </div>
+          )}
+
           {/* Clear Filters Button */}
-          {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || analysisFilter !== 'ALL' || poFilter !== 'ALL' || sapFilter !== 'ALL') && (
+          {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || analysisFilter !== 'ALL' || poFilter !== 'ALL' || sapFilter !== 'ALL' || pricingStatusFilter !== 'ALL') && (
             <button
               onClick={handleClearFilters}
               className="h-10 px-3.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border border-red-200 dark:border-red-800/60"
@@ -3678,6 +3881,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 </div>
                 <div className="space-y-1 max-h-64 overflow-y-auto">
                   {Object.keys(visibleColumns).map(colKey => {
+                    if (colKey === 'price' && !canViewPrice) return null;
                     const labels: Record<string, string> = {
                       index: isRtl ? 'م' : '#',
                       date: isRtl ? 'التاريخ' : 'Date',
@@ -3956,7 +4160,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                     <th className="py-3.5 px-3">{isRtl ? 'المنطقة / المزرعة' : 'Region'}</th>
                   )}
 
-                  {visibleColumns.price && (
+                  {canViewPrice && visibleColumns.price && (
                     <th className="py-3.5 px-3">{isRtl ? 'السعر والقيمة' : 'Price & Value'}</th>
                   )}
 
@@ -4170,7 +4374,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           </td>
                         )}
 
-                        {visibleColumns.price && (
+                        {canViewPrice && visibleColumns.price && (
                           <td className="py-2.5 px-3 whitespace-nowrap">
                             {(() => {
                               const base = record.price && record.price > 0 ? record.price : 0;
@@ -4178,7 +4382,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                               const net = base > 0 ? (discountPct > 0 ? base * (1 - discountPct / 100) : base) : 0;
                               const total = net > 0 ? net * record.quantityKg : 0;
 
-                              if (base === 0) return <span className="text-zinc-400 text-[11px]">-</span>;
+                              if (base === 0) {
+                                return <span className="text-zinc-400 text-[11px]">-</span>;
+                              }
 
                               return (
                                 <div className="flex items-center gap-1.5 font-mono text-xs whitespace-nowrap">
@@ -4196,6 +4402,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                                   <span className="text-[10.5px] font-bold text-zinc-500 dark:text-zinc-400">
                                     [{(total).toLocaleString('en-US', { maximumFractionDigits: 0 })} {isRtl ? 'ج.م' : 'EGP'}]
                                   </span>
+                                  {record.isPriceFixed ? (
+                                    <span 
+                                      className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800"
+                                      title={isRtl ? 'سعر مثبت رسمياً حتى تاريخ 31/08/2026' : 'Fixed price up to 31/08/2026'}
+                                    >
+                                      <Lock className="w-2.5 h-2.5" />
+                                      <span>{isRtl ? 'مثبت 31/08' : 'Fixed'}</span>
+                                    </span>
+                                  ) : (
+                                    <span 
+                                      className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
+                                      title={isRtl ? 'مسعر ومحدد عبر البرنامج' : 'Priced in app'}
+                                    >
+                                      <Laptop className="w-2.5 h-2.5" />
+                                      <span>{isRtl ? 'بالبرنامج' : 'App'}</span>
+                                    </span>
+                                  )}
                                 </div>
                               );
                             })()}
@@ -5063,7 +5286,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           2
                         </div>
                         <h5 className="font-black text-sm text-zinc-900 dark:text-white">
-                          {isRtl ? 'المصدر، التسعير وخصم الجودة وطريقة السداد' : 'Source, Pricing & Payment'}
+                          {canViewPrice 
+                            ? (isRtl ? 'المصدر، التسعير وخصم الجودة وطريقة السداد' : 'Source, Pricing & Payment')
+                            : (isRtl ? 'المصدر والمنطقة وطريقة السداد' : 'Source, Region & Payment')}
                         </h5>
                       </div>
 
@@ -5109,63 +5334,68 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           </div>
                         </div>
 
-                        {/* 4. Base Price per kg */}
-                        <div className="space-y-1.5">
-                          <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                            <DollarSign className="w-3.5 h-3.5 text-amber-600" />
-                            <span>{isRtl ? 'السعر الأساسي للكيلو (ج.م)' : 'Base Price per Kg (EGP)'}</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={editForm.price}
-                              onChange={(e) => setEditForm({ ...editForm, price: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                              placeholder="0.00"
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                            />
-                            <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">ج.م/كجم</span>
-                          </div>
-                        </div>
+                        {/* 4. Base Price per kg & 5. Quality Discount - Only visible to authorized roles */}
+                        {canViewPrice && (
+                          <>
+                            {/* 4. Base Price per kg */}
+                            <div className="space-y-1.5">
+                              <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                                <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                                <span>{isRtl ? 'السعر الأساسي للكيلو (ج.م)' : 'Base Price per Kg (EGP)'}</span>
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={editForm.price}
+                                  onChange={(e) => setEditForm({ ...editForm, price: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                                  placeholder="0.00"
+                                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                                />
+                                <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">ج.م/كجم</span>
+                              </div>
+                            </div>
 
-                        {/* 5. Quality Discount Percent */}
-                        <div className="space-y-1.5">
-                          <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                            <Percent className="w-3.5 h-3.5 text-rose-600" />
-                            <span>{isRtl ? 'نسبة خصم الجودة (%)' : 'Quality Discount (%)'}</span>
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              max="100"
-                              value={editForm.qualityDiscountPercent}
-                              onChange={(e) => setEditForm({ ...editForm, qualityDiscountPercent: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
-                              placeholder="0"
-                              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
-                            />
-                            <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">%</span>
-                          </div>
-                          {/* Quick Discount Presets */}
-                          <div className="flex items-center gap-1 flex-wrap pt-1.5">
-                            {[0, 1, 2, 3, 5, 7, 10, 15].map(pct => (
-                              <button
-                                key={pct}
-                                type="button"
-                                onClick={() => setEditForm({ ...editForm, qualityDiscountPercent: pct })}
-                                className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer border ${
-                                  Number(editForm.qualityDiscountPercent) === pct
-                                    ? 'bg-rose-600 text-white border-rose-700 font-bold'
-                                    : 'bg-white dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
-                                }`}
-                              >
-                                {pct}%
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                            {/* 5. Quality Discount Percent */}
+                            <div className="space-y-1.5">
+                              <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                                <Percent className="w-3.5 h-3.5 text-rose-600" />
+                                <span>{isRtl ? 'نسبة خصم الجودة (%)' : 'Quality Discount (%)'}</span>
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  max="100"
+                                  value={editForm.qualityDiscountPercent}
+                                  onChange={(e) => setEditForm({ ...editForm, qualityDiscountPercent: e.target.value === '' ? '' : parseFloat(e.target.value) || 0 })}
+                                  placeholder="0"
+                                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                                />
+                                <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">%</span>
+                              </div>
+                              {/* Quick Discount Presets */}
+                              <div className="flex items-center gap-1 flex-wrap pt-1.5">
+                                {[0, 1, 2, 3, 5, 7, 10, 15].map(pct => (
+                                  <button
+                                    key={pct}
+                                    type="button"
+                                    onClick={() => setEditForm({ ...editForm, qualityDiscountPercent: pct })}
+                                    className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer border ${
+                                      Number(editForm.qualityDiscountPercent) === pct
+                                        ? 'bg-rose-600 text-white border-rose-700 font-bold'
+                                        : 'bg-white dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                                    }`}
+                                  >
+                                    {pct}%
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
 
                         {/* 6. Payment Method */}
                         <div className="space-y-1.5 sm:col-span-2">
@@ -5202,8 +5432,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
                       </div>
 
-                      {/* Real-time Calculation Summary Breakdown */}
-                      {(() => {
+                      {/* Real-time Calculation Summary Breakdown - Only for authorized roles */}
+                      {canViewPrice && (() => {
                         const baseP = Number(editForm.price) || 0;
                         const discPct = Number(editForm.qualityDiscountPercent) || 0;
                         const discAmount = baseP * (discPct / 100);
@@ -5625,7 +5855,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto px-1">
               <div>
                 <label className="block text-xs font-black text-zinc-700 dark:text-zinc-300 mb-1.5">
                   {isRtl ? 'رقم أمر الشراء / التوريد (PO):' : 'Purchase Order (PO):'}
@@ -5655,10 +5885,107 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 />
               </div>
 
+              {/* Price & Supply fields - Only for authorized pricing roles */}
+              {canViewPrice && (
+                <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-amber-700 dark:text-amber-400">
+                    <DollarSign className="w-3.5 h-3.5" />
+                    <span>{isRtl ? 'بيانات التسعير والتوريد بالبرنامج' : 'App Pricing & Supply Details'}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                        {isRtl ? 'السعر الأساسي (ج.م/كجم):' : 'Base Price (EGP/kg):'}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={bulkEditForm.price}
+                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, price: e.target.value })}
+                        placeholder={isRtl ? 'السعر...' : 'Price...'}
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                        {isRtl ? 'نسبة خصم الجودة %:' : 'Quality Discount %:'}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={bulkEditForm.qualityDiscountPercent}
+                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, qualityDiscountPercent: e.target.value })}
+                        placeholder="0%"
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                      {isRtl ? 'التحليل الأولي:' : 'Initial Analysis:'}
+                    </label>
+                    <div className="flex gap-1.5 mb-1.5">
+                      {['خالي مبيدات', 'مبيدات', 'عشوائي'].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setBulkEditForm({ ...bulkEditForm, initialAnalysis: bulkEditForm.initialAnalysis === status ? '' : status })}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                            bulkEditForm.initialAnalysis === status
+                              ? 'bg-amber-600 text-white border-amber-600'
+                              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
+                          }`}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      value={bulkEditForm.initialAnalysis}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, initialAnalysis: e.target.value })}
+                      placeholder={isRtl ? 'التحليل الأولي...' : 'Initial analysis...'}
+                      className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                        {isRtl ? 'المنطقة / المزرعة:' : 'Region / Farm:'}
+                      </label>
+                      <input
+                        type="text"
+                        value={bulkEditForm.region}
+                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, region: e.target.value })}
+                        placeholder={isRtl ? 'الموقع أو المزرعة...' : 'Region/Farm...'}
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                        {isRtl ? 'طريقة السداد:' : 'Payment Method:'}
+                      </label>
+                      <input
+                        type="text"
+                        value={bulkEditForm.paymentMethod}
+                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, paymentMethod: e.target.value })}
+                        placeholder={isRtl ? 'طريقة السداد...' : 'Payment method...'}
+                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 p-3 rounded-xl leading-relaxed">
                 {isRtl 
-                  ? 'ملاحظة: سيتم تطبيق القيم المدخلة على جميع الصفوف المحددة وتحديثها في التخزين السحابي والمحلي فوراً.' 
-                  : 'Note: Entered values will be applied to all selected rows and updated in cloud & local storage immediately.'}
+                  ? 'ملاحظة: سيتم تطبيق الحقول المملوءة فقط على جميع الحركات المحددة وحفظها في التخزين السحابي فوراً.' 
+                  : 'Note: Filled fields only will be applied to all selected records and persisted to cloud Firestore.'}
               </p>
             </div>
 

@@ -52,5 +52,9 @@ service cloud.firestore {
     match /purchase_orders/{orderId} {
       allow read, write: if true;
     }
+
+    match /fresh_supply_overrides/{overrideId} {
+      allow read, write: if true;
+    }
   }
 }
