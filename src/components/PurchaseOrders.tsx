@@ -49,11 +49,38 @@ import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
+import { normalizeArabicSearch, matchesArabicSearch, equalsArabicNormalized } from '../utils/arabic';
 
 interface PurchaseOrdersProps {
   lang: Language;
   user: UserProfile | null;
 }
+
+const COMMON_SUPPLIERS = [
+  'على الجبالى',
+  'قطب رجب',
+  'مزرعة اوليف لاند',
+  'كمال زياده',
+  'عمرو جبريل',
+  'محمد صديق',
+  'الشهد',
+  'تنبت (محمود عطية)',
+  'سعيد ابو النجا',
+  'جمال سالم - الروقا',
+  'الروضة - شبانة - عبدالعليم',
+  'محمود عبدالرحمن',
+  'سعيد ابو ليله',
+  'ابراهيم كامل علي',
+  'اجروليفا',
+  'امل حسين عبد المعين',
+  'إيهاب سعيد',
+  'ابراهيم قبالى',
+  'اكسيد هب',
+  'اجرونيل',
+  'شركة جرين لايت',
+  'الروضة',
+  'اوليف لاند'
+];
 
 const COMMON_REGIONS = [
   'طريق مصر إسكندرية الصحراوي',
@@ -202,18 +229,18 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
   // Calculate unique lists for filters
   const uniqueSuppliers = useMemo(() => {
-    const list = Array.from(new Set(orders.map(o => o.supplierName).filter(Boolean)));
-    return list.sort();
+    const list = Array.from(new Set([...COMMON_SUPPLIERS, ...orders.map(o => o.supplierName).filter(Boolean)]));
+    return list.sort((a, b) => a.localeCompare(b, 'ar'));
   }, [orders]);
 
   const uniqueRegions = useMemo(() => {
     const list = Array.from(new Set([...COMMON_REGIONS, ...orders.map(o => o.region).filter(Boolean)]));
-    return list.sort();
+    return list.sort((a, b) => a.localeCompare(b, 'ar'));
   }, [orders]);
 
   const uniqueItemTypes = useMemo(() => {
     const list = Array.from(new Set([...COMMON_ITEM_TYPES, ...orders.map(o => o.itemType).filter(Boolean)]));
-    return list.sort();
+    return list.sort((a, b) => a.localeCompare(b, 'ar'));
   }, [orders]);
 
   // Filtered Orders
@@ -227,27 +254,33 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
       // Search Query
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+        const q = normalizeArabicSearch(searchQuery);
+        const rawQ = searchQuery.toLowerCase().trim();
         const matchesQuery = 
-          (order.orderNumber || '').toLowerCase().includes(q) ||
-          (order.poNumber || '').toLowerCase().includes(q) ||
-          (order.supplierName || '').toLowerCase().includes(q) ||
-          (order.region || '').toLowerCase().includes(q) ||
-          (order.itemType || '').toLowerCase().includes(q) ||
-          (order.createdByName || '').toLowerCase().includes(q) ||
-          (order.approvedByName || '').toLowerCase().includes(q) ||
-          (order.executedByName || '').toLowerCase().includes(q);
+          matchesArabicSearch(order.orderNumber, q) ||
+          matchesArabicSearch(order.poNumber, q) ||
+          matchesArabicSearch(order.supplierName, q) ||
+          matchesArabicSearch(order.region, q) ||
+          matchesArabicSearch(order.itemType, q) ||
+          matchesArabicSearch(order.itemCategory, q) ||
+          matchesArabicSearch(order.notes, q) ||
+          matchesArabicSearch(order.createdByName, q) ||
+          matchesArabicSearch(order.approvedByName, q) ||
+          matchesArabicSearch(order.executedByName, q) ||
+          (order.supplierName && order.supplierName.toLowerCase().includes(rawQ)) ||
+          (order.orderNumber && order.orderNumber.toLowerCase().includes(rawQ)) ||
+          (order.poNumber && order.poNumber.toLowerCase().includes(rawQ));
         if (!matchesQuery) return false;
       }
 
       // Region Filter
-      if (selectedRegion && order.region !== selectedRegion) return false;
+      if (selectedRegion && order.region !== selectedRegion && !equalsArabicNormalized(order.region, selectedRegion)) return false;
 
       // Supplier Filter
-      if (selectedSupplier && order.supplierName !== selectedSupplier) return false;
+      if (selectedSupplier && order.supplierName !== selectedSupplier && !equalsArabicNormalized(order.supplierName, selectedSupplier)) return false;
 
       // Item Type Filter
-      if (selectedItemType && order.itemType !== selectedItemType) return false;
+      if (selectedItemType && order.itemType !== selectedItemType && !equalsArabicNormalized(order.itemType, selectedItemType)) return false;
 
       // Date Range Filter
       if (startDate && order.pricingDate < startDate) return false;

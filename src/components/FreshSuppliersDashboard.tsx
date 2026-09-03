@@ -31,6 +31,7 @@ import {
   Cell,
   CartesianGrid
 } from 'recharts';
+import { normalizeArabicSearch, matchesArabicSearch } from '../utils/arabic';
 
 export interface FreshSupplierSummaryData {
   costCenter: string;
@@ -85,11 +86,13 @@ export const FreshSuppliersDashboard: React.FC<FreshSuppliersDashboardProps> = (
   const filteredSuppliers = useMemo(() => {
     let result = [...suppliers];
     if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase().trim();
+      const q = normalizeArabicSearch(searchTerm);
+      const raw = searchTerm.toLowerCase().trim();
       result = result.filter(sup =>
-        sup.costCenter.toLowerCase().includes(q) ||
-        sup.costCenterCode.toLowerCase().includes(q) ||
-        sup.topItem.toLowerCase().includes(q)
+        matchesArabicSearch(sup.costCenter, q) ||
+        matchesArabicSearch(sup.costCenterCode, q) ||
+        matchesArabicSearch(sup.topItem, q) ||
+        sup.costCenter.toLowerCase().includes(raw)
       );
     }
     switch (sortOption) {

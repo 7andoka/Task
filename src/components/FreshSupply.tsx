@@ -81,7 +81,8 @@ import {
   Edit,
   Lock,
   Laptop,
-  Plus
+  Plus,
+  Info
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -109,6 +110,7 @@ import { DateRangeFilter, DateFilterValue, getPresetDates } from './DateRangeFil
 import { Language, UserProfile } from '../types';
 import { translations } from '../i18n';
 import { toast } from 'sonner';
+import { normalizeArabicSearch, matchesArabicSearch, equalsArabicNormalized } from '../utils/arabic';
 
 const FRESH_GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv";
 const STORAGE_CACHE_KEY = "fresh_supply_data_cache";
@@ -428,29 +430,78 @@ function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSe
     }
   };
 
-  const filteredOptions = options.filter(opt =>
-    opt.label.toLowerCase().includes(filterQuery.toLowerCase())
-  );
+  const selectOnlyOption = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    onChange([id]);
+    setFilterQuery('');
+    setIsOpen(false);
+  };
+
+  const removeSingleSelected = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(selected.filter(item => item !== id));
+  };
+
+  const filteredOptions = options.filter(opt => {
+    if (!filterQuery.trim()) return true;
+    const q = normalizeArabicSearch(filterQuery);
+    return matchesArabicSearch(opt.label, q) || opt.label.toLowerCase().includes(filterQuery.toLowerCase());
+  });
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && filteredOptions.length > 0) {
+      e.preventDefault();
+      selectOnlyOption(filteredOptions[0].id);
+    }
+  };
+
+  const selectedOptNames = selected.map(id => {
+    const opt = options.find(o => o.id === id);
+    return opt ? opt.label : id;
+  });
 
   return (
     <div className="relative" ref={containerRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl border transition-all text-xs font-bold whitespace-nowrap cursor-pointer h-10 select-none ${
-          selected.length > 0 
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/20' 
-            : 'bg-zinc-50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-        }`}
-      >
-        {icon}
-        <span>{label}</span>
+      <div className="flex items-center">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-2xl border transition-all text-xs font-bold whitespace-nowrap cursor-pointer h-10 select-none ${
+            selected.length > 0 
+              ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-700 text-purple-800 dark:text-purple-200 ring-2 ring-purple-500/20' 
+              : 'bg-zinc-50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-700/50 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          {icon}
+          {selected.length === 0 && <span>{label}</span>}
+          {selected.length === 1 && (
+            <span className="truncate max-w-[150px]" title={selectedOptNames[0]}>
+              {selectedOptNames[0]}
+            </span>
+          )}
+          {selected.length > 1 && (
+            <span className="flex items-center gap-1.5">
+              <span>{label}</span>
+              <span className="bg-purple-600 text-white text-[10px] px-1.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-black">
+                {selected.length}
+              </span>
+            </span>
+          )}
+          <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+
         {selected.length > 0 && (
-          <span className="bg-emerald-500 text-white text-[10px] px-1.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-black">
-            {selected.length}
-          </span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange([]);
+            }}
+            title={isRtl ? 'إلغاء التحديد' : 'Clear filter'}
+            className="mr-1 p-1 text-zinc-400 hover:text-red-500 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+          >
+            <X size={13} />
+          </button>
         )}
-        <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
+      </div>
 
       <AnimatePresence>
         {isOpen && (
@@ -459,33 +510,77 @@ function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSe
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className={`absolute top-full mt-2 w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl z-50 p-2 overflow-hidden ${
+            className={`absolute top-full mt-2 w-80 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl z-50 p-2.5 overflow-hidden ${
               isRtl ? 'right-0' : 'left-0'
             }`}
           >
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-100 dark:border-zinc-800 px-1">
-              <span className="text-[11px] font-black text-zinc-700 dark:text-zinc-300">{label}</span>
+              <span className="text-[11px] font-black text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
+                {icon}
+                <span>{label}</span>
+              </span>
               {selected.length > 0 && (
                 <button
                   onClick={() => onChange([])}
                   className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
                 >
-                  {isRtl ? 'مسح الكل' : 'Clear'}
+                  {isRtl ? 'إلغاء التحديد (عرض الكل)' : 'Clear All'}
                 </button>
               )}
             </div>
 
-            {options.length > 5 && (
-              <div className="mb-2 px-1">
+            {/* Selected items chips */}
+            {selected.length > 0 && (
+              <div className="mb-2 p-1.5 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/50 dark:border-purple-800/40">
+                <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 mb-1 flex items-center justify-between">
+                  <span>{isRtl ? 'المحدد حالياً:' : 'Selected:'}</span>
+                  <span className="font-mono text-[9px] bg-purple-200/60 dark:bg-purple-900/60 px-1 rounded text-purple-800 dark:text-purple-200">
+                    {selected.length}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar">
+                  {selected.map(id => {
+                    const opt = options.find(o => o.id === id);
+                    return (
+                      <span
+                        key={id}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-bold bg-white dark:bg-zinc-800 text-purple-700 dark:text-purple-300 border border-purple-300/60 dark:border-purple-700/60 shadow-2xs"
+                      >
+                        <span className="truncate max-w-[140px]">{opt ? opt.label : id}</span>
+                        <button
+                          onClick={(e) => removeSingleSelected(id, e)}
+                          className="hover:text-red-500 cursor-pointer p-0.5"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {options.length > 3 && (
+              <div className="mb-2 px-0.5">
                 <div className="relative">
-                  <Search size={12} className="absolute top-2.5 left-2.5 text-zinc-400" />
+                  <Search size={12} className="absolute top-2.5 right-2.5 text-zinc-400" />
                   <input
                     type="text"
                     value={filterQuery}
                     onChange={(e) => setFilterQuery(e.target.value)}
-                    placeholder={isRtl ? 'بحث...' : 'Search...'}
-                    className="w-full text-xs pl-7 pr-2.5 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    onKeyDown={handleSearchKeyDown}
+                    placeholder={isRtl ? 'ابحث ثم اضغط Enter للتصفية...' : 'Search then Enter...'}
+                    className="w-full text-xs pr-7 pl-6 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    autoFocus
                   />
+                  {filterQuery && (
+                    <button
+                      onClick={() => setFilterQuery('')}
+                      className="absolute top-2 left-2 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -499,24 +594,40 @@ function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSe
                 filteredOptions.map((option) => {
                   const isChecked = selected.includes(option.id);
                   return (
-                    <button
+                    <div
                       key={option.id}
-                      onClick={() => toggleOption(option.id)}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs transition-colors cursor-pointer text-right ${
+                      className={`group w-full flex items-center justify-between px-2 py-1.5 rounded-xl text-xs transition-colors text-right cursor-pointer ${
                         isChecked 
-                          ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 font-bold' 
-                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                          ? 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 font-bold' 
+                          : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
                       }`}
+                      onClick={() => selectOnlyOption(option.id)}
+                      title={isRtl ? `تصفية حسب (${option.label}) فقط` : `Filter by ${option.label}`}
                     >
-                      <span className="truncate">{option.label}</span>
-                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors shrink-0 ml-2 ${
-                        isChecked 
-                          ? 'bg-emerald-500 border-emerald-500 text-white' 
-                          : 'border-zinc-300 dark:border-zinc-600'
-                      }`}>
-                        {isChecked && <Check size={10} strokeWidth={3} />}
+                      <div className="flex items-center gap-2 flex-1 truncate">
+                        {/* Checkbox toggles multi-select */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleOption(option.id);
+                          }}
+                          className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
+                            isChecked 
+                              ? 'bg-purple-600 border-purple-600 text-white' 
+                              : 'border-zinc-300 dark:border-zinc-600 hover:border-purple-500'
+                          }`}
+                          title={isRtl ? 'تحديد متعدد' : 'Toggle multi-select'}
+                        >
+                          {isChecked && <Check size={10} strokeWidth={3} />}
+                        </button>
+                        <span className="truncate">{option.label}</span>
                       </div>
-                    </button>
+
+                      <span className="text-[10px] text-zinc-400 group-hover:text-purple-600 opacity-0 group-hover:opacity-100 font-bold transition-opacity shrink-0">
+                        {isRtl ? 'تحديد ↵' : 'Select ↵'}
+                      </span>
+                    </div>
                   );
                 })
               )}
@@ -703,8 +814,27 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     initialAnalysis: '',
     region: '',
     paymentMethod: '',
-    qualityDiscountPercent: ''
+    qualityDiscountPercent: '',
+    routing: '',
+    notes: ''
   });
+  const [isSavingBulk, setIsSavingBulk] = useState(false);
+
+  // Bulk selected records metrics for summary card
+  const bulkSelectedSummary = useMemo(() => {
+    const selectedRecords = data.filter(r => selectedRowIds.includes(r.id));
+    const totalKg = selectedRecords.reduce((sum, r) => sum + (r.quantityKg || 0), 0);
+    const totalTons = totalKg / 1000;
+    const uniqueSuppliers = Array.from(new Set(selectedRecords.map(r => r.costCenter).filter(Boolean)));
+    const uniqueItems = Array.from(new Set(selectedRecords.map(r => r.itemName).filter(Boolean)));
+    return {
+      count: selectedRecords.length,
+      totalKg,
+      totalTons,
+      suppliersCount: uniqueSuppliers.length,
+      itemsCount: uniqueItems.length
+    };
+  }, [data, selectedRowIds]);
 
   // Filter for pricing status (Fixed up to 31/08/2026, Priced in App, Pending Pricing)
   const [pricingStatusFilter, setPricingStatusFilter] = useState<'ALL' | 'FIXED_PERIOD' | 'APP_PRICED' | 'PENDING_PRICING'>('ALL');
@@ -802,12 +932,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     location: true,
     sapCode: true,
     po: true,
-    sapExecutionNo: true,
+    postDocument: true, // Enable POST DOCUMENT in table by default
     region: true,
     price: true, // Show price in table by default as requested
     paymentMethod: false,
     initialAnalysis: false,
-    postDocument: true, // Enable POST DOCUMENT in table by default
     store: true,
     actions: true
   });
@@ -848,8 +977,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     setIsSavingRecord(true);
     try {
       const overrideKey = selectedRecord.id;
-      const numPrice = editForm.price !== '' ? Number(editForm.price) || 0 : 0;
-      const numDiscount = editForm.qualityDiscountPercent !== '' ? Number(editForm.qualityDiscountPercent) || 0 : 0;
+      const numPrice = canViewPrice
+        ? (editForm.price !== '' ? Number(editForm.price) || 0 : 0)
+        : (selectedRecord.price ?? 0);
+      const numDiscount = canViewPrice
+        ? (editForm.qualityDiscountPercent !== '' ? Number(editForm.qualityDiscountPercent) || 0 : 0)
+        : (selectedRecord.qualityDiscountPercent ?? 0);
       
       const execVal = (editForm.postDocument || editForm.sapExecutionNo || '').trim();
       const updatedData: Partial<FreshSupplyRecord> = {
@@ -863,7 +996,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         paymentMethod: editForm.paymentMethod.trim(),
         routing: editForm.routing.trim(),
         notes: editForm.notes.trim(),
-        isPricedInProgram: true,
+        isPricedInProgram: canViewPrice ? true : (selectedRecord.isPricedInProgram ?? false),
         updatedAt: new Date().toISOString(),
         updatedBy: user?.displayName || user?.username || (isRtl ? 'مستخدم النظام' : 'System User')
       };
@@ -936,6 +1069,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
   const handleBulkSave = async () => {
     if (selectedRowIds.length === 0) return;
+    setIsSavingBulk(true);
     try {
       const cachedStr = localStorage.getItem(STORAGE_OVERRIDES_KEY);
       const cachedMap = cachedStr ? JSON.parse(cachedStr) : {};
@@ -964,9 +1098,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       if (bulkEditForm.paymentMethod.trim() !== '') {
         updatedData.paymentMethod = bulkEditForm.paymentMethod.trim();
       }
+      if (bulkEditForm.routing.trim() !== '') {
+        updatedData.routing = bulkEditForm.routing.trim();
+      }
+      if (bulkEditForm.notes.trim() !== '') {
+        updatedData.notes = bulkEditForm.notes.trim();
+      }
 
       if (Object.keys(updatedData).length === 0) {
         toast.error(isRtl ? 'يرجى إدخال قيمة في أحد الحقول لتحديث الحركات المحددة' : 'Please enter a value in any field to update selected records');
+        setIsSavingBulk(false);
         return;
       }
 
@@ -1040,11 +1181,15 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         initialAnalysis: '',
         region: '',
         paymentMethod: '',
-        qualityDiscountPercent: ''
+        qualityDiscountPercent: '',
+        routing: '',
+        notes: ''
       });
     } catch (err: any) {
       console.error("Bulk save error:", err);
       toast.error(isRtl ? 'فشل التحديث الجماعي' : 'Bulk update failed');
+    } finally {
+      setIsSavingBulk(false);
     }
   };
 
@@ -1197,14 +1342,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const cleanItem = finalSapCode || finalItemName || '';
       const cleanQty = String(row['اضافة'] || row['الكمية'] || '').replace(/,/g, '').trim();
 
-      // Deterministic stable ID for the movement
-      const stableId = rawMoveNo 
+      // Deterministic stable ID for the movement (guaranteed unique by appending idx)
+      const baseStableId = rawMoveNo 
         ? `move_${rawMoveNo}_${cleanItem}_${rawTruck}_${cleanQty}`.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
         : `fresh-${idx}-${cleanItem}`;
+      const stableId = `${baseStableId}_${idx}`;
       const fallbackOldId = `fresh-${idx}-${rawMoveNo || Math.random().toString(36).substr(2, 9)}`;
 
-      // Check overrides by stableId first, then movementNo, then legacy fallback IDs
+      // Check overrides by stableId first, then baseStableId, then movementNo, then legacy fallback IDs
       const override = overridesMap[stableId] 
+        || overridesMap[baseStableId]
         || (rawMoveNo && overridesMap[`${rawMoveNo}_${cleanItem}`])
         || (rawMoveNo && overridesMap[rawMoveNo]) 
         || overridesMap[fallbackOldId] 
@@ -1527,11 +1674,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           if (mainCategoryFilter === 'PEPPER' && !isPepper) return false;
           if (mainCategoryFilter === 'OTHER' && !isOther) return false;
         }
-        if (excludeKey !== 'item' && selectedItems.length > 0 && !selectedItems.includes(record.itemName)) {
-          return false;
+        if (excludeKey !== 'item' && selectedItems.length > 0) {
+          const normSelectedItems = selectedItems.map(i => normalizeArabicSearch(i).trim()).filter(Boolean);
+          const normItem = normalizeArabicSearch(record.itemName).trim();
+          const normOrigItem = normalizeArabicSearch(record.originalItemName).trim();
+          const isItemMatch = selectedItems.includes(record.itemName) ||
+            (normItem !== '' && normSelectedItems.includes(normItem)) ||
+            (normOrigItem !== '' && normSelectedItems.includes(normOrigItem));
+          if (!isItemMatch) return false;
         }
-        if (excludeKey !== 'supplier' && selectedSuppliers.length > 0 && !selectedSuppliers.includes(record.costCenter)) {
-          return false;
+        if (excludeKey !== 'supplier' && selectedSuppliers.length > 0) {
+          const normSelected = selectedSuppliers.map(s => normalizeArabicSearch(s).trim()).filter(Boolean);
+          const normCostCenter = normalizeArabicSearch(record.costCenter).trim();
+          const normOrigCostCenter = normalizeArabicSearch(record.originalCostCenter).trim();
+          const isMatch = selectedSuppliers.includes(record.costCenter) ||
+            (normCostCenter !== '' && normSelected.includes(normCostCenter)) ||
+            (normOrigCostCenter !== '' && normSelected.includes(normOrigCostCenter));
+          if (!isMatch) return false;
         }
         if (excludeKey !== 'store' && selectedStores.length > 0 && !selectedStores.includes(record.store)) {
           return false;
@@ -1621,28 +1780,33 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     return data.filter(record => {
       // 1. Search Query
       if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase().trim();
+        const term = normalizeArabicSearch(searchTerm);
+        const rawTerm = searchTerm.toLowerCase().trim();
         const match = 
-          record.itemName.toLowerCase().includes(term) ||
-          (record.originalItemName && record.originalItemName.toLowerCase().includes(term)) ||
-          record.costCenter.toLowerCase().includes(term) ||
-          (record.originalCostCenter && record.originalCostCenter.toLowerCase().includes(term)) ||
-          record.costCenterCode.toLowerCase().includes(term) ||
-          record.truckNo.toLowerCase().includes(term) ||
-          record.driver.toLowerCase().includes(term) ||
-          record.movementNo.toLowerCase().includes(term) ||
-          record.po.toLowerCase().includes(term) ||
-          (record.sapExecutionNo && record.sapExecutionNo.toLowerCase().includes(term)) ||
-          (record.initialAnalysis && record.initialAnalysis.toLowerCase().includes(term)) ||
-          (record.region && record.region.toLowerCase().includes(term)) ||
-          (record.paymentMethod && record.paymentMethod.toLowerCase().includes(term)) ||
-          record.postDocument.toLowerCase().includes(term) ||
-          record.sapCode.toLowerCase().includes(term) ||
-          record.oldCode.toLowerCase().includes(term) ||
-          record.date.toLowerCase().includes(term) ||
-          (record.originalDate && record.originalDate.toLowerCase().includes(term)) ||
-          record.store.toLowerCase().includes(term) ||
-          record.location.toLowerCase().includes(term);
+          matchesArabicSearch(record.itemName, term) ||
+          (record.originalItemName && matchesArabicSearch(record.originalItemName, term)) ||
+          matchesArabicSearch(record.costCenter, term) ||
+          (record.originalCostCenter && matchesArabicSearch(record.originalCostCenter, term)) ||
+          matchesArabicSearch(record.costCenterCode, term) ||
+          matchesArabicSearch(record.truckNo, term) ||
+          matchesArabicSearch(record.driver, term) ||
+          matchesArabicSearch(record.movementNo, term) ||
+          matchesArabicSearch(record.po, term) ||
+          (record.sapExecutionNo && matchesArabicSearch(record.sapExecutionNo, term)) ||
+          (record.initialAnalysis && matchesArabicSearch(record.initialAnalysis, term)) ||
+          (record.region && matchesArabicSearch(record.region, term)) ||
+          (record.paymentMethod && matchesArabicSearch(record.paymentMethod, term)) ||
+          matchesArabicSearch(record.postDocument, term) ||
+          matchesArabicSearch(record.sapCode, term) ||
+          matchesArabicSearch(record.oldCode, term) ||
+          matchesArabicSearch(record.date, term) ||
+          (record.originalDate && matchesArabicSearch(record.originalDate, term)) ||
+          matchesArabicSearch(record.store, term) ||
+          matchesArabicSearch(record.location, term) ||
+          (record.vendorDocNo && matchesArabicSearch(record.vendorDocNo, term)) ||
+          (record.notes && matchesArabicSearch(record.notes, term)) ||
+          record.itemName.toLowerCase().includes(rawTerm) ||
+          record.costCenter.toLowerCase().includes(rawTerm);
         if (!match) return false;
       }
 
@@ -1666,13 +1830,25 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       }
 
       // 3. Item Filter
-      if (selectedItems.length > 0 && !selectedItems.includes(record.itemName)) {
-        return false;
+      if (selectedItems.length > 0) {
+        const normSelectedItems = selectedItems.map(i => normalizeArabicSearch(i).trim()).filter(Boolean);
+        const normItem = normalizeArabicSearch(record.itemName).trim();
+        const normOrigItem = normalizeArabicSearch(record.originalItemName).trim();
+        const isItemMatch = selectedItems.includes(record.itemName) ||
+          (normItem !== '' && normSelectedItems.includes(normItem)) ||
+          (normOrigItem !== '' && normSelectedItems.includes(normOrigItem));
+        if (!isItemMatch) return false;
       }
 
       // 4. Supplier / Cost Center Filter
-      if (selectedSuppliers.length > 0 && !selectedSuppliers.includes(record.costCenter)) {
-        return false;
+      if (selectedSuppliers.length > 0) {
+        const normSelected = selectedSuppliers.map(s => normalizeArabicSearch(s).trim()).filter(Boolean);
+        const normCostCenter = normalizeArabicSearch(record.costCenter).trim();
+        const normOrigCostCenter = normalizeArabicSearch(record.originalCostCenter).trim();
+        const isMatch = selectedSuppliers.includes(record.costCenter) ||
+          (normCostCenter !== '' && normSelected.includes(normCostCenter)) ||
+          (normOrigCostCenter !== '' && normSelected.includes(normOrigCostCenter));
+        if (!isMatch) return false;
       }
 
       // 5. Store Filter
@@ -1694,49 +1870,52 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       // 10. Date Filter
       if (dateFilter.mode !== 'all') {
         if (dateFilter.mode === 'single' && dateFilter.singleDate) {
-          if (record.date === dateFilter.singleDate) return true;
-          if (record.originalDate === dateFilter.singleDate) return true;
-          const singleD = parseFlexibleDate(dateFilter.singleDate) || new Date(dateFilter.singleDate);
-          if (record.parsedDate && !isNaN(singleD.getTime())) {
-            if (
-              record.parsedDate.getFullYear() === singleD.getFullYear() &&
-              record.parsedDate.getMonth() === singleD.getMonth() &&
-              record.parsedDate.getDate() === singleD.getDate()
-            ) {
-              return true;
+          let matchesSingle = false;
+          if (record.date === dateFilter.singleDate || record.originalDate === dateFilter.singleDate) {
+            matchesSingle = true;
+          } else {
+            const singleD = parseFlexibleDate(dateFilter.singleDate) || new Date(dateFilter.singleDate);
+            if (record.parsedDate && !isNaN(singleD.getTime())) {
+              if (
+                record.parsedDate.getFullYear() === singleD.getFullYear() &&
+                record.parsedDate.getMonth() === singleD.getMonth() &&
+                record.parsedDate.getDate() === singleD.getDate()
+              ) {
+                matchesSingle = true;
+              }
             }
           }
-          return false;
-        }
+          if (!matchesSingle) return false;
+        } else {
+          let startD: Date | null = null;
+          let endD: Date | null = null;
 
-        let startD: Date | null = null;
-        let endD: Date | null = null;
+          if (dateFilter.mode === 'range') {
+            if (dateFilter.startDate) {
+              startD = parseFlexibleDate(dateFilter.startDate) || new Date(dateFilter.startDate);
+              if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
+            }
+            if (dateFilter.endDate) {
+              endD = parseFlexibleDate(dateFilter.endDate) || new Date(dateFilter.endDate);
+              if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
+            }
+          } else if (dateFilter.mode === 'preset' && dateFilter.presetKey) {
+            const preset = getPresetDates(dateFilter.presetKey);
+            if (preset.startDate) {
+              startD = parseFlexibleDate(preset.startDate) || new Date(preset.startDate);
+              if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
+            }
+            if (preset.endDate) {
+              endD = parseFlexibleDate(preset.endDate) || new Date(preset.endDate);
+              if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
+            }
+          }
 
-        if (dateFilter.mode === 'range') {
-          if (dateFilter.startDate) {
-            startD = parseFlexibleDate(dateFilter.startDate) || new Date(dateFilter.startDate);
-            if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
+          if (startD || endD) {
+            if (!record.parsedDate) return false;
+            if (startD && record.parsedDate < startD) return false;
+            if (endD && record.parsedDate > endD) return false;
           }
-          if (dateFilter.endDate) {
-            endD = parseFlexibleDate(dateFilter.endDate) || new Date(dateFilter.endDate);
-            if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
-          }
-        } else if (dateFilter.mode === 'preset' && dateFilter.presetKey) {
-          const preset = getPresetDates(dateFilter.presetKey);
-          if (preset.startDate) {
-            startD = parseFlexibleDate(preset.startDate) || new Date(preset.startDate);
-            if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
-          }
-          if (preset.endDate) {
-            endD = parseFlexibleDate(preset.endDate) || new Date(preset.endDate);
-            if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
-          }
-        }
-
-        if (startD || endD) {
-          if (!record.parsedDate) return false;
-          if (startD && record.parsedDate < startD) return false;
-          if (endD && record.parsedDate > endD) return false;
         }
       }
 
@@ -1799,8 +1978,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         }
       }
 
-      const aVal = a[sortField];
-      const bVal = b[sortField];
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (sortField === 'postDocument') {
+        aVal = a.postDocument || a.sapExecutionNo || '';
+        bVal = b.postDocument || b.sapExecutionNo || '';
+      }
 
       if (aVal === undefined || aVal === null) return 1;
       if (bVal === undefined || bVal === null) return -1;
@@ -2465,13 +2649,15 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const filteredSortedItems = useMemo(() => {
     let result = [...itemsSummary];
     if (itemsSummarySearch.trim()) {
-      const q = itemsSummarySearch.toLowerCase().trim();
+      const q = normalizeArabicSearch(itemsSummarySearch);
+      const raw = itemsSummarySearch.toLowerCase().trim();
       result = result.filter(item => 
-        item.itemName.toLowerCase().includes(q) ||
-        item.sapCode.toLowerCase().includes(q) ||
-        item.oldCode.toLowerCase().includes(q) ||
-        item.varietyName.toLowerCase().includes(q) ||
-        item.topSupplier.toLowerCase().includes(q)
+        matchesArabicSearch(item.itemName, q) ||
+        matchesArabicSearch(item.sapCode, q) ||
+        matchesArabicSearch(item.oldCode, q) ||
+        matchesArabicSearch(item.varietyName, q) ||
+        matchesArabicSearch(item.topSupplier, q) ||
+        item.itemName.toLowerCase().includes(raw)
       );
     }
     switch (itemsSummarySort) {
@@ -2495,11 +2681,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const filteredSortedSuppliers = useMemo(() => {
     let result = [...suppliersSummary];
     if (suppliersSummarySearch.trim()) {
-      const q = suppliersSummarySearch.toLowerCase().trim();
+      const q = normalizeArabicSearch(suppliersSummarySearch);
+      const raw = suppliersSummarySearch.toLowerCase().trim();
       result = result.filter(sup => 
-        sup.costCenter.toLowerCase().includes(q) ||
-        sup.costCenterCode.toLowerCase().includes(q) ||
-        sup.topItem.toLowerCase().includes(q)
+        matchesArabicSearch(sup.costCenter, q) ||
+        matchesArabicSearch(sup.costCenterCode, q) ||
+        matchesArabicSearch(sup.topItem, q) ||
+        sup.costCenter.toLowerCase().includes(raw)
       );
     }
     switch (suppliersSummarySort) {
@@ -2976,7 +3164,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           'الموقع / التعبئة': r.location || '-',
           'رقم التانك': r.tankNo || '-',
           'أمر الشراء PO': r.po || '-',
-          'رقم تنفيذ الساب': r.sapExecutionNo || '-',
           'المنطقة / المزرعة': r.region || '-',
           'التحليل الأولي': r.initialAnalysis || '-'
         };
@@ -2990,7 +3177,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
         row['طريقة السداد'] = r.paymentMethod || '-';
         row['المخزن'] = r.store || 'GPS';
-        row['POST DOCUMENT'] = r.postDocument || '-';
+        row['POST DOCUMENT'] = r.postDocument || r.sapExecutionNo || '-';
         row['RESERVATION'] = r.reservation || '-';
         row['رقم مستند المورد'] = r.vendorDocNo || '-';
         row['ملاحظات'] = r.notes || '-';
@@ -3178,11 +3365,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         r.location,
         r.sapCode,
         r.po,
-        r.sapExecutionNo || '-'
+        r.postDocument || r.sapExecutionNo || '-'
       ]);
 
       (doc as any).autoTable({
-        head: [['#', 'Date', 'Move No', 'Item Name', 'KG', 'Tons', 'Supplier / Farm', 'Truck', 'Driver', 'Pkg', 'SAP Code', 'PO No', 'SAP Exec No']],
+        head: [['#', 'Date', 'Move No', 'Item Name', 'KG', 'Tons', 'Supplier / Farm', 'Truck', 'Driver', 'Pkg', 'SAP Code', 'PO No', 'POST DOCUMENT']],
         body: tableData,
         startY: 26,
         styles: { fontSize: 7.5, cellPadding: 1.5 },
@@ -3831,9 +4018,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               onChange={(e) => setSapFilter(e.target.value)}
               className="h-10 px-3.5 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-900 dark:text-zinc-100 text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-hidden cursor-pointer"
             >
-              <option value="ALL">{isRtl ? '⚙️ تنفيذ ساب / POST DOC (الكل)' : 'All SAP / POST DOC'}</option>
-              <option value="EXISTS">{isRtl ? '✔️ يوجد تنفيذ ساب (POST DOC)' : 'POST DOC Exists'}</option>
-              <option value="EMPTY">{isRtl ? '❌ لا يوجد تنفيذ ساب' : 'No POST DOC'}</option>
+              <option value="ALL">{isRtl ? '⚙️ مستند POST DOCUMENT (الكل)' : 'All POST DOCUMENT'}</option>
+              <option value="EXISTS">{isRtl ? '✔️ تم إدخال POST DOCUMENT' : 'POST DOC Exists'}</option>
+              <option value="EMPTY">{isRtl ? '❌ بدون POST DOCUMENT' : 'No POST DOC'}</option>
             </select>
           </div>
 
@@ -3893,12 +4080,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       location: isRtl ? 'الموقع والتعبئة' : 'Package',
                       sapCode: isRtl ? 'كود ساب' : 'SAP Code',
                       po: isRtl ? 'أمر الشراء (PO)' : 'PO No',
-                      sapExecutionNo: isRtl ? 'رقم تنفيذ الساب' : 'SAP Execution No',
+                      postDocument: 'POST DOCUMENT',
                       region: isRtl ? 'المنطقة / المزرعة' : 'Region',
                       price: isRtl ? 'السعر والقيمة (ج.م)' : 'Price & Value',
                       paymentMethod: isRtl ? 'طريقة السداد' : 'Payment Method',
                       initialAnalysis: isRtl ? 'التحليل الأولي' : 'Initial Analysis',
-                      postDocument: isRtl ? 'رقم تنفيذ الساب (POST DOCUMENT)' : 'POST DOCUMENT',
                       store: isRtl ? 'المخزن' : 'Store',
                       actions: isRtl ? 'الإجراءات' : 'Actions'
                     };
@@ -3978,7 +4164,107 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               <span>{isRtl ? 'أخرى' : 'Other'}</span>
             </button>
           </div>
+
+          {/* Results Counter */}
+          <div className="text-xs font-mono font-bold text-zinc-500 dark:text-zinc-400">
+            {isRtl ? `عرض ${filteredData.length.toLocaleString()} من أصل ${data.length.toLocaleString()} حركة` : `Showing ${filteredData.length} of ${data.length}`}
+          </div>
         </div>
+
+        {/* Active Filter Chips Bar */}
+        {(searchTerm || selectedSuppliers.length > 0 || selectedItems.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || analysisFilter !== 'ALL' || poFilter !== 'ALL' || sapFilter !== 'ALL' || pricingStatusFilter !== 'ALL') && (
+          <div className="pt-2.5 mt-2.5 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center gap-2 flex-wrap text-xs">
+            <span className="text-[11px] font-black text-zinc-400 shrink-0">
+              {isRtl ? 'الفلاتر النشطة:' : 'Active Filters:'}
+            </span>
+
+            {/* Search Term Chip */}
+            {searchTerm && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 font-bold">
+                <span>{isRtl ? `بحث: "${searchTerm}"` : `Search: "${searchTerm}"`}</span>
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="hover:text-red-500 cursor-pointer p-0.5"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+
+            {/* Selected Suppliers Chips */}
+            {selectedSuppliers.map(sup => (
+              <span
+                key={sup}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold"
+              >
+                <Building2 size={12} className="text-purple-500" />
+                <span>{isRtl ? `المورد: ${sup}` : `Supplier: ${sup}`}</span>
+                <button
+                  onClick={() => setSelectedSuppliers(selectedSuppliers.filter(s => s !== sup))}
+                  className="hover:text-red-500 cursor-pointer p-0.5"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+
+            {/* Selected Items Chips */}
+            {selectedItems.map(item => (
+              <span
+                key={item}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold"
+              >
+                <Sprout size={12} className="text-emerald-500" />
+                <span>{item}</span>
+                <button
+                  onClick={() => setSelectedItems(selectedItems.filter(i => i !== item))}
+                  className="hover:text-red-500 cursor-pointer p-0.5"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+
+            {/* Selected Stores Chips */}
+            {selectedStores.map(st => (
+              <span
+                key={st}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 font-bold"
+              >
+                <Container size={12} className="text-blue-500" />
+                <span>{st}</span>
+                <button
+                  onClick={() => setSelectedStores(selectedStores.filter(s => s !== st))}
+                  className="hover:text-red-500 cursor-pointer p-0.5"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+
+            {/* Date Filter Chip */}
+            {dateFilter.mode !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold">
+                <Calendar size={12} className="text-amber-500" />
+                <span>{isRtl ? 'فلتر التاريخ مفعل' : 'Date Filter Active'}</span>
+                <button
+                  onClick={() => setDateFilter({ mode: 'all' })}
+                  className="hover:text-red-500 cursor-pointer p-0.5"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+
+            {/* Reset All Button */}
+            <button
+              onClick={handleClearFilters}
+              className="text-[11px] text-red-500 hover:text-red-600 dark:text-red-400 font-black hover:underline cursor-pointer ml-auto shrink-0"
+            >
+              {isRtl ? 'إلغاء جميع الفلاتر ✕' : 'Clear All ✕'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 4. Active View Content */}
@@ -4004,7 +4290,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   {selectedRowIds.length}
                 </div>
                 <span className="font-bold text-xs">
-                  {isRtl ? `تم تحديد (${selectedRowIds.length}) صف لتعديل أمر التوريد ورقم الساب` : `Selected (${selectedRowIds.length}) rows for bulk update`}
+                  {isRtl ? `تم تحديد (${selectedRowIds.length}) صف لتعديل أمر التوريد ومستند POST DOCUMENT` : `Selected (${selectedRowIds.length}) rows for bulk update`}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -4013,7 +4299,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   className="px-4 py-2 bg-white text-purple-900 hover:bg-purple-50 font-black text-xs rounded-xl shadow transition-all cursor-pointer flex items-center gap-1.5"
                 >
                   <Edit className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'تعديل جماعي (أمر توريد / ساب)' : 'Bulk Edit (PO / SAP)'}</span>
+                  <span>{isRtl ? 'تعديل جماعي (PO / POST DOCUMENT)' : 'Bulk Edit (PO / POST DOC)'}</span>
                 </button>
                 <button
                   onClick={() => setSelectedRowIds([])}
@@ -4144,13 +4430,18 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                     <th className="py-3.5 px-3">{isRtl ? 'أمر الشراء PO' : 'PO No'}</th>
                   )}
 
-                  {visibleColumns.sapExecutionNo && (
+                  {visibleColumns.postDocument && (
                     <th 
-                      onClick={() => handleSort('sapExecutionNo')}
-                      className="py-3.5 px-3 cursor-pointer hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60 transition-colors"
+                      onClick={() => handleSort('postDocument')}
+                      className={`py-3.5 px-3 cursor-pointer transition-colors ${
+                        sortField === 'postDocument' 
+                          ? 'bg-indigo-100/70 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-300 font-black' 
+                          : 'hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60'
+                      }`}
+                      title={isRtl ? 'انقر للترتيب حسب مستند الترحيل POST DOCUMENT' : 'Sort by POST DOCUMENT'}
                     >
                       <div className="flex items-center gap-1">
-                        <span>{isRtl ? 'رقم تنفيذ الساب' : 'SAP Execution No'}</span>
+                        <span>POST DOCUMENT</span>
                         <ArrowUpDown className="w-3 h-3 text-zinc-400" />
                       </div>
                     </th>
@@ -4170,23 +4461,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
                   {visibleColumns.initialAnalysis && (
                     <th className="py-3.5 px-3">{isRtl ? 'التحليل الأولي' : 'Initial Analysis'}</th>
-                  )}
-
-                  {visibleColumns.postDocument && (
-                    <th 
-                      onClick={() => handleSort('postDocument')}
-                      className={`py-3.5 px-3 cursor-pointer transition-colors ${
-                        sortField === 'postDocument' 
-                          ? 'bg-indigo-100/70 dark:bg-indigo-950/50 text-indigo-900 dark:text-indigo-300 font-black' 
-                          : 'hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60'
-                      }`}
-                      title={isRtl ? 'انقر للترتيب حسب رقم تنفيذ الساب / POST DOCUMENT' : 'Sort by POST DOCUMENT'}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>{isRtl ? 'رقم تنفيذ الساب (POST DOCUMENT)' : 'POST DOCUMENT'}</span>
-                        <ArrowUpDown className="w-3 h-3 text-zinc-400" />
-                      </div>
-                    </th>
                   )}
 
                   {visibleColumns.store && (
@@ -4240,7 +4514,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                                 }}
                                 className="rounded border-zinc-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                               />
-                              <span>{rowNumber}</span>
+                              <span className="font-semibold text-zinc-600 dark:text-zinc-400">{rowNumber}</span>
                             </div>
                           </td>
                         )}
@@ -4292,9 +4566,19 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         {visibleColumns.costCenter && (
                           <td className="py-2.5 px-3 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 whitespace-nowrap">
-                              <span className="font-bold text-zinc-800 dark:text-zinc-200">
-                                {record.costCenter || '-'}
-                              </span>
+                              <button
+                                onClick={() => {
+                                  if (record.costCenter) {
+                                    setSelectedSuppliers([record.costCenter]);
+                                    toast.success(isRtl ? `تمت تصفية الجدول لعرض توريدات (${record.costCenter}) فقط` : `Filtered by ${record.costCenter}`);
+                                  }
+                                }}
+                                title={isRtl ? `تصفية حسب المورد (${record.costCenter}) فقط` : `Filter by ${record.costCenter} only`}
+                                className="font-bold text-zinc-800 dark:text-zinc-200 hover:text-purple-600 dark:hover:text-purple-400 hover:underline cursor-pointer text-right flex items-center gap-1 group/sup"
+                              >
+                                <span>{record.costCenter || '-'}</span>
+                                <Filter size={10} className="opacity-0 group-hover/sup:opacity-100 text-purple-500 transition-opacity" />
+                              </button>
                               {record.costCenterCode && (
                                 <span className="text-[10px] text-zinc-400 font-mono">
                                   ({record.costCenterCode})
@@ -4349,14 +4633,21 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           </td>
                         )}
 
-                        {visibleColumns.sapExecutionNo && (
-                          <td className="py-2.5 px-3 whitespace-nowrap">
-                            {record.sapExecutionNo ? (
-                              <span className="font-mono font-bold text-blue-800 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-[11px]">
-                                {record.sapExecutionNo}
+                        {visibleColumns.postDocument && (
+                          <td 
+                            className="py-2.5 px-3 whitespace-nowrap cursor-pointer hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 transition-colors"
+                            onClick={() => setSelectedRecord(record)}
+                            title={isRtl ? 'انقر لكتابة أو تعديل مستند POST DOCUMENT' : 'Click to write or edit POST DOCUMENT'}
+                          >
+                            {(record.postDocument || record.sapExecutionNo) ? (
+                              <span className="font-mono font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[11px]">
+                                {record.postDocument || record.sapExecutionNo}
                               </span>
                             ) : (
-                              <span className="text-zinc-400 text-[11px]">-</span>
+                              <span className="inline-flex items-center gap-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 text-[10.5px] font-bold">
+                                <Edit3 className="w-3 h-3" />
+                                <span>{isRtl ? 'كتابة المستند' : 'Add Doc'}</span>
+                              </span>
                             )}
                           </td>
                         )}
@@ -4466,18 +4757,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           </td>
                         )}
 
-                        {visibleColumns.postDocument && (
-                          <td className="py-2.5 px-3 whitespace-nowrap">
-                            {record.postDocument ? (
-                              <span className="font-mono font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[11px]">
-                                {record.postDocument}
-                              </span>
-                            ) : (
-                              <span className="text-zinc-400 text-[11px]">-</span>
-                            )}
-                          </td>
-                        )}
-
                         {visibleColumns.store && (
                           <td className="py-2.5 px-3 whitespace-nowrap">
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
@@ -4489,15 +4768,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         {visibleColumns.actions && (
                           <td className="py-3 px-3 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1">
-                              {canAccessSupplyActions && (
-                                <button
-                                  onClick={() => setSelectedRecord(record)}
-                                  className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
-                                  title={isRtl ? 'عرض واستكمال بيانات التوريد' : 'View & Complete Supply'}
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              <button
+                                onClick={() => setSelectedRecord(record)}
+                                className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
+                                title={isRtl ? 'عرض وتعديل بيانات التوريد وتنفيذ الساب' : 'View & Edit Supply / SAP'}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
                               <button
                                 onClick={() => handleCopyRecord(record)}
                                 className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 rounded-lg transition-colors cursor-pointer"
@@ -4842,7 +5119,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
                   <div className="space-y-2.5">
                     {suppliersSummary
-                      .filter(s => modalSearchTerm ? s.costCenter.toLowerCase().includes(modalSearchTerm.toLowerCase()) : true)
+                      .filter(s => modalSearchTerm ? (matchesArabicSearch(s.costCenter, modalSearchTerm) || s.costCenter.toLowerCase().includes(modalSearchTerm.toLowerCase())) : true)
                       .map((sup, idx) => {
                         const percent = stats.totalKg > 0 ? ((sup.totalKg / stats.totalKg) * 100).toFixed(1) : '0';
                         const isExpanded = expandedSupplier === sup.costCenter;
@@ -5259,11 +5536,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           />
                         </div>
 
-                        {/* 2. SAP Execution / POST DOCUMENT */}
+                        {/* 2. POST DOCUMENT */}
                         <div className="space-y-1.5">
                           <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                             <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>{isRtl ? 'رقم تنفيذ الساب (POST DOCUMENT)' : 'SAP Execution (POST DOCUMENT)'}</span>
+                            <span>POST DOCUMENT</span>
                           </label>
                           <input
                             type="text"
@@ -5838,173 +6115,545 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         )}
       </AnimatePresence>
 
-      {/* Bulk Edit Modal */}
+      {/* Bulk Edit Modal - Designed with the exact same display style and cards as the Edit Modal */}
       {isBulkEditModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-200 dark:border-zinc-800 space-y-5 animate-scale-up">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
-              <h3 className="text-base font-black text-zinc-900 dark:text-white flex items-center gap-2">
-                <Edit className="w-4 h-4 text-purple-600" />
-                <span>{isRtl ? `تعديل جماعي لـ (${selectedRowIds.length}) صف` : `Bulk Edit (${selectedRowIds.length}) Rows`}</span>
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-3xl w-full border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-purple-700 via-indigo-700 to-teal-800 text-white p-5 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Edit className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base">
+                    {isRtl ? 'التعديل الجماعي لبيانات التوريد وتنفيذ الساب' : 'Bulk Fresh Supply & SAP Execution Edit'}
+                  </h3>
+                  <p className="text-xs text-purple-100 font-mono">
+                    {isRtl 
+                      ? `تم تحديد (${selectedRowIds.length}) حركة توريد لتحديث بياناتها دفعة واحدة` 
+                      : `Selected (${selectedRowIds.length}) records for bulk update`}
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsBulkEditModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 cursor-pointer"
+                className="p-2 hover:bg-white/10 rounded-xl text-white transition-colors cursor-pointer"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto px-1">
-              <div>
-                <label className="block text-xs font-black text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  {isRtl ? 'رقم أمر الشراء / التوريد (PO):' : 'Purchase Order (PO):'}
-                </label>
-                <input
-                  type="text"
-                  value={bulkEditForm.po}
-                  onChange={(e) => setBulkEditForm({ ...bulkEditForm, po: e.target.value })}
-                  placeholder={isRtl ? 'أدخل رقم أمر الشراء المشترك (اختياري)...' : 'Enter common PO number (optional)...'}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  {isRtl ? 'رقم تنفيذ الساب (POST DOCUMENT):' : 'SAP Execution (POST DOCUMENT):'}
-                </label>
-                <input
-                  type="text"
-                  value={bulkEditForm.postDocument || bulkEditForm.sapExecutionNo}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setBulkEditForm({ ...bulkEditForm, postDocument: val, sapExecutionNo: val });
-                  }}
-                  placeholder={isRtl ? 'أدخل رقم تنفيذ الساب / مستند الترحيل المشترك...' : 'Enter common POST DOCUMENT / SAP execution no...'}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                />
-              </div>
-
-              {/* Price & Supply fields - Only for authorized pricing roles */}
-              {canViewPrice && (
-                <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-black text-amber-700 dark:text-amber-400">
-                    <DollarSign className="w-3.5 h-3.5" />
-                    <span>{isRtl ? 'بيانات التسعير والتوريد بالبرنامج' : 'App Pricing & Supply Details'}</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                        {isRtl ? 'السعر الأساسي (ج.م/كجم):' : 'Base Price (EGP/kg):'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={bulkEditForm.price}
-                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, price: e.target.value })}
-                        placeholder={isRtl ? 'السعر...' : 'Price...'}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-                      />
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 overflow-y-auto text-xs flex-1" dir={isRtl ? 'rtl' : 'ltr'}>
+              
+              <div className="space-y-6">
+                
+                {/* Summary Header Card */}
+                <div className="bg-gradient-to-r from-purple-500/15 via-indigo-500/10 to-purple-500/5 dark:from-purple-950/60 dark:via-zinc-900 dark:to-purple-950/30 p-5 rounded-3xl border border-purple-200/80 dark:border-purple-800/60 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-purple-700 text-white font-black text-[10px] tracking-wide">
+                        {isRtl ? 'تعديل جماعي متعدد' : 'Bulk Multi-Edit'}
+                      </span>
+                      <span className="text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">
+                        {isRtl ? `عدد الحركات: ${bulkSelectedSummary.count} حركة` : `${bulkSelectedSummary.count} Movements`}
+                      </span>
                     </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                        {isRtl ? 'نسبة خصم الجودة %:' : 'Quality Discount %:'}
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={bulkEditForm.qualityDiscountPercent}
-                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, qualityDiscountPercent: e.target.value })}
-                        placeholder="0%"
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs font-mono focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-                      />
+                    <h4 className="text-base font-black text-zinc-900 dark:text-white leading-tight">
+                      {isRtl 
+                        ? `تطبيق التعديلات على ${bulkSelectedSummary.count} حركة توريد محددة` 
+                        : `Apply updates to ${bulkSelectedSummary.count} selected movements`}
+                    </h4>
+                    <div className="flex items-center gap-3 text-zinc-600 dark:text-zinc-300 text-[11px] font-medium flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5 text-purple-600" />
+                        <strong>{isRtl ? 'الموردين:' : 'Suppliers:'}</strong> {bulkSelectedSummary.suppliersCount} مورد
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Sprout className="w-3.5 h-3.5 text-emerald-600" />
+                        <strong>{isRtl ? 'الأصناف:' : 'Items:'}</strong> {bulkSelectedSummary.itemsCount} صنف
+                      </span>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                      {isRtl ? 'التحليل الأولي:' : 'Initial Analysis:'}
-                    </label>
-                    <div className="flex gap-1.5 mb-1.5">
-                      {['خالي مبيدات', 'مبيدات', 'عشوائي'].map((status) => (
+                  <div className="bg-white/80 dark:bg-zinc-800/80 px-4 py-3 rounded-2xl border border-purple-200 dark:border-purple-700/60 text-left sm:text-right shrink-0 shadow-2xs">
+                    <span className="text-[10px] font-bold text-purple-800 dark:text-purple-300 block">إجمالي الكمية المحددة:</span>
+                    <div className="text-xl font-mono font-black text-purple-700 dark:text-purple-400">
+                      {bulkSelectedSummary.totalKg.toLocaleString()} <span className="text-xs font-bold">كجم</span>
+                    </div>
+                    <div className="text-[11px] font-mono font-bold text-zinc-500">
+                      = {bulkSelectedSummary.totalTons.toFixed(3)} طن
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info Note Banner */}
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-800/60 flex items-center gap-2.5 text-amber-800 dark:text-amber-300 text-xs">
+                  <Info className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>{isRtl ? 'ملاحظة: سيتم تطبيق الحقول التي تقوم بإدخالها فقط وتجاوز الحقول الفارغة دون المساس بقيمها الأصلية.' : 'Note: Only filled fields will be applied; empty fields will preserve their current values.'}</span>
+                </div>
+
+                <form onSubmit={(e) => { e.preventDefault(); handleBulkSave(); }} className="space-y-6">
+                  
+                  {/* SECTION 1: Documents & SAP Execution */}
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                    <div className="flex items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                      <div className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 flex items-center justify-center font-black text-xs">
+                        1
+                      </div>
+                      <h5 className="font-black text-sm text-zinc-900 dark:text-white">
+                        {isRtl ? 'بيانات المستندات وأوامر الشراء (PO & SAP)' : 'Documents & PO Data'}
+                      </h5>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* 1. PO Number */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <Hash className="w-3.5 h-3.5 text-purple-600" />
+                          <span>{isRtl ? 'رقم أمر الشراء (PO Number)' : 'PO Number'}</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={bulkEditForm.po}
+                          onChange={(e) => setBulkEditForm({ ...bulkEditForm, po: e.target.value })}
+                          placeholder={isRtl ? 'أدخل أمر الشراء المشترك...' : 'e.g. PO-2026-0891'}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                        />
+                      </div>
+
+                      {/* 2. POST DOCUMENT - Available for ALL users! */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>POST DOCUMENT</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={bulkEditForm.postDocument || bulkEditForm.sapExecutionNo}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setBulkEditForm({ ...bulkEditForm, postDocument: val, sapExecutionNo: val });
+                          }}
+                          placeholder={isRtl ? 'مثال: 5000052380 أو كود الترحيل' : 'e.g. 5000052380'}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 2: Source, Pricing & Payment */}
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-4">
+                    <div className="flex items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                      <div className="w-7 h-7 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 flex items-center justify-center font-black text-xs">
+                        2
+                      </div>
+                      <h5 className="font-black text-sm text-zinc-900 dark:text-white">
+                        {canViewPrice 
+                          ? (isRtl ? 'المصدر، التسعير وخصم الجودة وطريقة السداد' : 'Source, Pricing & Payment')
+                          : (isRtl ? 'المصدر والمنطقة وطريقة السداد' : 'Source, Region & Payment')}
+                      </h5>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Region / Farm */}
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-sky-600" />
+                          <span>{isRtl ? 'المنطقة / المزرعة / المصدر' : 'Region / Farm'}</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={bulkEditForm.region}
+                          onChange={(e) => setBulkEditForm({ ...bulkEditForm, region: e.target.value })}
+                          placeholder={isRtl ? 'اختر أو اكتب المنطقة / المزرعة...' : 'e.g. Siwa, Fayoum...'}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                        />
+                        {/* Preset Region suggestions */}
+                        <div className="flex items-center gap-1 flex-wrap pt-1.5">
+                          {[
+                            'الفيوم',
+                            'طريق مصر الاسكندريه الصحراوي',
+                            'الاسماعليه',
+                            'البره الثاني ( راس سدر )',
+                            'العريش',
+                            'المنيا',
+                            'المغره',
+                            'سيويه'
+                          ].map(reg => (
+                            <button
+                              key={reg}
+                              type="button"
+                              onClick={() => setBulkEditForm({ ...bulkEditForm, region: reg })}
+                              className={`px-2.5 py-1 text-[11px] rounded-lg transition-colors cursor-pointer border ${
+                                bulkEditForm.region === reg
+                                  ? 'bg-sky-600 text-white border-sky-700 font-black shadow-2xs'
+                                  : 'bg-white dark:bg-zinc-800 hover:bg-sky-50 dark:hover:bg-sky-950/60 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
+                              }`}
+                            >
+                              + {reg}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Pricing fields - Only for authorized pricing roles */}
+                      {canViewPrice && (
+                        <>
+                          {/* Base Price */}
+                          <div className="space-y-1.5">
+                            <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                              <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                              <span>{isRtl ? 'السعر الأساسي للكيلو (ج.م)' : 'Base Price per Kg (EGP)'}</span>
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={bulkEditForm.price}
+                                onChange={(e) => setBulkEditForm({ ...bulkEditForm, price: e.target.value })}
+                                placeholder="0.00"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                              />
+                              <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">ج.م/كجم</span>
+                            </div>
+                          </div>
+
+                          {/* Quality Discount */}
+                          <div className="space-y-1.5">
+                            <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                              <Percent className="w-3.5 h-3.5 text-rose-600" />
+                              <span>{isRtl ? 'نسبة خصم الجودة (%)' : 'Quality Discount (%)'}</span>
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                value={bulkEditForm.qualityDiscountPercent}
+                                onChange={(e) => setBulkEditForm({ ...bulkEditForm, qualityDiscountPercent: e.target.value })}
+                                placeholder="0"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                              />
+                              <span className="absolute left-3 top-2.5 text-zinc-400 text-[11px] font-bold">%</span>
+                            </div>
+                            {/* Quick Discount Presets */}
+                            <div className="flex items-center gap-1 flex-wrap pt-1.5">
+                              {[0, 1, 2, 3, 5, 7, 10, 15].map(pct => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() => setBulkEditForm({ ...bulkEditForm, qualityDiscountPercent: String(pct) })}
+                                  className={`px-2 py-0.5 text-[10px] rounded-md transition-colors cursor-pointer border ${
+                                    Number(bulkEditForm.qualityDiscountPercent) === pct && bulkEditForm.qualityDiscountPercent !== ''
+                                      ? 'bg-rose-600 text-white border-rose-700 font-bold'
+                                      : 'bg-white dark:bg-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/60 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                                  }`}
+                                >
+                                  {pct}%
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Payment Method */}
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                          <span>{isRtl ? 'طريقة السداد' : 'Payment Method'}</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={bulkEditForm.paymentMethod}
+                            onChange={(e) => setBulkEditForm({ ...bulkEditForm, paymentMethod: e.target.value })}
+                            placeholder={isRtl ? 'اختر أو اكتب طريقة السداد...' : 'Payment...'}
+                            className="flex-1 px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                          />
+                          <div className="flex items-center gap-1 shrink-0">
+                            {['نقدي', 'دفعات توريد'].map(pay => (
+                              <button
+                                key={pay}
+                                type="button"
+                                onClick={() => setBulkEditForm({ ...bulkEditForm, paymentMethod: pay })}
+                                className={`px-3 py-2.5 text-xs rounded-xl transition-colors cursor-pointer border whitespace-nowrap font-bold ${
+                                  bulkEditForm.paymentMethod === pay
+                                    ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
+                                    : 'bg-white dark:bg-zinc-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700'
+                                }`}
+                              >
+                                {pay}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* SECTION 3: Initial Quality Analysis */}
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+                    <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 flex items-center justify-center font-black text-xs">
+                          3
+                        </div>
+                        <label className="text-xs font-black text-zinc-900 dark:text-white flex items-center gap-1.5">
+                          <FlaskConical className="w-3.5 h-3.5 text-teal-600" />
+                          <span>{isRtl ? 'التحليل الأولي للجودة والمواصفات (اختر النتيجة):' : 'Initial Quality Analysis:'}</span>
+                        </label>
+                      </div>
+                      {bulkEditForm.initialAnalysis && (
                         <button
-                          key={status}
                           type="button"
-                          onClick={() => setBulkEditForm({ ...bulkEditForm, initialAnalysis: bulkEditForm.initialAnalysis === status ? '' : status })}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                            bulkEditForm.initialAnalysis === status
-                              ? 'bg-amber-600 text-white border-amber-600'
-                              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
-                          }`}
+                          onClick={() => setBulkEditForm({ ...bulkEditForm, initialAnalysis: '' })}
+                          className="text-[11px] font-bold text-zinc-400 hover:text-rose-500 transition-colors cursor-pointer"
                         >
-                          {status}
+                          {isRtl ? 'إلغاء التحديد ✕' : 'Clear ✕'}
                         </button>
-                      ))}
+                      )}
                     </div>
+
+                    {/* 3 Main Choice Cards */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* Option 1: خالي مبيدات */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkEditForm(prev => ({
+                            ...prev,
+                            initialAnalysis: prev.initialAnalysis === 'خالي مبيدات' ? '' : 'خالي مبيدات'
+                          }));
+                        }}
+                        className={`p-3.5 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                          bulkEditForm.initialAnalysis === 'خالي مبيدات' || bulkEditForm.initialAnalysis.includes('خالي مبيدات')
+                            ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20 scale-[1.02]'
+                            : 'bg-white dark:bg-zinc-800/80 border-emerald-200 dark:border-emerald-800/50 hover:border-emerald-400 hover:bg-emerald-50/50 text-zinc-800 dark:text-zinc-200'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          bulkEditForm.initialAnalysis === 'خالي مبيدات' || bulkEditForm.initialAnalysis.includes('خالي مبيدات')
+                            ? 'bg-white/20 text-white'
+                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        }`}>
+                          <Leaf className="w-4 h-4" />
+                        </div>
+                        <span className="font-black text-xs">{isRtl ? 'خالي مبيدات' : 'Pesticide-Free'}</span>
+                        <span className={`text-[10px] ${
+                          bulkEditForm.initialAnalysis === 'خالي مبيدات' || bulkEditForm.initialAnalysis.includes('خالي مبيدات')
+                            ? 'text-emerald-100'
+                            : 'text-zinc-400'
+                        }`}>
+                          {isRtl ? 'مطابق وسليم' : 'Clean / Safe'}
+                        </span>
+                      </button>
+
+                      {/* Option 2: مبيدات */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkEditForm(prev => ({
+                            ...prev,
+                            initialAnalysis: prev.initialAnalysis === 'مبيدات' ? '' : 'مبيدات'
+                          }));
+                        }}
+                        className={`p-3.5 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                          bulkEditForm.initialAnalysis === 'مبيدات' || (bulkEditForm.initialAnalysis.includes('مبيدات') && !bulkEditForm.initialAnalysis.includes('خالي'))
+                            ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20 scale-[1.02]'
+                            : 'bg-white dark:bg-zinc-800/80 border-rose-200 dark:border-rose-800/50 hover:border-rose-400 hover:bg-rose-50/50 text-zinc-800 dark:text-zinc-200'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          bulkEditForm.initialAnalysis === 'مبيدات' || (bulkEditForm.initialAnalysis.includes('مبيدات') && !bulkEditForm.initialAnalysis.includes('خالي'))
+                            ? 'bg-white/20 text-white'
+                            : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                        }`}>
+                          <ShieldAlert className="w-4 h-4" />
+                        </div>
+                        <span className="font-black text-xs">{isRtl ? 'مبيدات' : 'Pesticides'}</span>
+                        <span className={`text-[10px] ${
+                          bulkEditForm.initialAnalysis === 'مبيدات' || (bulkEditForm.initialAnalysis.includes('مبيدات') && !bulkEditForm.initialAnalysis.includes('خالي'))
+                            ? 'text-rose-100'
+                            : 'text-zinc-400'
+                        }`}>
+                          {isRtl ? 'يحتوي متبقيات' : 'Contains Res.'}
+                        </span>
+                      </button>
+
+                      {/* Option 3: عشوائي */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkEditForm(prev => ({
+                            ...prev,
+                            initialAnalysis: prev.initialAnalysis === 'عشوائي' ? '' : 'عشوائي'
+                          }));
+                        }}
+                        className={`p-3.5 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                          bulkEditForm.initialAnalysis === 'عشوائي' || bulkEditForm.initialAnalysis.includes('عشوائي')
+                            ? 'bg-indigo-600 text-white border-indigo-700 shadow-md shadow-indigo-600/20 scale-[1.02]'
+                            : 'bg-white dark:bg-zinc-800/80 border-indigo-200 dark:border-indigo-800/50 hover:border-indigo-400 hover:bg-indigo-50/50 text-zinc-800 dark:text-zinc-200'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          bulkEditForm.initialAnalysis === 'عشوائي' || bulkEditForm.initialAnalysis.includes('عشوائي')
+                            ? 'bg-white/20 text-white'
+                            : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                        }`}>
+                          <Shuffle className="w-4 h-4" />
+                        </div>
+                        <span className="font-black text-xs">{isRtl ? 'عشوائي' : 'Random Spot'}</span>
+                        <span className={`text-[10px] ${
+                          bulkEditForm.initialAnalysis === 'عشوائي' || bulkEditForm.initialAnalysis.includes('عشوائي')
+                            ? 'text-indigo-100'
+                            : 'text-zinc-400'
+                        }`}>
+                          {isRtl ? 'فحص عينة عشوائية' : 'Spot Check'}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Optional Notes / Specs Input */}
                     <input
                       type="text"
                       value={bulkEditForm.initialAnalysis}
                       onChange={(e) => setBulkEditForm({ ...bulkEditForm, initialAnalysis: e.target.value })}
-                      placeholder={isRtl ? 'التحليل الأولي...' : 'Initial analysis...'}
-                      className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                      placeholder={isRtl ? 'أو اكتب نصاً مفصلاً للتحليل المشترك...' : 'Or enter custom detailed notes...'}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                        {isRtl ? 'المنطقة / المزرعة:' : 'Region / Farm:'}
-                      </label>
-                      <input
-                        type="text"
-                        value={bulkEditForm.region}
-                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, region: e.target.value })}
-                        placeholder={isRtl ? 'الموقع أو المزرعة...' : 'Region/Farm...'}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-                      />
+                  {/* SECTION 4: Processing Routing (التوجيه) */}
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-3">
+                    <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 flex items-center justify-center font-black text-xs">
+                          4
+                        </div>
+                        <label className="text-xs font-black text-zinc-900 dark:text-white flex items-center gap-1.5">
+                          <Route className="w-3.5 h-3.5 text-purple-600" />
+                          <span>{isRtl ? 'توجيه المعالجة والتصنيع:' : 'Processing Routing:'}</span>
+                        </label>
+                      </div>
+                      {bulkEditForm.routing && (
+                        <button
+                          type="button"
+                          onClick={() => setBulkEditForm({ ...bulkEditForm, routing: '' })}
+                          className="text-[11px] font-bold text-zinc-400 hover:text-rose-500 transition-colors cursor-pointer"
+                        >
+                          {isRtl ? 'إلغاء التحديد ✕' : 'Clear ✕'}
+                        </button>
+                      )}
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                        {isRtl ? 'طريقة السداد:' : 'Payment Method:'}
-                      </label>
-                      <input
-                        type="text"
-                        value={bulkEditForm.paymentMethod}
-                        onChange={(e) => setBulkEditForm({ ...bulkEditForm, paymentMethod: e.target.value })}
-                        placeholder={isRtl ? 'طريقة السداد...' : 'Payment method...'}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-                      />
+                    {/* Routing Preset Buttons */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {[
+                        { key: 'مياه وملح', label: isRtl ? 'مياه وملح' : 'Water & Salt', desc: isRtl ? 'تخليل / حفظ' : 'Pickling' },
+                        { key: 'مطبوخ', label: isRtl ? 'مطبوخ' : 'Cooked', desc: isRtl ? 'حراري / تسوية' : 'Cooked' },
+                        { key: 'زيت', label: isRtl ? 'زيت' : 'Oil Extraction', desc: isRtl ? 'عصر زيتون' : 'Oil Pressing' },
+                        { key: 'أخري', label: isRtl ? 'أخري' : 'Other', desc: isRtl ? 'توجيه آخر' : 'Other Routing' },
+                      ].map(item => {
+                        const isSelected = bulkEditForm.routing === item.key || bulkEditForm.routing.includes(item.key);
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => {
+                              setBulkEditForm(prev => ({
+                                ...prev,
+                                routing: prev.routing === item.key ? '' : item.key
+                              }));
+                            }}
+                            className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                              isSelected
+                                ? 'bg-purple-600 text-white border-purple-700 shadow-md shadow-purple-600/20 scale-[1.02]'
+                                : 'bg-white dark:bg-zinc-800/80 border-purple-200 dark:border-purple-800/50 hover:border-purple-400 hover:bg-purple-50/50 text-zinc-800 dark:text-zinc-200'
+                            }`}
+                          >
+                            <span className="font-black text-xs">{item.label}</span>
+                            <span className={`text-[10px] ${isSelected ? 'text-purple-100' : 'text-zinc-400'}`}>
+                              {item.desc}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
+
+                    {/* Custom Routing Input */}
+                    <input
+                      type="text"
+                      value={bulkEditForm.routing}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, routing: e.target.value })}
+                      placeholder={isRtl ? 'أو اكتب تفاصيل التوجيه المشترك...' : 'Or enter custom routing details...'}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden mt-2"
+                    />
                   </div>
-                </div>
-              )}
 
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 p-3 rounded-xl leading-relaxed">
-                {isRtl 
-                  ? 'ملاحظة: سيتم تطبيق الحقول المملوءة فقط على جميع الحركات المحددة وحفظها في التخزين السحابي فوراً.' 
-                  : 'Note: Filled fields only will be applied to all selected records and persisted to cloud Firestore.'}
-              </p>
+                  {/* SECTION 5: Additional Notes */}
+                  <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-2">
+                    <label className="block text-xs font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-zinc-500" />
+                      <span>{isRtl ? 'ملاحظات إضافية' : 'Additional Notes'}</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={bulkEditForm.notes}
+                      onChange={(e) => setBulkEditForm({ ...bulkEditForm, notes: e.target.value })}
+                      placeholder={isRtl ? 'أي ملاحظات مشتركة للحركات المحددة...' : 'Additional notes for selected records...'}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Modal Footer Controls */}
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkEditModalOpen(false)}
+                      className="px-5 py-2.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-xs cursor-pointer"
+                    >
+                      {isRtl ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingBulk}
+                      className="px-7 py-3 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-purple-600/20 active:scale-95 disabled:opacity-50"
+                    >
+                      {isSavingBulk ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      <span>{isRtl ? `تطبيق على (${selectedRowIds.length}) حركة والمزامنة` : `Apply to (${selectedRowIds.length}) records`}</span>
+                    </button>
+                  </div>
+
+                </form>
+              </div>
+
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-zinc-200 dark:border-zinc-800">
+            {/* Modal Bottom Bar */}
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-850 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
+              <span className="text-[11px] font-bold text-zinc-500">
+                {isRtl ? `الحركات المحددة: ${selectedRowIds.length} حركة توريد` : `${selectedRowIds.length} supply movements selected`}
+              </span>
+
               <button
-                type="button"
                 onClick={() => setIsBulkEditModalOpen(false)}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                className="px-6 py-2 bg-zinc-800 hover:bg-zinc-900 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md"
               >
-                {isRtl ? 'إلغاء' : 'Cancel'}
-              </button>
-              <button
-                type="button"
-                onClick={handleBulkSave}
-                className="px-5 py-2.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20 transition-all cursor-pointer"
-              >
-                {isRtl ? 'تطبيق وحفظ التعديلات' : 'Apply & Save Changes'}
+                {isRtl ? 'إغلاق' : 'Close'}
               </button>
             </div>
+
           </div>
         </div>
       )}
