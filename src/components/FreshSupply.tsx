@@ -111,6 +111,7 @@ import { Language, UserProfile } from '../types';
 import { translations } from '../i18n';
 import { toast } from 'sonner';
 import { normalizeArabicSearch, matchesArabicSearch, equalsArabicNormalized } from '../utils/arabic';
+import { soundFx } from '../utils/sound';
 
 const FRESH_GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv";
 const STORAGE_CACHE_KEY = "fresh_supply_data_cache";
@@ -1165,6 +1166,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         return item;
       }));
 
+      soundFx.playSuccess();
       toast.success(
         isRtl 
           ? `تم تحديث بيانات (${selectedRowIds.length}) حركة توريد بالبرنامج بنجاح!` 
@@ -1626,6 +1628,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             localStorage.setItem(STORAGE_TIME_KEY, nowFormatted);
 
             if (isManualSync) {
+              soundFx.playSuccess();
               toast.success(
                 isRtl 
                   ? `تم تحديث البيانات بنجاح (${processed.length} حركة توريد)`
@@ -3925,7 +3928,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       {/* 3. Search & Filter Bar - Unified Single Row */}
       <div className="bg-white dark:bg-zinc-900 rounded-3xl p-4 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-3.5">
         
-        {/* Primary Filter Toolbar - All Main Filters In One Unified Row */}
+        {/* Primary Filter Toolbar - Row 1: Search & Core Filters */}
         <div className="flex items-center gap-2.5 flex-wrap xl:flex-nowrap">
           
           {/* Universal Search Input */}
@@ -4011,45 +4014,52 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             </select>
           </div>
 
-          {/* SAP Execution Filter */}
-          <div className="shrink-0">
-            <select
-              value={sapFilter}
-              onChange={(e) => setSapFilter(e.target.value)}
-              className="h-10 px-3.5 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-900 dark:text-zinc-100 text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-hidden cursor-pointer"
-            >
-              <option value="ALL">{isRtl ? '⚙️ مستند POST DOCUMENT (الكل)' : 'All POST DOCUMENT'}</option>
-              <option value="EXISTS">{isRtl ? '✔️ تم إدخال POST DOCUMENT' : 'POST DOC Exists'}</option>
-              <option value="EMPTY">{isRtl ? '❌ بدون POST DOCUMENT' : 'No POST DOC'}</option>
-            </select>
-          </div>
+        </div>
 
-          {/* Pricing Status Filter (Restricted to authorized roles) */}
-          {canViewPrice && (
+        {/* Secondary Filter Toolbar - Row 2: Post Document, Pricing Status, Clear, Columns */}
+        <div className="flex items-center justify-between gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex-wrap">
+          
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* SAP Execution Filter */}
             <div className="shrink-0">
               <select
-                value={pricingStatusFilter}
-                onChange={(e) => setPricingStatusFilter(e.target.value as any)}
-                className="h-10 px-3.5 py-2 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-950/30 text-amber-950 dark:text-amber-200 text-xs font-bold focus:ring-2 focus:ring-amber-500 focus:outline-hidden cursor-pointer"
+                value={sapFilter}
+                onChange={(e) => setSapFilter(e.target.value)}
+                className="h-10 px-3.5 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 bg-zinc-50 dark:bg-zinc-800/40 text-zinc-900 dark:text-zinc-100 text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-hidden cursor-pointer"
               >
-                <option value="ALL">{isRtl ? '💰 حالة الأسعار والتسعير (الكل)' : 'Pricing Status (All)'}</option>
-                <option value="FIXED_PERIOD">{isRtl ? '🔒 مثبت حتى 31/08/2026' : 'Fixed (Up to 31/08/2026)'}</option>
-                <option value="APP_PRICED">{isRtl ? '💻 مسعر بالبرنامج (من 01/09)' : 'Priced in App'}</option>
-                <option value="PENDING_PRICING">{isRtl ? '⚠️ بانتظار التسعير بالبرنامج' : 'Pending Pricing in App'}</option>
+                <option value="ALL">{isRtl ? '⚙️ مستند POST DOCUMENT (الكل)' : 'All POST DOCUMENT'}</option>
+                <option value="EXISTS">{isRtl ? '✔️ تم إدخال POST DOCUMENT' : 'POST DOC Exists'}</option>
+                <option value="EMPTY">{isRtl ? '❌ بدون POST DOCUMENT' : 'No POST DOC'}</option>
               </select>
             </div>
-          )}
 
-          {/* Clear Filters Button */}
-          {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || analysisFilter !== 'ALL' || poFilter !== 'ALL' || sapFilter !== 'ALL' || pricingStatusFilter !== 'ALL') && (
-            <button
-              onClick={handleClearFilters}
-              className="h-10 px-3.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border border-red-200 dark:border-red-800/60"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>{isRtl ? 'إلغاء الفلاتر' : 'Clear Filters'}</span>
-            </button>
-          )}
+            {/* Pricing Status Filter (Restricted to authorized roles) */}
+            {canViewPrice && (
+              <div className="shrink-0">
+                <select
+                  value={pricingStatusFilter}
+                  onChange={(e) => setPricingStatusFilter(e.target.value as any)}
+                  className="h-10 px-3.5 py-2 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-950/30 text-amber-950 dark:text-amber-200 text-xs font-bold focus:ring-2 focus:ring-amber-500 focus:outline-hidden cursor-pointer"
+                >
+                  <option value="ALL">{isRtl ? '💰 حالة الأسعار والتسعير (الكل)' : 'Pricing Status (All)'}</option>
+                  <option value="FIXED_PERIOD">{isRtl ? '🔒 مثبت حتى 31/08/2026' : 'Fixed (Up to 31/08/2026)'}</option>
+                  <option value="APP_PRICED">{isRtl ? '💻 مسعر بالبرنامج (من 01/09)' : 'Priced in App'}</option>
+                  <option value="PENDING_PRICING">{isRtl ? '⚠️ بانتظار التسعير بالبرنامج' : 'Pending Pricing in App'}</option>
+                </select>
+              </div>
+            )}
+
+            {/* Clear Filters Button */}
+            {(searchTerm || selectedItems.length > 0 || selectedSuppliers.length > 0 || selectedStores.length > 0 || selectedLocations.length > 0 || selectedVarieties.length > 0 || dateFilter.mode !== 'all' || mainCategoryFilter !== 'ALL' || analysisFilter !== 'ALL' || poFilter !== 'ALL' || sapFilter !== 'ALL' || pricingStatusFilter !== 'ALL') && (
+              <button
+                onClick={handleClearFilters}
+                className="h-10 px-3.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border border-red-200 dark:border-red-800/60"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>{isRtl ? 'إلغاء الفلاتر' : 'Clear Filters'}</span>
+              </button>
+            )}
+          </div>
 
           {/* Column Visibility Toggle */}
           <div className="relative shrink-0">
