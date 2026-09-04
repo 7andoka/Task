@@ -55,6 +55,39 @@ async function startServer() {
     }
   });
 
+  app.post("/api/sync-google-sheet", async (req, res) => {
+    try {
+      const { webhookUrl, updates, action } = req.body;
+      if (!webhookUrl || typeof webhookUrl !== 'string') {
+        return res.status(400).json({ error: "Missing or invalid webhookUrl" });
+      }
+
+      const payload = action === 'ping' 
+        ? { action: 'ping' }
+        : { updates: updates || [] };
+
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        redirect: "follow",
+      });
+
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { raw: text };
+      }
+
+      res.json({ success: true, response: data });
+    } catch (error: any) {
+      console.error("Error proxying Google Sheet sync:", error);
+      res.status(500).json({ error: error.message || "Failed to communicate with Google Sheets webhook" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const { createServer: createViteServer } = await import("vite");

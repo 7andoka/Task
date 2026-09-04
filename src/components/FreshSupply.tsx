@@ -112,6 +112,8 @@ import { translations } from '../i18n';
 import { toast } from 'sonner';
 import { normalizeArabicSearch, matchesArabicSearch, equalsArabicNormalized } from '../utils/arabic';
 import { soundFx } from '../utils/sound';
+import { GoogleSheetSyncModal } from './GoogleSheetSyncModal';
+import { getGoogleSheetWebhookUrl, syncUpdatesToGoogleSheet } from '../utils/googleSheetSync';
 
 const FRESH_GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv";
 const STORAGE_CACHE_KEY = "fresh_supply_data_cache";
@@ -888,6 +890,17 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     });
   }, [user, userRoles]);
 
+  // Admin role check: for system administrators only
+  const isAdmin = useMemo(() => {
+    if (!user) return false;
+    const adminRoles = ['admin', 'Admin', 'ADMIN', 'مدير النظام', 'مدير'];
+    return userRoles.some(r => {
+      if (!r) return false;
+      const clean = String(r).trim().toLowerCase();
+      return adminRoles.some(a => a.toLowerCase() === clean);
+    });
+  }, [user, userRoles]);
+
   // Form state for editing record details (PO, sapExecutionNo, postDocument, initialAnalysis, region, price, qualityDiscountPercent, paymentMethod, notes)
   const [editForm, setEditForm] = useState({
     po: '',
@@ -902,6 +915,17 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     notes: ''
   });
   const [isSavingRecord, setIsSavingRecord] = useState(false);
+
+  // Google Sheet Webhook Sync States
+  const [sheetWebhookUrl, setSheetWebhookUrl] = useState<string>('');
+  const [isSheetSyncModalOpen, setIsSheetSyncModalOpen] = useState<boolean>(false);
+
+  // Load Google Sheet webhook URL from settings on mount
+  useEffect(() => {
+    getGoogleSheetWebhookUrl().then(url => {
+      if (url) setSheetWebhookUrl(url);
+    }).catch(err => console.warn("Could not load Google Sheet webhook URL:", err));
+  }, []);
 
   // Load record data into edit form whenever selectedRecord changes
   useEffect(() => {
@@ -1055,6 +1079,20 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         console.warn("Firestore save warning (persisted locally):", fsErr);
       }
 
+      // 4. Live sync to Google Sheet quietly in background if webhook is configured and PO or Post Document was updated
+      if (sheetWebhookUrl && selectedRecord.movementNo && (updatedData.po || updatedData.postDocument)) {
+        syncUpdatesToGoogleSheet(sheetWebhookUrl, [{
+          movementNo: selectedRecord.movementNo,
+          po: updatedData.po || '',
+          postDocument: updatedData.postDocument || '',
+          updatedAt: new Date().toISOString()
+        }]).then(sheetRes => {
+          if (!sheetRes.success) {
+            console.warn("Google Sheet sync notice:", sheetRes.error);
+          }
+        }).catch(syncErr => console.warn("Google Sheet sync error:", syncErr));
+      }
+
       toast.success(
         isRtl 
           ? 'تم حفظ وتحديث بيانات التوريد (السعر الأساسي، التحليل، المنطقة، السداد، أمر الشراء ومستند الترحيل) بنجاح!' 
@@ -1155,6 +1193,27 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       });
 
       localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(cachedMap));
+
+      // Batch live sync to Google Sheet if webhook is configured and PO or Post Document was updated
+      if (sheetWebhookUrl && (updatedData.po || updatedData.postDocument)) {
+        const batchSheetUpdates = selectedRowIds
+          .map(id => data.find(r => r.id === id))
+          .filter((r): r is FreshSupplyRecord => Boolean(r && r.movementNo))
+          .map(r => ({
+            movementNo: r.movementNo!,
+            po: updatedData.po !== undefined ? updatedData.po : (r.po || ''),
+            postDocument: updatedData.postDocument !== undefined ? updatedData.postDocument : (r.postDocument || r.sapExecutionNo || ''),
+            updatedAt: new Date().toISOString()
+          }));
+
+        if (batchSheetUpdates.length > 0) {
+          syncUpdatesToGoogleSheet(sheetWebhookUrl, batchSheetUpdates).then(sheetRes => {
+            if (!sheetRes.success) {
+              console.warn("Batch Google Sheet sync notice:", sheetRes.error);
+            }
+          }).catch(syncErr => console.warn("Batch Google Sheet sync error:", syncErr));
+        }
+      }
 
       setData(prev => prev.map(item => {
         if (selectedRowIds.includes(item.id)) {
@@ -4061,15 +4120,33 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             )}
           </div>
 
-          {/* Column Visibility Toggle */}
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setShowColumnConfig(!showColumnConfig)}
-              className="h-10 px-3.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-zinc-200/60 dark:border-zinc-700/60"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>{isRtl ? 'أعمدة الجدول' : 'Columns'}</span>
-            </button>
+          <div className="flex items-center gap-2">
+            {/* Google Sheets Two-Way Sync Button (Admin Only) */}
+            {isAdmin && (
+              <button
+                onClick={() => setIsSheetSyncModalOpen(true)}
+                className={`h-10 px-3.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                  sheetWebhookUrl 
+                    ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60' 
+                    : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border-zinc-200/60 dark:border-zinc-700/60'
+                }`}
+                title={isRtl ? 'إعداد ومزامنة شيت جوجل المباشرة (للإدارة فقط)' : 'Google Sheet Two-Way Sync (Admin Only)'}
+              >
+                <span className={`w-2 h-2 rounded-full ${sheetWebhookUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>{isRtl ? 'مزامنة الشيت 2-Way' : 'Sheet Sync'}</span>
+              </button>
+            )}
+
+            {/* Column Visibility Toggle */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setShowColumnConfig(!showColumnConfig)}
+                className="h-10 px-3.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-zinc-200/60 dark:border-zinc-700/60"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>{isRtl ? 'أعمدة الجدول' : 'Columns'}</span>
+              </button>
 
             {showColumnConfig && (
               <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-3 shadow-xl z-50 space-y-2">
@@ -4120,8 +4197,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               </div>
             )}
           </div>
-
         </div>
+
+      </div>
 
         {/* Sub-Filters: Category Filter */}
         <div className="flex items-center justify-between gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex-wrap">
@@ -5521,13 +5599,30 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                     
                     {/* SECTION 1: Documents & SAP Execution */}
                     <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-4">
-                      <div className="flex items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                        <div className="w-7 h-7 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-black text-xs">
-                          1
+                      <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-black text-xs">
+                            1
+                          </div>
+                          <h5 className="font-black text-sm text-zinc-900 dark:text-white">
+                            {isRtl ? 'بيانات المستندات وأوامر الشراء (PO & SAP)' : 'Documents & PO Data'}
+                          </h5>
                         </div>
-                        <h5 className="font-black text-sm text-zinc-900 dark:text-white">
-                          {isRtl ? 'بيانات المستندات وأوامر الشراء (PO & SAP)' : 'Documents & PO Data'}
-                        </h5>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => setIsSheetSyncModalOpen(true)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                              sheetWebhookUrl
+                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                                : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${sheetWebhookUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                            <FileSpreadsheet className="w-3 h-3" />
+                            <span>{sheetWebhookUrl ? (isRtl ? 'مزامنة الشيت مفعلة' : 'Sheet Sync Active') : (isRtl ? 'ربط شيت جوجل' : 'Connect Sheet')}</span>
+                          </button>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -6147,12 +6242,29 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setIsBulkEditModalOpen(false)}
-                className="p-2 hover:bg-white/10 rounded-xl text-white transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleBulkSave}
+                  disabled={isSavingBulk}
+                  className="px-4 py-1.5 bg-white/20 hover:bg-white/30 text-white font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer backdrop-blur-xs transition-all disabled:opacity-50"
+                  title={isRtl ? 'حفظ وتطبيق التعديلات' : 'Save & Apply'}
+                >
+                  {isSavingBulk ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isRtl ? 'حفظ التعديلات' : 'Save'}</span>
+                </button>
+
+                <button
+                  onClick={() => setIsBulkEditModalOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-xl text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Body */}
@@ -6209,13 +6321,30 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   
                   {/* SECTION 1: Documents & SAP Execution */}
                   <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-4">
-                    <div className="flex items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                      <div className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 flex items-center justify-center font-black text-xs">
-                        1
+                    <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 flex items-center justify-center font-black text-xs">
+                          1
+                        </div>
+                        <h5 className="font-black text-sm text-zinc-900 dark:text-white">
+                          {isRtl ? 'بيانات المستندات وأوامر الشراء (PO & SAP)' : 'Documents & PO Data'}
+                        </h5>
                       </div>
-                      <h5 className="font-black text-sm text-zinc-900 dark:text-white">
-                        {isRtl ? 'بيانات المستندات وأوامر الشراء (PO & SAP)' : 'Documents & PO Data'}
-                      </h5>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => setIsSheetSyncModalOpen(true)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                            sheetWebhookUrl
+                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${sheetWebhookUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                          <FileSpreadsheet className="w-3 h-3" />
+                          <span>{sheetWebhookUrl ? (isRtl ? 'مزامنة الشيت مفعلة' : 'Sheet Sync Active') : (isRtl ? 'ربط شيت جوجل' : 'Connect Sheet')}</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -6650,23 +6779,50 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
             </div>
 
-            {/* Modal Bottom Bar */}
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-850 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
+            {/* Modal Bottom Bar - Always visible sticky bar with Save button next to Close */}
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-850 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 flex-wrap gap-3">
               <span className="text-[11px] font-bold text-zinc-500">
                 {isRtl ? `الحركات المحددة: ${selectedRowIds.length} حركة توريد` : `${selectedRowIds.length} supply movements selected`}
               </span>
 
-              <button
-                onClick={() => setIsBulkEditModalOpen(false)}
-                className="px-6 py-2 bg-zinc-800 hover:bg-zinc-900 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-white font-bold rounded-xl text-xs cursor-pointer shadow-md"
-              >
-                {isRtl ? 'إغلاق' : 'Close'}
-              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkEditModalOpen(false)}
+                  className="px-5 py-2.5 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-800 dark:text-zinc-100 font-bold rounded-xl text-xs cursor-pointer transition-colors"
+                >
+                  {isRtl ? 'إغلاق' : 'Close'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkSave}
+                  disabled={isSavingBulk}
+                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-purple-600/20 active:scale-95 disabled:opacity-50 transition-all"
+                >
+                  {isSavingBulk ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>{isRtl ? `حفظ وتطبيق التعديلات (${selectedRowIds.length})` : `Save & Apply (${selectedRowIds.length})`}</span>
+                </button>
+              </div>
             </div>
 
           </div>
         </div>
       )}
+
+      {/* Google Sheet Two-Way Sync Modal */}
+      <GoogleSheetSyncModal
+        isOpen={isSheetSyncModalOpen}
+        onClose={() => setIsSheetSyncModalOpen(false)}
+        webhookUrl={sheetWebhookUrl}
+        onWebhookUrlChange={setSheetWebhookUrl}
+        records={data}
+        isRtl={isRtl}
+      />
 
     </div>
   );
