@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Check, 
@@ -20,7 +20,8 @@ import {
   saveGoogleSheetWebhookUrl, 
   syncUpdatesToGoogleSheet, 
   GOOGLE_APPS_SCRIPT_CODE,
-  SheetUpdateItem 
+  SheetUpdateItem,
+  DEFAULT_VERIFIED_WEBHOOK_URL
 } from '../utils/googleSheetSync';
 import { soundFx } from '../utils/sound';
 
@@ -46,12 +47,18 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
   records,
   isRtl = true,
 }) => {
-  const [inputUrl, setInputUrl] = useState(webhookUrl);
+  const [inputUrl, setInputUrl] = useState(webhookUrl || DEFAULT_VERIFIED_WEBHOOK_URL);
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    if (webhookUrl) {
+      setInputUrl(webhookUrl);
+    }
+  }, [webhookUrl]);
 
   if (!isOpen) return null;
 

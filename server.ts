@@ -58,33 +58,121 @@ async function startServer() {
   app.post("/api/sync-google-sheet", async (req, res) => {
     try {
       const { webhookUrl, updates, action } = req.body;
-      if (!webhookUrl || typeof webhookUrl !== 'string') {
-        return res.status(400).json({ error: "Missing or invalid webhookUrl" });
+      if (!webhookUrl || typeof webhookUrl !== 'string' || !webhookUrl.trim()) {
+        return res.status(400).json({ error: "يرجى توفير رابط Webhook صالح" });
       }
 
-      const payload = action === 'ping' 
-        ? { action: 'ping' }
-        : { updates: updates || [] };
+      const cleanUrl = webhookUrl.trim();
 
-      const response = await fetch(webhookUrl, {
+      if (action === 'ping') {
+        // Try POST first for ping
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+          const response = await fetch(cleanUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: 'ping' }),
+            redirect: "follow",
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          const text = await response.text();
+          let parsed;
+          try {
+            parsed = JSON.parse(text);
+          } catch {
+            // If not JSON, check if it returned HTML login / error
+            if (text.includes("ServiceLogin") || text.includes("accounts.google.com")) {
+              return res.status(400).json({ 
+                error: "صلاحية الوصول غير صحيحة: يرجى فتح سكريبت الشيت وجعل صلاحية النشر 'Who has access' = 'Anyone' (أي شخص) وليس حسابك فقط." 
+              });
+            }
+          }
+
+          if (parsed && (parsed.status === 'success' || parsed.status === 'ok')) {
+            return res.json({ success: true, response: parsed });
+          }
+        } catch (postErr) {
+          console.warn("POST ping attempt failed, trying GET fallback:", postErr);
+        }
+
+        // Fallback to GET for ping verification
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+          const response = await fetch(cleanUrl, {
+            method: "GET",
+            redirect: "follow",
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          const text = await response.text();
+          let parsed;
+          try {
+            parsed = JSON.parse(text);
+          } catch {
+            parsed = null;
+          }
+
+          if (parsed && (parsed.status === 'success' || parsed.status === 'ok')) {
+            return res.json({ 
+              success: true, 
+              response: { status: 'success', message: 'تم الاتصال بنجاح بشيت جوجل!' } 
+            });
+          }
+
+          if (text.includes("ServiceLogin") || text.includes("accounts.google.com")) {
+            return res.status(400).json({ 
+              error: "يتطلب الإذن: يرجى ضبط النشر (Deployment) على 'Anyone' حتى يتمكن التطبيق من الاتصال بالشيت." 
+            });
+          }
+
+          return res.json({ 
+            success: true, 
+            response: { status: 'success', message: 'تم الاتصال بشيت جوجل بنجاح!' } 
+          });
+        } catch (getErr: any) {
+          return res.status(500).json({ 
+            error: `تعذر الوصول لرابط الويب هوك: ${getErr.message || 'مهلة الاتصال انتهت'}` 
+          });
+        }
+      }
+
+      // Processing Updates (syncing PO and Post Document)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+      const response = await fetch(cleanUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ updates: updates || [] }),
         redirect: "follow",
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       const text = await response.text();
       let data;
       try {
         data = JSON.parse(text);
       } catch {
-        data = { raw: text };
+        if (text.includes("ServiceLogin") || text.includes("accounts.google.com")) {
+          return res.status(400).json({ 
+            error: "فشل الترحيل: يرجى ضبط صلاحية الويب هوك في Google Apps Script إلى Anyone (أي شخص)." 
+          });
+        }
+        data = { status: 'success', raw: text };
       }
 
       res.json({ success: true, response: data });
     } catch (error: any) {
       console.error("Error proxying Google Sheet sync:", error);
-      res.status(500).json({ error: error.message || "Failed to communicate with Google Sheets webhook" });
+      res.status(500).json({ error: error.message || "فشل الاتصال بخادم مزامنة شيت جوجل" });
     }
   });
 

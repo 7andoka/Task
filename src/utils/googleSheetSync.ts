@@ -4,6 +4,7 @@ import { COLLECTIONS } from '../constants';
 
 export const GOOGLE_SHEET_WEBHOOK_STORAGE_KEY = 'fresh_supply_sheet_webhook_url';
 export const SYNC_SETTINGS_DOC_ID = 'fresh_supply_sync';
+export const DEFAULT_VERIFIED_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyrBKfX1p-fyPxWzvKVgNwn6uoe5L-hlMBD1bd47fxFTVxcWwp-3nHMK7_v2r1ZYOt4/exec';
 
 export interface SheetUpdateItem {
   movementNo: string;
@@ -22,7 +23,7 @@ export interface SyncResponse {
 }
 
 /**
- * Get stored Google Apps Script Webhook URL (checks localStorage then Firestore)
+ * Get stored Google Apps Script Webhook URL (checks localStorage then Firestore, fallback to verified URL)
  */
 export async function getGoogleSheetWebhookUrl(): Promise<string> {
   // 1. Check localStorage first
@@ -37,7 +38,7 @@ export async function getGoogleSheetWebhookUrl(): Promise<string> {
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data();
-      if (data.webhookUrl && typeof data.webhookUrl === 'string') {
+      if (data.webhookUrl && typeof data.webhookUrl === 'string' && data.webhookUrl.trim()) {
         localStorage.setItem(GOOGLE_SHEET_WEBHOOK_STORAGE_KEY, data.webhookUrl.trim());
         return data.webhookUrl.trim();
       }
@@ -46,7 +47,8 @@ export async function getGoogleSheetWebhookUrl(): Promise<string> {
     console.warn("Failed to fetch webhook URL from Firestore:", err);
   }
 
-  return '';
+  // 3. Fallback to the user's active verified webhook URL
+  return DEFAULT_VERIFIED_WEBHOOK_URL;
 }
 
 /**
@@ -75,33 +77,51 @@ export async function testGoogleSheetWebhook(webhookUrl: string): Promise<{ succ
     return { success: false, message: 'يرجى إدخال رابط Webhook أولاً' };
   }
 
+  const cleanUrl = webhookUrl.trim();
+
   try {
     const res = await fetch('/api/sync-google-sheet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        webhookUrl: webhookUrl.trim(),
+        webhookUrl: cleanUrl,
         action: 'ping'
       })
     });
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      return { success: false, message: errJson.error || 'فشل الاتصال برابط الويب هوك' };
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return { 
+          success: true, 
+          message: data.response?.message || 'تم الاتصال بنجاح بشيت جوجل!' 
+        };
+      }
     }
 
-    const data = await res.json();
-    if (data.success && data.response?.status === 'success') {
-      return { success: true, message: data.response.message || 'تم الاتصال بنجاح بشيت جوجل!' };
+    // If server returned a specific error message, parse it
+    const errJson = await res.json().catch(() => ({}));
+    if (errJson.error) {
+      return { success: false, message: errJson.error };
     }
-
-    return { 
-      success: true, 
-      message: data.response?.message || 'تم الرد من شيت جوجل بنجاح!' 
-    };
-  } catch (err: any) {
-    return { success: false, message: err.message || 'خطأ أثناء فحص الرابط' };
+  } catch (serverErr) {
+    console.warn("Server proxy test error, trying client GET fallback:", serverErr);
   }
+
+  // Client-side fallback check (test if URL responds)
+  try {
+    const directRes = await fetch(cleanUrl, {
+      method: 'GET',
+      mode: 'cors'
+    });
+    if (directRes.ok) {
+      return { success: true, message: 'تم الاتصال بنجاح بشيت جوجل!' };
+    }
+  } catch {
+    // If CORS prevents reading body, we already verified via server
+  }
+
+  return { success: false, message: 'فشل الاتصال برابط الويب هوك. تأكد من إتاحة الوصول (Anyone) في سكريبت الشيت' };
 }
 
 /**
