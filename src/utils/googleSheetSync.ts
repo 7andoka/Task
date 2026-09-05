@@ -416,28 +416,34 @@ function doPost(e) {
     var updates = Array.isArray(payload.updates) ? payload.updates : (payload.movementNo ? [payload] : []);
     var updatedCount = 0;
     
-    // فهرسة أرقام الحركات وأرقام الصفوف المقابلة
+    // فهرسة أرقام الحركات وأرقام كافة الصفوف المقابلة (يدعم وجود رقم الحركة في أكثر من صف)
     var rowMap = {};
     for (var r = 1; r < data.length; r++) {
       var val = String(data[r][moveCol - 1] || '').trim();
       if (val) {
-        rowMap[val] = r + 1; // 1-based row index
+        if (!rowMap[val]) {
+          rowMap[val] = [];
+        }
+        rowMap[val].push(r + 1); // 1-based row index
       }
     }
     
-    // كتابة التحديثات في نفس مكان وخانات الصف المطابق
+    // كتابة التحديثات في كافة الصفوف المطابقة لرقم الحركة (لو الرقم موجود في صفين أو أكثر يتم تحديث الجميع)
     for (var i = 0; i < updates.length; i++) {
       var u = updates[i];
       var mNo = String(u.movementNo || '').trim();
-      var targetRow = rowMap[mNo];
-      if (targetRow) {
-        if (u.po !== undefined && u.po !== null && String(u.po).trim() !== '') {
-          sheet.getRange(targetRow, poCol).setValue(String(u.po).trim());
+      var targetRows = rowMap[mNo];
+      if (targetRows && targetRows.length > 0) {
+        for (var t = 0; t < targetRows.length; t++) {
+          var targetRow = targetRows[t];
+          if (u.po !== undefined && u.po !== null && String(u.po).trim() !== '') {
+            sheet.getRange(targetRow, poCol).setValue(String(u.po).trim());
+          }
+          if (u.postDocument !== undefined && u.postDocument !== null && String(u.postDocument).trim() !== '') {
+            sheet.getRange(targetRow, postDocCol).setValue(String(u.postDocument).trim());
+          }
+          updatedCount++;
         }
-        if (u.postDocument !== undefined && u.postDocument !== null && String(u.postDocument).trim() !== '') {
-          sheet.getRange(targetRow, postDocCol).setValue(String(u.postDocument).trim());
-        }
-        updatedCount++;
       }
     }
     
@@ -446,7 +452,8 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       updatedCount: updatedCount,
-      totalReceived: updates.length
+      totalReceived: updates.length,
+      message: "تم تحديث (" + updatedCount + ") صف في الشيت بنجاح"
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({

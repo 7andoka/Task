@@ -1031,10 +1031,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         ...updatedData
       };
 
-      // 1. Update in-memory state only for the specific selected row id
+      // 1. Update in-memory state for this record and any rows sharing the same movementNo
       setData(prev => prev.map(item => {
         const isMatch = item.id === selectedRecord.id;
-        return isMatch ? { ...item, ...updatedData } : item;
+        const isSameMove = Boolean(selectedRecord.movementNo && item.movementNo === selectedRecord.movementNo);
+        if (isMatch) {
+          return { ...item, ...updatedData };
+        }
+        if (isSameMove && (updatedData.po !== undefined || updatedData.postDocument !== undefined || updatedData.sapExecutionNo !== undefined)) {
+          return {
+            ...item,
+            ...(updatedData.po !== undefined ? { po: updatedData.po } : {}),
+            ...(updatedData.postDocument !== undefined ? { postDocument: updatedData.postDocument } : {}),
+            ...(updatedData.sapExecutionNo !== undefined ? { sapExecutionNo: updatedData.sapExecutionNo } : {})
+          };
+        }
+        return item;
       }));
 
       setSelectedRecord(updatedRecord);
@@ -1215,11 +1227,25 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         }
       }
 
+      const affectedMovements = new Set(
+        selectedRowIds
+          .map(id => data.find(r => r.id === id)?.movementNo)
+          .filter(Boolean) as string[]
+      );
+
       setData(prev => prev.map(item => {
         if (selectedRowIds.includes(item.id)) {
           return {
             ...item,
             ...updatedData
+          };
+        }
+        if (item.movementNo && affectedMovements.has(item.movementNo) && (updatedData.po !== undefined || updatedData.postDocument !== undefined || updatedData.sapExecutionNo !== undefined)) {
+          return {
+            ...item,
+            ...(updatedData.po !== undefined ? { po: updatedData.po } : {}),
+            ...(updatedData.postDocument !== undefined ? { postDocument: updatedData.postDocument } : {}),
+            ...(updatedData.sapExecutionNo !== undefined ? { sapExecutionNo: updatedData.sapExecutionNo } : {})
           };
         }
         return item;

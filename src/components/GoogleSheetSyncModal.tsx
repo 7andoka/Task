@@ -118,12 +118,31 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
     setSyncProgress(null);
     soundFx.playClick();
 
-    const updates: SheetUpdateItem[] = eligibleRecords.map(r => ({
-      movementNo: r.movementNo!,
-      po: r.po?.trim() || '',
-      postDocument: (r.postDocument || r.sapExecutionNo || '').trim(),
-      updatedAt: new Date().toISOString()
-    }));
+    // تجميع الحركات بحسب رقم الحركة لضمان إرسال بيانات متكاملة
+    const updateMap = new Map<string, SheetUpdateItem>();
+    eligibleRecords.forEach(r => {
+      const mNo = r.movementNo!.trim();
+      const po = r.po?.trim() || '';
+      const postDocument = (r.postDocument || r.sapExecutionNo || '').trim();
+      const existing = updateMap.get(mNo);
+      if (!existing) {
+        updateMap.set(mNo, {
+          movementNo: mNo,
+          po: po,
+          postDocument: postDocument,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        updateMap.set(mNo, {
+          movementNo: mNo,
+          po: po || existing.po,
+          postDocument: postDocument || existing.postDocument,
+          updatedAt: new Date().toISOString()
+        });
+      }
+    });
+
+    const updates = Array.from(updateMap.values());
 
     const res = await syncUpdatesToGoogleSheet(url, updates, (prog) => {
       setSyncProgress(prog);
@@ -135,8 +154,8 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
       soundFx.playSuccess();
       toast.success(
         isRtl 
-          ? `تمت المزامنة بنجاح! تم تحديث (${res.updatedCount || updates.length}) حركة في الشيت مباشرة`
-          : `Synced successfully! Updated (${res.updatedCount || updates.length}) rows in sheet`
+          ? `تمت المزامنة بنجاح! تم تحديث (${res.updatedCount ?? updates.length}) صف في الشيت مباشرة (تم ترحيل كافة الصفوف المتطابقة).`
+          : `Synced successfully! Updated (${res.updatedCount ?? updates.length}) rows in sheet across all matching lines.`
       );
     } else {
       toast.error(res.error || (isRtl ? 'فشلت عملية المزامنة مع الشيت' : 'Sync failed'));
