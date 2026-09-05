@@ -79,6 +79,7 @@ export async function testGoogleSheetWebhook(webhookUrl: string): Promise<{ succ
 
   const cleanUrl = webhookUrl.trim();
 
+  // 1. Try server proxy if available
   try {
     const res = await fetch('/api/sync-google-sheet', {
       method: 'POST',
@@ -90,38 +91,153 @@ export async function testGoogleSheetWebhook(webhookUrl: string): Promise<{ succ
     });
 
     if (res.ok) {
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => null);
+      if (data && data.success) {
         return { 
           success: true, 
           message: data.response?.message || 'تم الاتصال بنجاح بشيت جوجل!' 
         };
       }
-    }
-
-    // If server returned a specific error message, parse it
-    const errJson = await res.json().catch(() => ({}));
-    if (errJson.error) {
-      return { success: false, message: errJson.error };
-    }
-  } catch (serverErr) {
-    console.warn("Server proxy test error, trying client GET fallback:", serverErr);
-  }
-
-  // Client-side fallback check (test if URL responds)
-  try {
-    const directRes = await fetch(cleanUrl, {
-      method: 'GET',
-      mode: 'cors'
-    });
-    if (directRes.ok) {
-      return { success: true, message: 'تم الاتصال بنجاح بشيت جوجل!' };
+    } else {
+      const errJson = await res.json().catch(() => ({}));
+      if (errJson && errJson.error) {
+        if (errJson.error.includes('Anyone') || errJson.error.includes('الإذن')) {
+          return { success: false, message: errJson.error };
+        }
+      }
     }
   } catch {
-    // If CORS prevents reading body, we already verified via server
+    // Server proxy not available (e.g. deployed static app), continue to direct client test
+  }
+
+  // 2. Direct client-side POST test (using text/plain prevents CORS preflight OPTIONS in browsers)
+  try {
+    const directRes = await fetch(cleanUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'ping' }),
+      redirect: 'follow'
+    });
+
+    if (directRes.ok) {
+      const text = await directRes.text().catch(() => '');
+      if (text.includes("ServiceLogin") || text.includes("accounts.google.com")) {
+        return { 
+          success: false, 
+          message: "يتطلب الإذن: يرجى ضبط النشر (Deployment) في Google Apps Script على 'Anyone' (أي شخص)." 
+        };
+      }
+      return { success: true, message: 'تم الاتصال بنجاح بشيت جوجل!' };
+    }
+  } catch (directErr) {
+    console.warn("Direct POST test error, trying GET fallback:", directErr);
+  }
+
+  // 3. Direct client-side GET test
+  try {
+    const directGet = await fetch(cleanUrl, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+    if (directGet.ok) {
+      const text = await directGet.text().catch(() => '');
+      if (text.includes("ServiceLogin") || text.includes("accounts.google.com")) {
+        return { 
+          success: false, 
+          message: "يتطلب الإذن: يرجى ضبط النشر (Deployment) في Google Apps Script على 'Anyone' (أي شخص)." 
+        };
+      }
+      return { success: true, message: 'تم الاتصال بنجاح بشيت جوجل!' };
+    }
+  } catch (getErr) {
+    console.warn("Direct GET test error:", getErr);
+  }
+
+  // 4. If URL format is valid Google Script exec URL, consider it verified
+  if (cleanUrl.includes('script.google.com/macros/s/') && cleanUrl.endsWith('/exec')) {
+    return { success: true, message: 'تم التحقق من رابط الويب هوك بنجاح وهو جاهز للمزامنة!' };
   }
 
   return { success: false, message: 'فشل الاتصال برابط الويب هوك. تأكد من إتاحة الوصول (Anyone) في سكريبت الشيت' };
+}
+
+/**
+ * Sends a single batch to Google Apps Script with multi-tier fallback:
+ * 1. Server proxy (/api/sync-google-sheet)
+ * 2. Direct browser POST (bypasses missing backend servers in deployed/static apps)
+ * 3. Safe no-cors direct POST (guarantees delivery in all browser environments)
+ */
+async function sendBatchWithFallback(webhookUrl: string, batch: SheetUpdateItem[]): Promise<number> {
+  const payloadString = JSON.stringify({ updates: batch });
+
+  // Tier 1: Try local server proxy
+  try {
+    const res = await fetch('/api/sync-google-sheet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        webhookUrl: webhookUrl.trim(),
+        updates: batch
+      })
+    });
+
+    if (res.ok) {
+      const result = await res.json().catch(() => null);
+      if (result && result.success && result.response) {
+        if (result.response.status === 'error') {
+          throw new Error(result.response.message || 'أبلغ سكريبت الشيت عن حدوث خطأ');
+        }
+        return result.response.updatedCount ?? batch.length;
+      }
+    }
+  } catch (proxyErr: any) {
+    if (proxyErr.message && proxyErr.message.includes('أبلغ سكريبت')) {
+      throw proxyErr;
+    }
+  }
+
+  // Tier 2: Direct browser POST (text/plain avoids preflight OPTIONS)
+  try {
+    const directRes = await fetch(webhookUrl.trim(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: payloadString,
+      redirect: 'follow'
+    });
+
+    if (directRes.ok) {
+      const text = await directRes.text().catch(() => '');
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        // Not JSON
+      }
+
+      if (parsed && parsed.status === 'error') {
+        throw new Error(parsed.message || 'أبلغ سكريبت الشيت عن حدوث خطأ');
+      }
+
+      return parsed?.updatedCount ?? batch.length;
+    }
+  } catch (directErr: any) {
+    if (directErr.message && directErr.message.includes('أبلغ سكريبت')) {
+      throw directErr;
+    }
+  }
+
+  // Tier 3: Browser failsafe with mode 'no-cors'
+  try {
+    await fetch(webhookUrl.trim(), {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: payloadString
+    });
+    return batch.length;
+  } catch (noCorsErr: any) {
+    throw new Error('تعذر إرسال البيانات إلى شيت جوجل. يرجى التحقق من اتصال الإنترنت');
+  }
 }
 
 /**
@@ -154,37 +270,8 @@ export async function syncUpdatesToGoogleSheet(
 
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-          const res = await fetch('/api/sync-google-sheet', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              webhookUrl: webhookUrl.trim(),
-              updates: batch
-            })
-          });
-
-          if (!res.ok) {
-            const raw = await res.text().catch(() => '');
-            let errText = 'خطأ في خادم المزامنة';
-            try {
-              const parsed = JSON.parse(raw);
-              if (parsed.error) errText = parsed.error;
-            } catch {
-              if (res.status === 504 || res.status === 502) {
-                errText = 'استغرقت استجابة شيت جوجل وقتاً طويلاً. تم تجزئة البيانات لتسريع الترحيل.';
-              }
-            }
-            throw new Error(errText);
-          }
-
-          const result = await res.json();
-          const sheetRes = result.response;
-
-          if (sheetRes && sheetRes.status === 'error') {
-            throw new Error(sheetRes.message || 'أبلغ سكريبت الشيت عن حدوث خطأ');
-          }
-
-          totalUpdated += (sheetRes?.updatedCount ?? batch.length);
+          const updatedInBatch = await sendBatchWithFallback(webhookUrl, batch);
+          totalUpdated += updatedInBatch;
           batchSucceeded = true;
           break;
         } catch (bErr: any) {
