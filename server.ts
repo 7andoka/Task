@@ -145,15 +145,24 @@ async function startServer() {
 
       // Processing Updates (syncing PO and Post Document)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const response = await fetch(cleanUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ updates: updates || [] }),
-        redirect: "follow",
-        signal: controller.signal
-      });
+      let response;
+      try {
+        response = await fetch(cleanUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ updates: updates || [] }),
+          redirect: "follow",
+          signal: controller.signal
+        });
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          return res.status(504).json({ error: "استغرقت استجابة شيت جوجل أكثر من 60 ثانية (Timeout)." });
+        }
+        return res.status(500).json({ error: `تعذر الاتصال برابط الويب هوك: ${fetchErr.message || 'خطأ في الشبكة'}` });
+      }
       clearTimeout(timeoutId);
 
       const text = await response.text();
@@ -169,10 +178,10 @@ async function startServer() {
         data = { status: 'success', raw: text };
       }
 
-      res.json({ success: true, response: data });
+      return res.json({ success: true, response: data });
     } catch (error: any) {
       console.error("Error proxying Google Sheet sync:", error);
-      res.status(500).json({ error: error.message || "فشل الاتصال بخادم مزامنة شيت جوجل" });
+      return res.status(500).json({ error: error.message || "فشل الاتصال بخادم مزامنة شيت جوجل" });
     }
   });
 

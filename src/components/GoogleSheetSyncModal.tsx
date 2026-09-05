@@ -50,6 +50,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
   const [inputUrl, setInputUrl] = useState(webhookUrl || DEFAULT_VERIFIED_WEBHOOK_URL);
   const [isTesting, setIsTesting] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; percent: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -114,6 +115,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
     }
 
     setIsSyncingAll(true);
+    setSyncProgress(null);
     soundFx.playClick();
 
     const updates: SheetUpdateItem[] = eligibleRecords.map(r => ({
@@ -123,8 +125,11 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
       updatedAt: new Date().toISOString()
     }));
 
-    const res = await syncUpdatesToGoogleSheet(url, updates);
+    const res = await syncUpdatesToGoogleSheet(url, updates, (prog) => {
+      setSyncProgress(prog);
+    });
     setIsSyncingAll(false);
+    setSyncProgress(null);
 
     if (res.success) {
       soundFx.playSuccess();
@@ -269,10 +274,12 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
               disabled={isSyncingAll || !isConfigured || eligibleRecords.length === 0}
               className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs shrink-0"
             >
-              <Send className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-pulse' : ''}`} />
+              <Send className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
               <span>
                 {isSyncingAll 
-                  ? (isRtl ? 'جاري ترحيل البيانات للشيت...' : 'Syncing...') 
+                  ? (syncProgress 
+                      ? (isRtl ? `جاري الترحيل (${syncProgress.current} / ${syncProgress.total})... ${syncProgress.percent}%` : `Syncing (${syncProgress.current}/${syncProgress.total})... ${syncProgress.percent}%`)
+                      : (isRtl ? 'جاري ترحيل البيانات للشيت...' : 'Syncing...'))
                   : (isRtl ? 'ترحيل كل المسجل للشيت الآن' : 'Sync All to Sheet Now')}
               </span>
             </button>

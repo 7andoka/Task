@@ -129,47 +129,100 @@ export async function testGoogleSheetWebhook(webhookUrl: string): Promise<{ succ
  */
 export async function syncUpdatesToGoogleSheet(
   webhookUrl: string, 
-  updates: SheetUpdateItem[]
+  updates: SheetUpdateItem[],
+  onProgress?: (progress: { current: number; total: number; percent: number }) => void
 ): Promise<SyncResponse> {
   if (!webhookUrl || !webhookUrl.trim()) {
     return { success: false, error: 'لم يتم تعيين رابط Webhook لمزامنة شيت جوجل' };
   }
 
-  const validUpdates = updates.filter(u => u.movementNo && u.movementNo.trim());
+  const validUpdates = updates.filter(u => u.movementNo && String(u.movementNo).trim());
   if (validUpdates.length === 0) {
     return { success: false, error: 'لا توجد حركات محددة برقم حركة صالح للمزامنة' };
   }
 
-  try {
-    const res = await fetch('/api/sync-google-sheet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        webhookUrl: webhookUrl.trim(),
-        updates: validUpdates
-      })
-    });
+  // Chunk in batches of 25 to guarantee each Google Apps Script roundtrip finishes in 2-3 seconds
+  const BATCH_SIZE = 25;
+  let totalUpdated = 0;
+  const batchErrors: string[] = [];
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.error || 'خطأ في خادم المزامنة');
+  try {
+    for (let i = 0; i < validUpdates.length; i += BATCH_SIZE) {
+      const batch = validUpdates.slice(i, i + BATCH_SIZE);
+      let batchSucceeded = false;
+      let lastErrMessage = '';
+
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const res = await fetch('/api/sync-google-sheet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              webhookUrl: webhookUrl.trim(),
+              updates: batch
+            })
+          });
+
+          if (!res.ok) {
+            const raw = await res.text().catch(() => '');
+            let errText = 'خطأ في خادم المزامنة';
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed.error) errText = parsed.error;
+            } catch {
+              if (res.status === 504 || res.status === 502) {
+                errText = 'استغرقت استجابة شيت جوجل وقتاً طويلاً. تم تجزئة البيانات لتسريع الترحيل.';
+              }
+            }
+            throw new Error(errText);
+          }
+
+          const result = await res.json();
+          const sheetRes = result.response;
+
+          if (sheetRes && sheetRes.status === 'error') {
+            throw new Error(sheetRes.message || 'أبلغ سكريبت الشيت عن حدوث خطأ');
+          }
+
+          totalUpdated += (sheetRes?.updatedCount ?? batch.length);
+          batchSucceeded = true;
+          break;
+        } catch (bErr: any) {
+          lastErrMessage = bErr.message || 'فشل الاتصال';
+          if (attempt === 1 && validUpdates.length > BATCH_SIZE) {
+            await new Promise(resolve => setTimeout(resolve, 800));
+          }
+        }
+      }
+
+      if (!batchSucceeded) {
+        batchErrors.push(lastErrMessage);
+      }
+
+      const currentCount = Math.min(i + BATCH_SIZE, validUpdates.length);
+      if (onProgress) {
+        onProgress({
+          current: currentCount,
+          total: validUpdates.length,
+          percent: Math.round((currentCount / validUpdates.length) * 100)
+        });
+      }
     }
 
-    const result = await res.json();
-    const sheetRes = result.response;
-
-    if (sheetRes && sheetRes.status === 'error') {
+    if (batchErrors.length > 0 && totalUpdated === 0) {
       return {
         success: false,
-        error: sheetRes.message || 'أبلغ سكريبت الشيت عن حدوث خطأ'
+        error: batchErrors[0] || 'فشلت المزامنة مع شيت جوجل'
       };
     }
 
     return {
       success: true,
-      updatedCount: sheetRes?.updatedCount ?? validUpdates.length,
+      updatedCount: totalUpdated,
       totalReceived: validUpdates.length,
-      message: `تم تحديث (${sheetRes?.updatedCount ?? validUpdates.length}) صف بالشيت بنجاح`
+      message: batchErrors.length > 0 
+        ? `تم تحديث (${totalUpdated}) حركة، مع تعذر (${validUpdates.length - totalUpdated}) حركة`
+        : `تم تحديث (${totalUpdated}) صف بالشيت بنجاح`
     };
   } catch (err: any) {
     console.error("Google Sheet Sync Error:", err);
