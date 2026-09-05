@@ -189,9 +189,20 @@ async function sendBatchWithFallback(webhookUrl: string, batch: SheetUpdateItem[
         }
         return result.response.updatedCount ?? batch.length;
       }
+    } else {
+      const errData = await res.json().catch(() => null);
+      if (errData && errData.error) {
+        throw new Error(errData.error);
+      }
     }
   } catch (proxyErr: any) {
-    if (proxyErr.message && proxyErr.message.includes('أبلغ سكريبت')) {
+    if (proxyErr.message && (
+      proxyErr.message.includes('أبلغ سكريبت') || 
+      proxyErr.message.includes('صلاحية') || 
+      proxyErr.message.includes('Anyone') ||
+      proxyErr.message.includes('عمود') ||
+      proxyErr.message.includes('مهلة')
+    )) {
       throw proxyErr;
     }
   }
