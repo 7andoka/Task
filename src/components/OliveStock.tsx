@@ -297,6 +297,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     if (eLower.includes('kobrosi') || eLower.includes('kobrosy') || eLower.includes('qobr') || eLower.includes('cyprus')) return 'Kobrosi';
     if (eLower.includes('kalamata') || eLower.includes('kalama')) return 'Kalamata';
     if (eLower.includes('dolsy') || eLower.includes('dolcy') || eLower.includes('dolce') || eLower.includes('dolsi')) return 'Dolsy';
+    if (eLower.includes('nour') && eLower.includes('sabah') || eLower.includes('نور صباح') || eLower.includes('نور الصباح')) return 'Nour Sabah';
 
     return 'Other';
   };
@@ -304,6 +305,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   const getVarietyName = (v: string) => {
     if (v === 'Pepper') {
       return isRtl ? 'الفلفل (Pepper)' : 'Pepper';
+    }
+    if (v === 'Nour Sabah') {
+      return isRtl ? 'نور الصباح (Nour Sabah)' : 'Nour Sabah';
     }
     if (v === 'Other') {
       return isRtl ? 'آخر / مشكل' : 'Other / mixed';
@@ -327,6 +331,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50';
       case 'Dolsy':
         return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50';
+      case 'Nour Sabah':
+        return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-900/50';
       case 'Pepper':
         return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50';
       default:
@@ -777,7 +783,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   }, [dataset]);
 
   const varieties = useMemo(() => {
-    return ['Manzanilla', 'Picual', 'Akas', 'Azizi', 'Kobrosi', 'Kalamata', 'Dolsy', 'Pepper', 'Other'];
+    return ['Manzanilla', 'Picual', 'Akas', 'Azizi', 'Kobrosi', 'Kalamata', 'Dolsy', 'Nour Sabah', 'Pepper', 'Other'];
   }, []);
 
   const visibleLocations = useMemo(() => {
@@ -1047,6 +1053,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     Kobrosi: '#3b82f6',   // Blue
     Kalamata: '#6366f1',  // Indigo
     Dolsy: '#f43f5e',     // Rose
+    'Nour Sabah': '#0d9488', // Teal
     Pepper: '#ef4444',    // Red
     Other: '#64748b'       // Slate
   };

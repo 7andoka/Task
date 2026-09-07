@@ -99,10 +99,9 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
-import { fixedSupplyPricesSnapshot } from '../data/fixedSupplyPrices';
 import { FreshItemsDashboard } from './FreshItemsDashboard';
 import { FreshSuppliersDashboard } from './FreshSuppliersDashboard';
 import { FreshAnalyticsDashboard } from './FreshAnalyticsDashboard';
@@ -112,13 +111,10 @@ import { translations } from '../i18n';
 import { toast } from 'sonner';
 import { normalizeArabicSearch, matchesArabicSearch, equalsArabicNormalized } from '../utils/arabic';
 import { soundFx } from '../utils/sound';
-import { GoogleSheetSyncModal } from './GoogleSheetSyncModal';
-import { getGoogleSheetWebhookUrl, syncUpdatesToGoogleSheet } from '../utils/googleSheetSync';
 
 const FRESH_GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv";
 const STORAGE_CACHE_KEY = "fresh_supply_data_cache";
 const STORAGE_TIME_KEY = "fresh_supply_last_synced";
-const STORAGE_OVERRIDES_KEY = "fresh_supply_overrides_cache";
 
 export interface FreshSupplyRecord {
   id: string;
@@ -169,7 +165,7 @@ interface FreshSupplyProps {
 
 // Variety categorization helper & color codes
 export const FRESH_VARIETIES = [
-  'Manzanilla', 'Picual', 'Kalamata', 'Akas', 'Azizi', 'Kobrosi', 'Dolsy', 'Pepper', 'Other'
+  'Manzanilla', 'Picual', 'Kalamata', 'Akas', 'Azizi', 'Kobrosi', 'Dolsy', 'Nour Sabah', 'Pepper', 'Other'
 ];
 
 export const detectFreshVariety = (descr: string): string => {
@@ -182,6 +178,7 @@ export const detectFreshVariety = (descr: string): string => {
   if (dLower.includes('kobrosi') || dLower.includes('kobrosy') || dLower.includes('قبرص') || dLower.includes('قبرصي')) return 'Kobrosi';
   if (dLower.includes('kalamata') || dLower.includes('kalama') || dLower.includes('كالمات') || dLower.includes('كلامات') || dLower.includes('كلاماته') || dLower.includes('كلاماتا')) return 'Kalamata';
   if (dLower.includes('dolsy') || dLower.includes('dolcy') || dLower.includes('dolce') || dLower.includes('تفاح') || dLower.includes('tofah') || dLower.includes('دولس')) return 'Dolsy';
+  if (dLower.includes('نور صباح') || dLower.includes('نور الصباح') || dLower.includes('نورالصباح') || dLower.includes('nour sabah') || dLower.includes('nour elsabah') || dLower.includes('nour al sabah') || dLower.includes('nouralsabah')) return 'Nour Sabah';
   if (dLower.includes('زيتون') || dLower.includes('olive')) return 'Azizi';
   return 'Other';
 };
@@ -192,6 +189,14 @@ export const classifyItemCategory = (itemName: string, variety: string) => {
   const isOlive = 
     dLower.includes('زيتون') || 
     dLower.includes('olive') || 
+    dLower.includes('نور صباح') || 
+    dLower.includes('نور الصباح') || 
+    dLower.includes('نورالصباح') || 
+    dLower.includes('nour sabah') || 
+    dLower.includes('nour elsabah') || 
+    dLower.includes('nour al sabah') || 
+    dLower.includes('nouralsabah') || 
+    variety === 'Nour Sabah' || 
     dLower.includes('بيكوال') || 
     dLower.includes('بكوال') || 
     dLower.includes('picual') || 
@@ -376,6 +381,7 @@ export const getFreshVarietyName = (v: string, isRtl: boolean) => {
     case 'Azizi': return isRtl ? 'عزيزي (Azizi)' : 'Azizi';
     case 'Kobrosi': return isRtl ? 'قبرصي (Kobrosi)' : 'Kobrosi';
     case 'Dolsy': return isRtl ? 'تفاحي / دولسي (Dolsy)' : 'Dolsy';
+    case 'Nour Sabah': return isRtl ? 'نور الصباح (Nour Sabah)' : 'Nour Sabah';
     case 'Pepper': return isRtl ? 'فلفل (Pepper)' : 'Pepper';
     default: return isRtl ? 'أصناف أخرى' : 'Other Varieties';
   }
@@ -389,6 +395,7 @@ export const VARIETY_COLORS: Record<string, string> = {
   Kobrosi: '#3b82f6',   // Blue
   Kalamata: '#6366f1',  // Indigo
   Dolsy: '#f43f5e',     // Rose
+  'Nour Sabah': '#0d9488', // Teal
   Pepper: '#ef4444',    // Red
   Other: '#64748b'       // Slate
 };
@@ -839,8 +846,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     };
   }, [data, selectedRowIds]);
 
-  // Filter for pricing status (Fixed up to 31/08/2026, Priced in App, Pending Pricing)
-  const [pricingStatusFilter, setPricingStatusFilter] = useState<'ALL' | 'FIXED_PERIOD' | 'APP_PRICED' | 'PENDING_PRICING'>('ALL');
+  // Filter for pricing status (Priced in App, Pending Pricing)
+  const [pricingStatusFilter, setPricingStatusFilter] = useState<'ALL' | 'APP_PRICED' | 'PENDING_PRICING'>('ALL');
 
   // User role checking for permission restriction:
   // Restricted to: مسئول الاعتماد, مسئول التنفيذ, مسئول التسجيل, Admin
@@ -916,17 +923,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   });
   const [isSavingRecord, setIsSavingRecord] = useState(false);
 
-  // Google Sheet Webhook Sync States
-  const [sheetWebhookUrl, setSheetWebhookUrl] = useState<string>('');
-  const [isSheetSyncModalOpen, setIsSheetSyncModalOpen] = useState<boolean>(false);
-
-  // Load Google Sheet webhook URL from settings on mount
-  useEffect(() => {
-    getGoogleSheetWebhookUrl().then(url => {
-      if (url) setSheetWebhookUrl(url);
-    }).catch(err => console.warn("Could not load Google Sheet webhook URL:", err));
-  }, []);
-
   // Load record data into edit form whenever selectedRecord changes
   useEffect(() => {
     if (selectedRecord) {
@@ -967,36 +963,32 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   });
   const [showColumnConfig, setShowColumnConfig] = useState(false);
 
-  // Helper to fetch persistent overrides from Firestore & LocalStorage
+  // Helper to fetch persistent overrides purely from Cloud Firestore
   const fetchOverrides = async (): Promise<Record<string, any>> => {
     const overridesMap: Record<string, any> = {};
     
-    // 1. Read from localStorage cache first for fast response
+    // Clean up any obsolete local cache from previous sessions
     try {
-      const cached = localStorage.getItem(STORAGE_OVERRIDES_KEY);
-      if (cached) {
-        Object.assign(overridesMap, JSON.parse(cached));
-      }
+      localStorage.removeItem("fresh_supply_overrides_cache");
     } catch (e) {
-      console.warn("Error reading local overrides cache:", e);
+      // ignore
     }
 
-    // 2. Fetch fresh overrides from Firestore
+    // Fetch overrides directly from Cloud Firestore
     try {
       const snapshot = await getDocs(collection(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES));
       snapshot.forEach(docSnap => {
         overridesMap[docSnap.id] = docSnap.data();
       });
-      // Cache in localStorage
-      localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(overridesMap));
     } catch (firestoreErr) {
-      console.warn("Firestore fetch overrides warning (offline/cached):", firestoreErr);
+      console.error("Firestore fetch overrides error:", firestoreErr);
+      toast.error(isRtl ? 'تعذر جلب التعديلات السحابية من Firestore' : 'Failed to fetch cloud overrides from Firestore');
     }
 
     return overridesMap;
   };
 
-  // Handler to save/update record details (PO, Initial Analysis, Region, Price, Quality Discount, Payment Method)
+  // Handler to save/update record details purely in Cloud Firestore (PO, Initial Analysis, Region, Price, Quality Discount, Payment Method)
   const handleSaveRecordDetails = async () => {
     if (!selectedRecord) return;
     setIsSavingRecord(true);
@@ -1031,7 +1023,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         ...updatedData
       };
 
-      // 1. Update in-memory state for this record and any rows sharing the same movementNo
+      // 1. Persist directly to Cloud Firestore
+      await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, overrideKey), {
+        id: overrideKey,
+        movementNo: selectedRecord.movementNo || '',
+        ...updatedData
+      }, { merge: true });
+
+      if (selectedRecord.movementNo) {
+        await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, selectedRecord.movementNo), {
+          id: selectedRecord.movementNo,
+          movementNo: selectedRecord.movementNo,
+          ...updatedData
+        }, { merge: true });
+      }
+
+      // 2. Update in-memory state for this record and any rows sharing the same movementNo
       setData(prev => prev.map(item => {
         const isMatch = item.id === selectedRecord.id;
         const isSameMove = Boolean(selectedRecord.movementNo && item.movementNo === selectedRecord.movementNo);
@@ -1051,68 +1058,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       setSelectedRecord(updatedRecord);
 
-      // 2. Update localStorage overrides cache
-      try {
-        const cachedStr = localStorage.getItem(STORAGE_OVERRIDES_KEY);
-        const cachedMap = cachedStr ? JSON.parse(cachedStr) : {};
-        cachedMap[overrideKey] = {
-          id: overrideKey,
-          movementNo: selectedRecord.movementNo || '',
-          ...updatedData
-        };
-        if (selectedRecord.movementNo) {
-          cachedMap[selectedRecord.movementNo] = {
-            id: selectedRecord.movementNo,
-            movementNo: selectedRecord.movementNo,
-            ...updatedData
-          };
-        }
-        localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(cachedMap));
-      } catch (cacheErr) {
-        console.error("Cache save error:", cacheErr);
-      }
-
-      // 3. Persist to Firestore for cloud sync & multi-device collaboration
-      try {
-        await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, overrideKey), {
-          id: overrideKey,
-          movementNo: selectedRecord.movementNo || '',
-          ...updatedData
-        }, { merge: true });
-
-        if (selectedRecord.movementNo) {
-          setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, selectedRecord.movementNo), {
-            id: selectedRecord.movementNo,
-            movementNo: selectedRecord.movementNo,
-            ...updatedData
-          }, { merge: true }).catch(() => {});
-        }
-      } catch (fsErr) {
-        console.warn("Firestore save warning (persisted locally):", fsErr);
-      }
-
-      // 4. Live sync to Google Sheet quietly in background if webhook is configured and PO or Post Document was updated
-      if (sheetWebhookUrl && selectedRecord.movementNo && (updatedData.po || updatedData.postDocument)) {
-        syncUpdatesToGoogleSheet(sheetWebhookUrl, [{
-          movementNo: selectedRecord.movementNo,
-          po: updatedData.po || '',
-          postDocument: updatedData.postDocument || '',
-          updatedAt: new Date().toISOString()
-        }]).then(sheetRes => {
-          if (!sheetRes.success) {
-            console.warn("Google Sheet sync notice:", sheetRes.error);
-          }
-        }).catch(syncErr => console.warn("Google Sheet sync error:", syncErr));
-      }
-
       toast.success(
         isRtl 
-          ? 'تم حفظ وتحديث بيانات التوريد (السعر الأساسي، التحليل، المنطقة، السداد، أمر الشراء ومستند الترحيل) بنجاح!' 
-          : 'Supply details (Price, Analysis, Region, Payment, PO, POST DOC) saved successfully!'
+          ? 'تم حفظ وتحديث بيانات التوريد سحابياً في Firestore بنجاح!' 
+          : 'Supply details saved to Cloud Firestore successfully!'
       );
     } catch (err: any) {
       console.error("Save Record Details Error:", err);
-      toast.error(isRtl ? 'حدث خطأ أثناء حفظ البيانات' : 'Failed to save details');
+      toast.error(isRtl ? 'حدث خطأ أثناء الحفظ السحابي في Firestore' : 'Failed to save details to Firestore');
     } finally {
       setIsSavingRecord(false);
     }
@@ -1122,9 +1075,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     if (selectedRowIds.length === 0) return;
     setIsSavingBulk(true);
     try {
-      const cachedStr = localStorage.getItem(STORAGE_OVERRIDES_KEY);
-      const cachedMap = cachedStr ? JSON.parse(cachedStr) : {};
-
       const updatedData: any = {};
       if (bulkEditForm.po.trim() !== '') {
         updatedData.po = bulkEditForm.po.trim();
@@ -1169,62 +1119,28 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       updatedData.updatedAt = new Date().toISOString();
       updatedData.updatedBy = user?.displayName || user?.username || (isRtl ? 'مستخدم النظام' : 'System User');
 
-      selectedRowIds.forEach(id => {
-        const record = data.find(r => r.id === id);
-        if (record) {
-          cachedMap[id] = {
-            id,
-            movementNo: record.movementNo || '',
-            ...(cachedMap[id] || {}),
-            ...updatedData
-          };
-
-          if (record.movementNo) {
-            cachedMap[record.movementNo] = {
-              id: record.movementNo,
-              movementNo: record.movementNo,
-              ...(cachedMap[record.movementNo] || {}),
-              ...updatedData
-            };
-          }
-
-          setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, id), {
-            id,
+      // Save directly and purely to Cloud Firestore using batches
+      const selectedRecords = selectedRowIds.map(id => data.find(r => r.id === id)).filter(Boolean) as FreshSupplyRecord[];
+      const BATCH_SIZE = 200;
+      for (let i = 0; i < selectedRecords.length; i += BATCH_SIZE) {
+        const chunk = selectedRecords.slice(i, i + BATCH_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(record => {
+          batch.set(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, record.id), {
+            id: record.id,
             movementNo: record.movementNo || '',
             ...updatedData
-          }, { merge: true }).catch(err => console.warn("Firestore bulk save warning:", err));
+          }, { merge: true });
 
           if (record.movementNo) {
-            setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, record.movementNo), {
+            batch.set(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, record.movementNo), {
               id: record.movementNo,
               movementNo: record.movementNo,
               ...updatedData
-            }, { merge: true }).catch(() => {});
+            }, { merge: true });
           }
-        }
-      });
-
-      localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(cachedMap));
-
-      // Batch live sync to Google Sheet if webhook is configured and PO or Post Document was updated
-      if (sheetWebhookUrl && (updatedData.po || updatedData.postDocument)) {
-        const batchSheetUpdates = selectedRowIds
-          .map(id => data.find(r => r.id === id))
-          .filter((r): r is FreshSupplyRecord => Boolean(r && r.movementNo))
-          .map(r => ({
-            movementNo: r.movementNo!,
-            po: updatedData.po !== undefined ? updatedData.po : (r.po || ''),
-            postDocument: updatedData.postDocument !== undefined ? updatedData.postDocument : (r.postDocument || r.sapExecutionNo || ''),
-            updatedAt: new Date().toISOString()
-          }));
-
-        if (batchSheetUpdates.length > 0) {
-          syncUpdatesToGoogleSheet(sheetWebhookUrl, batchSheetUpdates).then(sheetRes => {
-            if (!sheetRes.success) {
-              console.warn("Batch Google Sheet sync notice:", sheetRes.error);
-            }
-          }).catch(syncErr => console.warn("Batch Google Sheet sync error:", syncErr));
-        }
+        });
+        await batch.commit();
       }
 
       const affectedMovements = new Set(
@@ -1254,8 +1170,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       soundFx.playSuccess();
       toast.success(
         isRtl 
-          ? `تم تحديث بيانات (${selectedRowIds.length}) حركة توريد بالبرنامج بنجاح!` 
-          : `Successfully updated (${selectedRowIds.length}) records in app!`
+          ? `تم تحديث وحفظ بيانات (${selectedRowIds.length}) حركة توريد سحابياً في Firestore بنجاح!` 
+          : `Successfully updated (${selectedRowIds.length}) records in Cloud Firestore!`
       );
 
       setIsBulkEditModalOpen(false);
@@ -1445,27 +1361,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         || overridesMap[`fresh-${idx}`] 
         || {};
 
-      // Determine if movement belongs to the fixed price period (on or before 31/08/2026)
-      const isPriceFixedPeriod = (() => {
-        if (parsedDate && !isNaN(parsedDate.getTime())) {
-          // Cutoff: 31 August 2026 end of day
-          const cutoff = new Date(2026, 7, 31, 23, 59, 59, 999);
-          return parsedDate.getTime() <= cutoff.getTime();
-        }
-        const cleanD = String(dateStr).toLowerCase();
-        if (cleanD.includes('sep') || cleanD.includes('/09/') || cleanD.includes('-09-')) return false;
-        if (cleanD.includes('oct') || cleanD.includes('/10/')) return false;
-        if (cleanD.includes('nov') || cleanD.includes('/11/')) return false;
-        if (cleanD.includes('dec') || cleanD.includes('/12/')) return false;
-        return true;
-      })();
-
-      // Snapshot entry for fixed prices up to 31/08/2026
-      const snapshotKey = `${rawMoveNo}_${finalSapCode || finalItemName}`;
-      const fixedSnapshot = isPriceFixedPeriod
-        ? ((fixedSupplyPricesSnapshot as Record<string, any>)[snapshotKey] || (fixedSupplyPricesSnapshot as Record<string, any>)[rawMoveNo] || null)
-        : null;
-
       const rawPo = getRowValueFlexible(
         row,
         'PO',
@@ -1516,7 +1411,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       );
       const initialAnalysis = override.initialAnalysis !== undefined && override.initialAnalysis !== '' 
         ? String(override.initialAnalysis).trim() 
-        : (fixedSnapshot?.initialAnalysis ? String(fixedSnapshot.initialAnalysis).trim() : rawInitialAnalysis);
+        : rawInitialAnalysis;
 
       const rawRegion = getRowValueFlexible(
         row,
@@ -1529,20 +1424,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       );
       const region = override.region !== undefined && override.region !== '' 
         ? String(override.region).trim() 
-        : (fixedSnapshot?.region ? String(fixedSnapshot.region).trim() : rawRegion);
+        : rawRegion;
 
       const rawPriceVal = override.price !== undefined && override.price !== '' 
         ? override.price 
-        : (fixedSnapshot?.price !== undefined && fixedSnapshot.price > 0 
-            ? fixedSnapshot.price 
-            : getRowValueFlexible(row, 'السعر الأساسي (ج.م/كجم)', 'السعر الأساسي', 'السعر الاساسي', 'السعر', 'سعر الكيلو', 'Base Price', 'Price'));
+        : getRowValueFlexible(row, 'السعر الأساسي (ج.م/كجم)', 'السعر الأساسي', 'السعر الاساسي', 'السعر', 'سعر الكيلو', 'Base Price', 'Price');
       const price = rawPriceVal !== undefined && rawPriceVal !== '-' && rawPriceVal !== '' ? Number(rawPriceVal) || 0 : 0;
       
       const rawDiscountVal = override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '' 
         ? override.qualityDiscountPercent 
-        : (fixedSnapshot?.qualityDiscountPercent !== undefined && fixedSnapshot.qualityDiscountPercent > 0
-            ? fixedSnapshot.qualityDiscountPercent
-            : getRowValueFlexible(row, 'نسبة خصم الجودة %', 'نسبة خصم الجودة', 'خصم الجودة', 'نسبة الخصم', 'الخصم', 'Quality Discount'));
+        : getRowValueFlexible(row, 'نسبة خصم الجودة %', 'نسبة خصم الجودة', 'خصم الجودة', 'نسبة الخصم', 'الخصم', 'Quality Discount');
       let qualityDiscountPercent = 0;
       if (rawDiscountVal !== undefined && rawDiscountVal !== '-' && rawDiscountVal !== '') {
         const discStr = String(rawDiscountVal).replace('%', '').trim();
@@ -1559,14 +1450,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       );
       const paymentMethod = override.paymentMethod !== undefined && override.paymentMethod !== '' 
         ? String(override.paymentMethod).trim() 
-        : (fixedSnapshot?.paymentMethod ? String(fixedSnapshot.paymentMethod).trim() : rawPaymentMethod);
+        : rawPaymentMethod;
 
-      const isPricedInProgram = !isPriceFixedPeriod && (
-        (override.price !== undefined && override.price !== '') ||
-        (override.initialAnalysis !== undefined && override.initialAnalysis !== '') ||
-        (override.region !== undefined && override.region !== '') ||
-        (override.paymentMethod !== undefined && override.paymentMethod !== '') ||
-        (override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '')
+      const isPricedInProgram = Boolean(
+        (override.price !== undefined && override.price !== '' && Number(override.price) > 0) ||
+        price > 0
       );
 
       const rawRouting = getRowValueFlexible(row, 'توجيه', 'التوجيه', 'Routing');
@@ -1627,9 +1515,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         paymentMethod,
         routing,
         notes,
-        isPriceFixed: isPriceFixedPeriod,
+        isPriceFixed: false,
         isPricedInProgram,
-        isFromCurrentPeriod: !isPriceFixedPeriod,
+        isFromCurrentPeriod: true,
         updatedAt,
         updatedBy,
         reservation,
@@ -2040,12 +1928,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       // Pricing Status Filter (Restricted to authorized roles)
       if (canViewPrice && pricingStatusFilter !== 'ALL') {
-        if (pricingStatusFilter === 'FIXED_PERIOD') {
-          if (!record.isPriceFixed) return false;
-        } else if (pricingStatusFilter === 'APP_PRICED') {
-          if (record.isPriceFixed || !record.price || record.price <= 0) return false;
+        if (pricingStatusFilter === 'APP_PRICED') {
+          if (!record.price || record.price <= 0) return false;
         } else if (pricingStatusFilter === 'PENDING_PRICING') {
-          if (record.isPriceFixed || (record.price !== undefined && record.price > 0)) return false;
+          if (record.price !== undefined && record.price > 0) return false;
         }
       }
 
@@ -3113,8 +2999,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         return;
       }
 
-      const cachedStr = localStorage.getItem(STORAGE_OVERRIDES_KEY);
-      const cachedMap = cachedStr ? JSON.parse(cachedStr) : {};
+      const overridesToSave: Array<{ id: string; movementNo: string; data: any }> = [];
+      const updatedDataMap = new Map<string, any>();
       let updatedCount = 0;
 
       rows.forEach((row, idx) => {
@@ -3167,26 +3053,46 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             updatedBy: user?.displayName || user?.username || (isRtl ? 'مستخدم النظام' : 'System User')
           };
 
-          cachedMap[overrideKey] = {
+          overridesToSave.push({
             id: overrideKey,
             movementNo: matchedRecord.movementNo || '',
-            ...updatedData
-          };
+            data: updatedData
+          });
 
-          setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, overrideKey), {
-            id: overrideKey,
-            movementNo: matchedRecord.movementNo || '',
-            ...updatedData
-          }, { merge: true }).catch(err => console.warn("Firestore import save warning:", err));
+          updatedDataMap.set(overrideKey, updatedData);
+          if (matchedRecord.movementNo) {
+            updatedDataMap.set(matchedRecord.movementNo, updatedData);
+          }
 
           updatedCount++;
         }
       });
 
-      localStorage.setItem(STORAGE_OVERRIDES_KEY, JSON.stringify(cachedMap));
+      // Save in batches directly to Cloud Firestore
+      const BATCH_SIZE = 200;
+      for (let i = 0; i < overridesToSave.length; i += BATCH_SIZE) {
+        const chunk = overridesToSave.slice(i, i + BATCH_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(item => {
+          batch.set(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, item.id), {
+            id: item.id,
+            movementNo: item.movementNo,
+            ...item.data
+          }, { merge: true });
+
+          if (item.movementNo) {
+            batch.set(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, item.movementNo), {
+              id: item.movementNo,
+              movementNo: item.movementNo,
+              ...item.data
+            }, { merge: true });
+          }
+        });
+        await batch.commit();
+      }
 
       setData(prev => prev.map(item => {
-        const ov = cachedMap[item.id] || (item.movementNo && cachedMap[item.movementNo]);
+        const ov = updatedDataMap.get(item.id) || (item.movementNo ? updatedDataMap.get(item.movementNo) : undefined);
         if (ov) {
           return {
             ...item,
@@ -3207,8 +3113,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
       toast.success(
         isRtl 
-          ? `تم استيراد وتحديث (${updatedCount}) سجل بنجاح من شيت الإكسيل!` 
-          : `Successfully imported and updated (${updatedCount}) records from Excel!`
+          ? `تم استيراد وحفظ (${updatedCount}) سجل سحابياً في Firestore بنجاح!` 
+          : `Successfully imported and saved (${updatedCount}) records to Cloud Firestore!`
       );
     } catch (err: any) {
       console.error("Excel Import Error:", err);
@@ -4127,8 +4033,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   className="h-10 px-3.5 py-2 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-950/30 text-amber-950 dark:text-amber-200 text-xs font-bold focus:ring-2 focus:ring-amber-500 focus:outline-hidden cursor-pointer"
                 >
                   <option value="ALL">{isRtl ? '💰 حالة الأسعار والتسعير (الكل)' : 'Pricing Status (All)'}</option>
-                  <option value="FIXED_PERIOD">{isRtl ? '🔒 مثبت حتى 31/08/2026' : 'Fixed (Up to 31/08/2026)'}</option>
-                  <option value="APP_PRICED">{isRtl ? '💻 مسعر بالبرنامج (من 01/09)' : 'Priced in App'}</option>
+                  <option value="APP_PRICED">{isRtl ? '💻 مسعر بالبرنامج' : 'Priced in App'}</option>
                   <option value="PENDING_PRICING">{isRtl ? '⚠️ بانتظار التسعير بالبرنامج' : 'Pending Pricing in App'}</option>
                 </select>
               </div>
@@ -4147,23 +4052,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Google Sheets Two-Way Sync Button (Admin Only) */}
-            {isAdmin && (
-              <button
-                onClick={() => setIsSheetSyncModalOpen(true)}
-                className={`h-10 px-3.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                  sheetWebhookUrl 
-                    ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60' 
-                    : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border-zinc-200/60 dark:border-zinc-700/60'
-                }`}
-                title={isRtl ? 'إعداد ومزامنة شيت جوجل المباشرة (للإدارة فقط)' : 'Google Sheet Two-Way Sync (Admin Only)'}
-              >
-                <span className={`w-2 h-2 rounded-full ${sheetWebhookUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>{isRtl ? 'مزامنة الشيت 2-Way' : 'Sheet Sync'}</span>
-              </button>
-            )}
-
             {/* Column Visibility Toggle */}
             <div className="relative shrink-0">
               <button
@@ -4788,7 +4676,14 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                               const total = net > 0 ? net * record.quantityKg : 0;
 
                               if (base === 0) {
-                                return <span className="text-zinc-400 text-[11px]">-</span>;
+                                return (
+                                  <span 
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                                    title={isRtl ? 'بانتظار إدخال السعر والتفاصيل بالبرنامج' : 'Pending price entry in app'}
+                                  >
+                                    {isRtl ? 'بانتظار التسعير' : 'Pending'}
+                                  </span>
+                                );
                               }
 
                               return (
@@ -4807,23 +4702,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                                   <span className="text-[10.5px] font-bold text-zinc-500 dark:text-zinc-400">
                                     [{(total).toLocaleString('en-US', { maximumFractionDigits: 0 })} {isRtl ? 'ج.م' : 'EGP'}]
                                   </span>
-                                  {record.isPriceFixed ? (
-                                    <span 
-                                      className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800"
-                                      title={isRtl ? 'سعر مثبت رسمياً حتى تاريخ 31/08/2026' : 'Fixed price up to 31/08/2026'}
-                                    >
-                                      <Lock className="w-2.5 h-2.5" />
-                                      <span>{isRtl ? 'مثبت 31/08' : 'Fixed'}</span>
-                                    </span>
-                                  ) : (
-                                    <span 
-                                      className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
-                                      title={isRtl ? 'مسعر ومحدد عبر البرنامج' : 'Priced in app'}
-                                    >
-                                      <Laptop className="w-2.5 h-2.5" />
-                                      <span>{isRtl ? 'بالبرنامج' : 'App'}</span>
-                                    </span>
-                                  )}
+                                  <span 
+                                    className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800"
+                                    title={isRtl ? 'مسعر ومحدد عبر البرنامج' : 'Priced in app'}
+                                  >
+                                    <Laptop className="w-2.5 h-2.5" />
+                                    <span>{isRtl ? 'بالبرنامج' : 'App'}</span>
+                                  </span>
                                 </div>
                               );
                             })()}
@@ -5634,21 +5519,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                             {isRtl ? 'بيانات المستندات وأوامر الشراء (PO & SAP)' : 'Documents & PO Data'}
                           </h5>
                         </div>
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => setIsSheetSyncModalOpen(true)}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
-                              sheetWebhookUrl
-                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                                : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                            }`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${sheetWebhookUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                            <FileSpreadsheet className="w-3 h-3" />
-                            <span>{sheetWebhookUrl ? (isRtl ? 'مزامنة الشيت مفعلة' : 'Sheet Sync Active') : (isRtl ? 'ربط شيت جوجل' : 'Connect Sheet')}</span>
-                          </button>
-                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -6356,21 +6226,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                           {isRtl ? 'بيانات المستندات وأوامر الشراء (PO & SAP)' : 'Documents & PO Data'}
                         </h5>
                       </div>
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => setIsSheetSyncModalOpen(true)}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
-                            sheetWebhookUrl
-                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                              : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                          }`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${sheetWebhookUrl ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                          <FileSpreadsheet className="w-3 h-3" />
-                          <span>{sheetWebhookUrl ? (isRtl ? 'مزامنة الشيت مفعلة' : 'Sheet Sync Active') : (isRtl ? 'ربط شيت جوجل' : 'Connect Sheet')}</span>
-                        </button>
-                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -6839,16 +6694,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           </div>
         </div>
       )}
-
-      {/* Google Sheet Two-Way Sync Modal */}
-      <GoogleSheetSyncModal
-        isOpen={isSheetSyncModalOpen}
-        onClose={() => setIsSheetSyncModalOpen(false)}
-        webhookUrl={sheetWebhookUrl}
-        onWebhookUrlChange={setSheetWebhookUrl}
-        records={data}
-        isRtl={isRtl}
-      />
 
     </div>
   );
