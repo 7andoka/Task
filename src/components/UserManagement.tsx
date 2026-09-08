@@ -69,7 +69,8 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     'Registration Officer',
     'Approval Officer',
     'Execution Officer',
-    'Pricing Officer'
+    'Pricing Officer',
+    'Accounts'
   ];
 
   const availablePages = [

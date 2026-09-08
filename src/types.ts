@@ -18,6 +18,8 @@ export type UserRole =
   | 'Approval Officer'
   | 'Execution Officer'
   | 'Pricing Officer'
+  | 'Accounts'
+  | 'حسابات'
   | 'مسئول التسجيل'
   | 'مسئول الاعتماد'
   | 'مسئول التنفيذ'

@@ -892,7 +892,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       'Execution Officer',
       'مسئول التسعير',
       'مسؤول التسعير',
-      'Pricing Officer'
+      'Pricing Officer',
+      'حسابات',
+      'الحسابات',
+      'قسم الحسابات',
+      'إدارة الحسابات',
+      'محاسب',
+      'Accounts',
+      'Accountant',
+      'Accounting',
+      'Finance'
     ];
     return userRoles.some(r => {
       if (!r) return false;
@@ -937,6 +946,77 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       return adminRoles.some(a => a.toLowerCase() === clean);
     });
   }, [user, userRoles]);
+
+  // Quality discount edit permission: Quality team and Admin only
+  const canEditQualityDiscount = useMemo(() => {
+    if (!user) return false;
+    const allowedQualityRoles = [
+      'admin',
+      'administrator',
+      'مدير النظام',
+      'مدير',
+      'quality',
+      'quality operations',
+      'quality inspection',
+      'quality officer',
+      'quality manager',
+      'جودة',
+      'الجودة',
+      'مسئول جودة',
+      'مسؤول جودة',
+      'مراقب جودة',
+      'فني جودة',
+      'إدارة الجودة',
+      'قسم الجودة'
+    ];
+    return userRoles.some(r => {
+      if (!r) return false;
+      const clean = String(r).trim().toLowerCase();
+      return allowedQualityRoles.some(a => a.toLowerCase() === clean);
+    });
+  }, [user, userRoles]);
+
+  // POST DOCUMENT edit permission: Warehouse team and Admin only
+  const canEditPostDocument = useMemo(() => {
+    if (!user) return false;
+    const allowedWarehouseRoles = [
+      'admin',
+      'administrator',
+      'مدير النظام',
+      'مدير',
+      'warehouse',
+      'warehouse manager',
+      'warehouse specialist',
+      'warehouse keeper',
+      'assistant warehouse keeper',
+      'warehouse operations',
+      'مخزن',
+      'المخزن',
+      'المخازن',
+      'أمين مخزن',
+      'امين مخزن',
+      'مسؤول مخزن',
+      'مسئول مخزن',
+      'مدير مخازن',
+      'مدير مخزن',
+      'عمليات مخازن'
+    ];
+    return userRoles.some(r => {
+      if (!r) return false;
+      const clean = String(r).trim().toLowerCase();
+      return allowedWarehouseRoles.some(a => a.toLowerCase() === clean);
+    });
+  }, [user, userRoles]);
+
+  // Quick modal state for editing Discount % directly (Quality & Admin)
+  const [quickDiscountRecord, setQuickDiscountRecord] = useState<FreshSupplyRecord | null>(null);
+  const [quickDiscountValue, setQuickDiscountValue] = useState<string>('');
+  const [isSavingQuickDiscount, setIsSavingQuickDiscount] = useState(false);
+
+  // Quick modal state for editing POST DOCUMENT directly (Warehouse & Admin)
+  const [quickPostDocRecord, setQuickPostDocRecord] = useState<FreshSupplyRecord | null>(null);
+  const [quickPostDocValue, setQuickPostDocValue] = useState<string>('');
+  const [isSavingQuickPostDoc, setIsSavingQuickPostDoc] = useState(false);
 
   // Form state for editing record details (PO, sapExecutionNo, postDocument, initialAnalysis, region, price, qualityDiscountPercent, paymentMethod, notes)
   const [editForm, setEditForm] = useState({
@@ -984,6 +1064,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     sapCode: true,
     po: true,
     postDocument: true, // Enable POST DOCUMENT in table by default
+    qualityDiscount: true, // Visible to everyone by default
     region: true,
     price: true, // Show price in table by default as requested
     paymentMethod: false,
@@ -1093,6 +1174,93 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       toast.error(isRtl ? 'حدث خطأ أثناء الحفظ السحابي في Firestore' : 'Failed to save details to Firestore');
     } finally {
       setIsSavingRecord(false);
+    }
+  };
+
+  // Handler to save Quality Discount % directly for a single row (Quality & Admin)
+  const handleSaveQuickDiscount = async () => {
+    if (!quickDiscountRecord) return;
+    if (!canEditQualityDiscount) {
+      toast.error(isRtl ? 'عذراً، صلاحية تعديل نسبة الخصم تقتصر على فريق الجودة والأدمن فقط' : 'Permission denied. Quality & Admin only.');
+      return;
+    }
+
+    const num = quickDiscountValue === '' ? 0 : parseFloat(quickDiscountValue);
+    if (isNaN(num) || num < 0 || num > 100) {
+      toast.error(isRtl ? 'يرجى إدخال نسبة خصم صحيحة بين 0 و 100' : 'Please enter a valid percentage (0-100)');
+      return;
+    }
+
+    setIsSavingQuickDiscount(true);
+    try {
+      await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, quickDiscountRecord.id), {
+        id: quickDiscountRecord.id,
+        movementNo: quickDiscountRecord.movementNo || '',
+        qualityDiscountPercent: num,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user?.displayName || user?.username || (isRtl ? 'فريق الجودة' : 'Quality Team')
+      }, { merge: true });
+
+      if (quickDiscountRecord.movementNo) {
+        try {
+          await deleteDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, quickDiscountRecord.movementNo));
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      setData(prev => prev.map(item => item.id === quickDiscountRecord.id ? { ...item, qualityDiscountPercent: num } : item));
+      toast.success(isRtl ? `تم حفظ نسبة الخصم (%${num}) بنجاح للسطر المحدد` : `Discount % (${num}%) saved successfully`);
+      setQuickDiscountRecord(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'فشل حفظ نسبة الخصم' : 'Failed to save discount');
+    } finally {
+      setIsSavingQuickDiscount(false);
+    }
+  };
+
+  // Handler to save POST DOCUMENT directly for a single row (Warehouse & Admin)
+  const handleSaveQuickPostDoc = async () => {
+    if (!quickPostDocRecord) return;
+    if (!canEditPostDocument) {
+      toast.error(isRtl ? 'عذراً، صلاحية إدخال مستند الترحيل تقتصر على فريق المخزن والأدمن فقط' : 'Permission denied. Warehouse & Admin only.');
+      return;
+    }
+
+    const docVal = quickPostDocValue.trim();
+    setIsSavingQuickPostDoc(true);
+    try {
+      await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, quickPostDocRecord.id), {
+        id: quickPostDocRecord.id,
+        movementNo: quickPostDocRecord.movementNo || '',
+        postDocument: docVal,
+        sapExecutionNo: docVal,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user?.displayName || user?.username || (isRtl ? 'فريق المخزن' : 'Warehouse Team')
+      }, { merge: true });
+
+      if (quickPostDocRecord.movementNo) {
+        try {
+          await deleteDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, quickPostDocRecord.movementNo));
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      setData(prev => prev.map(item => item.id === quickPostDocRecord.id ? { 
+        ...item, 
+        postDocument: docVal,
+        sapExecutionNo: docVal 
+      } : item));
+
+      toast.success(isRtl ? `تم حفظ مستند الترحيل (${docVal || '-'}) بنجاح للسطر المحدد` : `Post document saved successfully`);
+      setQuickPostDocRecord(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(isRtl ? 'فشل حفظ مستند الترحيل' : 'Failed to save post document');
+    } finally {
+      setIsSavingQuickPostDoc(false);
     }
   };
 
@@ -1973,6 +2141,11 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       if (sortField === 'postDocument') {
         aVal = a.postDocument || a.sapExecutionNo || '';
         bVal = b.postDocument || b.sapExecutionNo || '';
+      }
+
+      if (sortField === 'qualityDiscountPercent') {
+        aVal = a.qualityDiscountPercent || 0;
+        bVal = b.qualityDiscountPercent || 0;
       }
 
       if (aVal === undefined || aVal === null) return 1;
@@ -3163,12 +3336,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           'رقم التانك': r.tankNo || '-',
           'أمر الشراء PO': r.po || '-',
           'المنطقة / المزرعة': r.region || '-',
-          'التحليل الأولي': r.initialAnalysis || '-'
+          'التحليل الأولي': r.initialAnalysis || '-',
+          'نسبة خصم الجودة %': discountPct > 0 ? `${discountPct}%` : '0%'
         };
 
         if (canViewPrice) {
           row['السعر الأساسي (ج.م/كجم)'] = basePrice > 0 ? basePrice : '-';
-          row['نسبة خصم الجودة %'] = discountPct > 0 ? `${discountPct}%` : '0%';
           row['صافي السعر بعد الخصم (ج.م/كجم)'] = netPrice > 0 ? parseFloat(netPrice.toFixed(2)) : '-';
           row['إجمالي القيمة المستحقة (ج.م)'] = totalValue > 0 ? parseFloat(totalValue.toFixed(2)) : '-';
         }
@@ -3203,12 +3376,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         'أمر الشراء PO': '',
         'رقم تنفيذ الساب': '',
         'المنطقة / المزرعة': '',
-        'التحليل الأولي': ''
+        'التحليل الأولي': '',
+        'نسبة خصم الجودة %': ''
       };
 
       if (canViewPrice) {
         summaryRow['السعر الأساسي (ج.م/كجم)'] = '' as any;
-        summaryRow['نسبة خصم الجودة %'] = '';
         summaryRow['صافي السعر بعد الخصم (ج.م/كجم)'] = '' as any;
         summaryRow['إجمالي القيمة المستحقة (ج.م)'] = grandTotalValue > 0 ? parseFloat(grandTotalValue.toFixed(2)) : ('' as any);
       }
@@ -3246,13 +3419,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         { wch: 15 }, // PO
         { wch: 16 }, // sap exec
         { wch: 22 }, // region
-        { wch: 16 }  // initial analysis
+        { wch: 16 }, // initial analysis
+        { wch: 16 }  // quality discount %
       ];
 
       if (canViewPrice) {
         colWidths.push(
           { wch: 16 }, // base price
-          { wch: 15 }, // quality discount %
           { wch: 18 }, // net price
           { wch: 18 }  // total value
         );
@@ -3363,11 +3536,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         r.location,
         r.sapCode,
         r.po,
-        r.postDocument || r.sapExecutionNo || '-'
+        r.postDocument || r.sapExecutionNo || '-',
+        r.qualityDiscountPercent && r.qualityDiscountPercent > 0 ? `${r.qualityDiscountPercent}%` : '0%'
       ]);
 
       (doc as any).autoTable({
-        head: [['#', 'Date', 'Move No', 'Item Name', 'KG', 'Tons', 'Supplier / Farm', 'Truck', 'Driver', 'Pkg', 'SAP Code', 'PO No', 'POST DOCUMENT']],
+        head: [['#', 'Date', 'Move No', 'Item Name', 'KG', 'Tons', 'Supplier / Farm', 'Truck', 'Driver', 'Pkg', 'SAP Code', 'PO No', 'POST DOCUMENT', 'Disc %']],
         body: tableData,
         startY: 26,
         styles: { fontSize: 7.5, cellPadding: 1.5 },
@@ -3662,51 +3836,48 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               <span>{isRtl ? 'مزامنة وتحديث' : 'Sync Sheet'}</span>
             </button>
 
-            {/* Export Buttons - Restricted to authorized roles */}
-            {canAccessSupplyActions && (
+            {/* Export Excel - Opened for everyone (without prices if not authorized) */}
+            <button
+              onClick={handleExportExcel}
+              disabled={filteredData.length === 0}
+              className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+              title={isRtl ? (canViewPrice ? 'تصدير إكسيل .xlsx' : 'تصدير إكسيل (بدون أسعار)') : (canViewPrice ? 'Export Excel' : 'Export Excel (No Prices)')}
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden sm:inline">
+                {isRtl ? (canViewPrice ? 'تصدير إكسيل' : 'تصدير إكسيل (بدون أسعار)') : (canViewPrice ? 'Excel' : 'Excel (No Prices)')}
+              </span>
+            </button>
+
+            {/* Export PDF - Opened for everyone */}
+            <button
+              onClick={handleExportPDF}
+              disabled={filteredData.length === 0}
+              className="px-3.5 py-2.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+              title={isRtl ? 'طباعة تقرير PDF' : 'Export PDF'}
+            >
+              <FileText className="w-4 h-4 text-red-500" />
+              <span className="hidden sm:inline">{isRtl ? 'تقرير PDF' : 'PDF'}</span>
+            </button>
+
+            {/* Import Excel - Restricted to Admin Only */}
+            {userRoles.includes('Admin') && (
               <>
-                {/* Export Excel */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImportExcel}
+                  accept=".xlsx, .xls, .csv"
+                  className="hidden"
+                />
                 <button
-                  onClick={handleExportExcel}
-                  disabled={filteredData.length === 0}
-                  className="px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-                  title={isRtl ? 'تصدير إكسيل .xlsx' : 'Export Excel'}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-sm"
+                  title={isRtl ? 'استيراد وتحديث البيانات من شيت إكسيل معدل (متاح للادمن فقط)' : 'Import & update data from modified Excel (Admin Only)'}
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="hidden sm:inline">{isRtl ? 'تصدير إكسيل' : 'Excel'}</span>
-                </button>
-
-                {/* Import Excel - Restricted to Admin Only */}
-                {userRoles.includes('Admin') && (
-                  <>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleImportExcel}
-                      accept=".xlsx, .xls, .csv"
-                      className="hidden"
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isImporting}
-                      className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-sm"
-                      title={isRtl ? 'استيراد وتحديث البيانات من شيت إكسيل معدل (متاح للادمن فقط)' : 'Import & update data from modified Excel (Admin Only)'}
-                    >
-                      <Upload className={`w-4 h-4 ${isImporting ? 'animate-bounce' : ''}`} />
-                      <span className="hidden sm:inline">{isRtl ? 'استيراد تعديل الإكسيل' : 'Import Excel'}</span>
-                    </button>
-                  </>
-                )}
-
-                {/* Export PDF */}
-                <button
-                  onClick={handleExportPDF}
-                  disabled={filteredData.length === 0}
-                  className="px-3.5 py-2.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-                  title={isRtl ? 'طباعة تقرير PDF' : 'Export PDF'}
-                >
-                  <FileText className="w-4 h-4 text-red-500" />
-                  <span className="hidden sm:inline">{isRtl ? 'تقرير PDF' : 'PDF'}</span>
+                  <Upload className={`w-4 h-4 ${isImporting ? 'animate-bounce' : ''}`} />
+                  <span className="hidden sm:inline">{isRtl ? 'استيراد تعديل الإكسيل' : 'Import Excel'}</span>
                 </button>
               </>
             )}
@@ -4086,6 +4257,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       sapCode: isRtl ? 'كود ساب' : 'SAP Code',
                       po: isRtl ? 'أمر الشراء (PO)' : 'PO No',
                       postDocument: 'POST DOCUMENT',
+                      qualityDiscount: isRtl ? 'نسبة الخصم (%)' : 'Discount (%)',
                       region: isRtl ? 'المنطقة / المزرعة' : 'Region',
                       price: isRtl ? 'السعر والقيمة (ج.م)' : 'Price & Value',
                       paymentMethod: isRtl ? 'طريقة السداد' : 'Payment Method',
@@ -4455,6 +4627,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                     </th>
                   )}
 
+                  {visibleColumns.qualityDiscount && (
+                    <th 
+                      onClick={() => handleSort('qualityDiscountPercent')}
+                      className={`py-3.5 px-3 cursor-pointer transition-colors ${
+                        sortField === 'qualityDiscountPercent' 
+                          ? 'bg-rose-100/70 dark:bg-rose-950/50 text-rose-900 dark:text-rose-300 font-black' 
+                          : 'hover:bg-zinc-200/60 dark:hover:bg-zinc-700/60'
+                      }`}
+                      title={isRtl ? 'انقر للترتيب حسب نسبة الخصم %' : 'Sort by Discount %'}
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>{isRtl ? 'نسبة الخصم %' : 'Discount %'}</span>
+                        <ArrowUpDown className="w-3 h-3 text-zinc-400" />
+                      </div>
+                    </th>
+                  )}
+
                   {visibleColumns.region && (
                     <th className="py-3.5 px-3">{isRtl ? 'المنطقة / المزرعة' : 'Region'}</th>
                   )}
@@ -4643,26 +4832,56 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
                         {visibleColumns.postDocument && (
                           <td 
-                            className={`py-2.5 px-3 whitespace-nowrap ${canEditFreshSupply ? 'cursor-pointer hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40' : ''} transition-colors`}
+                            className={`py-2.5 px-3 whitespace-nowrap ${canEditPostDocument ? 'cursor-pointer hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40' : ''} transition-colors`}
                             onClick={() => {
-                              if (canEditFreshSupply) {
-                                setSelectedRecord(record);
+                              if (canEditPostDocument) {
+                                setQuickPostDocRecord(record);
+                                setQuickPostDocValue(record.postDocument || record.sapExecutionNo || '');
                               }
                             }}
-                            title={canEditFreshSupply ? (isRtl ? 'انقر لكتابة أو تعديل مستند POST DOCUMENT' : 'Click to write or edit POST DOCUMENT') : undefined}
+                            title={canEditPostDocument ? (isRtl ? 'انقر لكتابة أو تعديل مستند POST DOCUMENT (خاص بالمخزن والأدمن)' : 'Click to write or edit POST DOCUMENT (Warehouse & Admin)') : undefined}
                           >
                             {(record.postDocument || record.sapExecutionNo) ? (
                               <span className="font-mono font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[11px]">
                                 {record.postDocument || record.sapExecutionNo}
                               </span>
                             ) : (
-                              canEditFreshSupply ? (
+                              canEditPostDocument ? (
                                 <span className="inline-flex items-center gap-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 text-[10.5px] font-bold">
                                   <Edit3 className="w-3 h-3" />
                                   <span>{isRtl ? 'كتابة المستند' : 'Add Doc'}</span>
                                 </span>
                               ) : (
                                 <span className="text-zinc-400 text-[11px]">-</span>
+                              )
+                            )}
+                          </td>
+                        )}
+
+                        {visibleColumns.qualityDiscount && (
+                          <td 
+                            className={`py-2.5 px-3 whitespace-nowrap ${canEditQualityDiscount ? 'cursor-pointer hover:bg-rose-50/70 dark:hover:bg-rose-950/40' : ''} transition-colors`}
+                            onClick={() => {
+                              if (canEditQualityDiscount) {
+                                setQuickDiscountRecord(record);
+                                setQuickDiscountValue(record.qualityDiscountPercent !== undefined && record.qualityDiscountPercent !== null ? String(record.qualityDiscountPercent) : '');
+                              }
+                            }}
+                            title={canEditQualityDiscount ? (isRtl ? 'انقر لتعديل نسبة الخصم (خاص بالجودة والأدمن)' : 'Click to edit discount % (Quality & Admin)') : undefined}
+                          >
+                            {record.qualityDiscountPercent && record.qualityDiscountPercent > 0 ? (
+                              <span className="inline-flex items-center gap-1 font-mono font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-800 text-[11px]">
+                                <Percent className="w-2.5 h-2.5" />
+                                {record.qualityDiscountPercent}%
+                              </span>
+                            ) : (
+                              canEditQualityDiscount ? (
+                                <span className="inline-flex items-center gap-1 text-rose-500 hover:text-rose-700 dark:text-rose-400 text-[10.5px] font-bold">
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>{isRtl ? 'إدخال الخصم' : 'Add %'}</span>
+                                </span>
+                              ) : (
+                                <span className="text-zinc-400 text-[11px]">0%</span>
                               )
                             )}
                           </td>
@@ -6752,6 +6971,231 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Quick Quality Discount Modal - Restricted to Quality & Admin */}
+      {quickDiscountRecord && canEditQualityDiscount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-md w-full border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-rose-600 to-amber-600 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Percent className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm">
+                    {isRtl ? 'تعديل نسبة خصم الجودة (%)' : 'Edit Quality Discount (%)'}
+                  </h3>
+                  <p className="text-[11px] text-rose-100 font-medium">
+                    {isRtl ? 'صلاحية خاصة بفريق الجودة ومدير النظام' : 'Quality & Admin Privileged Field'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickDiscountRecord(null)}
+                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={(e) => { e.preventDefault(); handleSaveQuickDiscount(); }} className="p-5 space-y-4">
+              {/* Record Summary Info */}
+              <div className="bg-zinc-50 dark:bg-zinc-800/60 p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'رقم الحركة:' : 'Move No:'}</span>
+                  <span className="font-black font-mono text-zinc-900 dark:text-zinc-100">{quickDiscountRecord.movementNo || '-'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'الصنف:' : 'Item:'}</span>
+                  <span className="font-bold text-zinc-800 dark:text-zinc-200">{quickDiscountRecord.itemName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'الكمية:' : 'Quantity:'}</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    {quickDiscountRecord.quantityKg.toLocaleString()} {isRtl ? 'كجم' : 'kg'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'المورد / مركز التكلفة:' : 'Supplier:'}</span>
+                  <span className="font-bold text-zinc-700 dark:text-zinc-300">{quickDiscountRecord.costCenter || '-'}</span>
+                </div>
+              </div>
+
+              {/* Quick percentage chips */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-600 dark:text-zinc-400 mb-1.5">
+                  {isRtl ? 'نسب سريعة:' : 'Quick Presets:'}
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[0, 1, 2, 3, 5, 7.5, 10, 15, 20].map((preset) => (
+                    <button
+                      type="button"
+                      key={preset}
+                      onClick={() => setQuickDiscountValue(String(preset))}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        parseFloat(quickDiscountValue) === preset
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
+                      }`}
+                    >
+                      {preset}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Input */}
+              <div>
+                <label className="block text-xs font-black text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  {isRtl ? 'نسبة الخصم المعتمدة من الجودة (%):' : 'Approved Quality Discount (%):'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="100"
+                    autoFocus
+                    value={quickDiscountValue}
+                    onChange={(e) => setQuickDiscountValue(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-lg font-black font-mono focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all text-left"
+                    dir="ltr"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-black text-zinc-400">
+                    %
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  {isRtl ? 'أدخل النسبة المئوية للخصم (من 0 إلى 100). اتركها 0 إذا لم يكن هناك خصم.' : 'Enter discount percentage between 0 and 100.'}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setQuickDiscountRecord(null)}
+                  className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingQuickDiscount}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-rose-600/20 disabled:opacity-50"
+                >
+                  {isSavingQuickDiscount ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isRtl ? 'حفظ الخصم' : 'Save Discount'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick POST DOCUMENT Modal - Restricted to Warehouse & Admin */}
+      {quickPostDocRecord && canEditPostDocument && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-md w-full border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-700 to-blue-600 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <PackageCheck className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm">
+                    {isRtl ? 'إدخال مستند الترحيل (POST DOCUMENT)' : 'Enter POST DOCUMENT'}
+                  </h3>
+                  <p className="text-[11px] text-indigo-100 font-medium">
+                    {isRtl ? 'صلاحية خاصة بفريق المخازن ومدير النظام' : 'Warehouse & Admin Privileged Field'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickPostDocRecord(null)}
+                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={(e) => { e.preventDefault(); handleSaveQuickPostDoc(); }} className="p-5 space-y-4">
+              {/* Record Summary Info */}
+              <div className="bg-zinc-50 dark:bg-zinc-800/60 p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'رقم الحركة:' : 'Move No:'}</span>
+                  <span className="font-black font-mono text-zinc-900 dark:text-zinc-100">{quickPostDocRecord.movementNo || '-'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'الصنف:' : 'Item:'}</span>
+                  <span className="font-bold text-zinc-800 dark:text-zinc-200">{quickPostDocRecord.itemName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'المخزن:' : 'Store:'}</span>
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400">{quickPostDocRecord.store || 'GPS'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">{isRtl ? 'المورد / مركز التكلفة:' : 'Supplier:'}</span>
+                  <span className="font-bold text-zinc-700 dark:text-zinc-300">{quickPostDocRecord.costCenter || '-'}</span>
+                </div>
+              </div>
+
+              {/* Input */}
+              <div>
+                <label className="block text-xs font-black text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  {isRtl ? 'رقم مستند الترحيل (POST DOCUMENT):' : 'POST DOCUMENT Number:'}
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={quickPostDocValue}
+                  onChange={(e) => setQuickPostDocValue(e.target.value)}
+                  placeholder={isRtl ? 'مثال: 5000492811' : 'e.g. 5000492811'}
+                  className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-base font-black font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                  dir="ltr"
+                />
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  {isRtl ? 'يتم حفظ هذا المستند الخاص بحركة استلام المخزن وتحديثه في السحابة فوراً للسطر المحدد.' : 'Saves post document for this specific warehouse movement record.'}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setQuickPostDocRecord(null)}
+                  className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingQuickPostDoc}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                >
+                  {isSavingQuickPostDoc ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isRtl ? 'حفظ المستند' : 'Save Document'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
