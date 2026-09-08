@@ -99,7 +99,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { collection, doc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
 import { FreshItemsDashboard } from './FreshItemsDashboard';
@@ -872,7 +872,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     return userRoles.some(r => targetRoles.includes(r));
   }, [user, userRoles]);
 
-  // Restrict Prices to only: مسئول التسجيل, مسئول الاعتماد, مسئول التنفيذ, Admin
+  // Restrict Prices to only: مسئول التسجيل, مسئول الاعتماد, مسئول التنفيذ, مسئول التسعير, Admin
   const canViewPrice = useMemo(() => {
     if (!user) return false;
     const allowed = [
@@ -880,6 +880,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       'Admin',
       'ADMIN',
       'مدير النظام',
+      'مدير',
       'مسئول التسجيل',
       'مسؤول التسجيل',
       'Registration Officer',
@@ -888,12 +889,41 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       'Approval Officer',
       'مسئول التنفيذ',
       'مسؤول التنفيذ',
-      'Execution Officer'
+      'Execution Officer',
+      'مسئول التسعير',
+      'مسؤول التسعير',
+      'Pricing Officer'
     ];
     return userRoles.some(r => {
       if (!r) return false;
       const clean = String(r).trim();
       return allowed.some(a => a.toLowerCase() === clean.toLowerCase());
+    });
+  }, [user, userRoles]);
+
+  // Permission for editing fresh supply records:
+  // Restricted strictly to: admin, مسئول التنفيذ, مسئول الاعتماد, مسئول التسعير
+  const canEditFreshSupply = useMemo(() => {
+    if (!user) return false;
+    const allowedEditRoles = [
+      'admin',
+      'administrator',
+      'مدير النظام',
+      'مدير',
+      'مسئول التنفيذ',
+      'مسؤول التنفيذ',
+      'execution officer',
+      'مسئول الاعتماد',
+      'مسؤول الاعتماد',
+      'approval officer',
+      'مسئول التسعير',
+      'مسؤول التسعير',
+      'pricing officer'
+    ];
+    return userRoles.some(r => {
+      if (!r) return false;
+      const clean = String(r).trim().toLowerCase();
+      return allowedEditRoles.some(a => a.toLowerCase() === clean);
     });
   }, [user, userRoles]);
 
@@ -991,6 +1021,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   // Handler to save/update record details purely in Cloud Firestore (PO, Initial Analysis, Region, Price, Quality Discount, Payment Method)
   const handleSaveRecordDetails = async () => {
     if (!selectedRecord) return;
+    if (!canEditFreshSupply) {
+      toast.error(isRtl ? 'عذراً، صلاحية التعديل تقتصر فقط على: Admin، مسئول التنفيذ، مسئول الاعتماد، مسئول التسعير' : 'Permission denied. Editing is restricted to Admin, Execution Officer, Approval Officer, and Pricing Officer.');
+      return;
+    }
     setIsSavingRecord(true);
     try {
       const overrideKey = selectedRecord.id;
@@ -1023,35 +1057,26 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         ...updatedData
       };
 
-      // 1. Persist directly to Cloud Firestore
+      // 1. Persist directly to Cloud Firestore ONLY for this specific row's unique ID
       await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, overrideKey), {
         id: overrideKey,
         movementNo: selectedRecord.movementNo || '',
         ...updatedData
       }, { merge: true });
 
+      // Clean up legacy movement-wide override document if one existed so sibling rows remain untouched
       if (selectedRecord.movementNo) {
-        await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, selectedRecord.movementNo), {
-          id: selectedRecord.movementNo,
-          movementNo: selectedRecord.movementNo,
-          ...updatedData
-        }, { merge: true });
+        try {
+          await deleteDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, selectedRecord.movementNo));
+        } catch (delErr) {
+          // ignore if document does not exist
+        }
       }
 
-      // 2. Update in-memory state for this record and any rows sharing the same movementNo
+      // 2. Update in-memory state ONLY for this exact record (single row edit, never affecting other rows of the same movement)
       setData(prev => prev.map(item => {
-        const isMatch = item.id === selectedRecord.id;
-        const isSameMove = Boolean(selectedRecord.movementNo && item.movementNo === selectedRecord.movementNo);
-        if (isMatch) {
+        if (item.id === selectedRecord.id) {
           return { ...item, ...updatedData };
-        }
-        if (isSameMove && (updatedData.po !== undefined || updatedData.postDocument !== undefined || updatedData.sapExecutionNo !== undefined)) {
-          return {
-            ...item,
-            ...(updatedData.po !== undefined ? { po: updatedData.po } : {}),
-            ...(updatedData.postDocument !== undefined ? { postDocument: updatedData.postDocument } : {}),
-            ...(updatedData.sapExecutionNo !== undefined ? { sapExecutionNo: updatedData.sapExecutionNo } : {})
-          };
         }
         return item;
       }));
@@ -1073,6 +1098,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
   const handleBulkSave = async () => {
     if (selectedRowIds.length === 0) return;
+    if (!canEditFreshSupply) {
+      toast.error(isRtl ? 'عذراً، صلاحية التعديل تقتصر فقط على: Admin، مسئول التنفيذ، مسئول الاعتماد، مسئول التسعير' : 'Permission denied. Editing is restricted to Admin, Execution Officer, Approval Officer, and Pricing Officer.');
+      return;
+    }
     setIsSavingBulk(true);
     try {
       const updatedData: any = {};
@@ -1133,35 +1162,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           }, { merge: true });
 
           if (record.movementNo) {
-            batch.set(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, record.movementNo), {
-              id: record.movementNo,
-              movementNo: record.movementNo,
-              ...updatedData
-            }, { merge: true });
+            try {
+              batch.delete(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, record.movementNo));
+            } catch (e) {
+              // ignore
+            }
           }
         });
         await batch.commit();
       }
 
-      const affectedMovements = new Set(
-        selectedRowIds
-          .map(id => data.find(r => r.id === id)?.movementNo)
-          .filter(Boolean) as string[]
-      );
-
+      // Update in-memory state ONLY for the selected rows (never affecting unselected sibling rows)
       setData(prev => prev.map(item => {
         if (selectedRowIds.includes(item.id)) {
           return {
             ...item,
             ...updatedData
-          };
-        }
-        if (item.movementNo && affectedMovements.has(item.movementNo) && (updatedData.po !== undefined || updatedData.postDocument !== undefined || updatedData.sapExecutionNo !== undefined)) {
-          return {
-            ...item,
-            ...(updatedData.po !== undefined ? { po: updatedData.po } : {}),
-            ...(updatedData.postDocument !== undefined ? { postDocument: updatedData.postDocument } : {}),
-            ...(updatedData.sapExecutionNo !== undefined ? { sapExecutionNo: updatedData.sapExecutionNo } : {})
           };
         }
         return item;
@@ -1352,13 +1368,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const stableId = `${baseStableId}_${idx}`;
       const fallbackOldId = `fresh-${idx}-${rawMoveNo || Math.random().toString(36).substr(2, 9)}`;
 
-      // Check overrides by stableId first, then baseStableId, then movementNo, then legacy fallback IDs
+      // Check overrides strictly by row-specific unique IDs (stableId, fallbackOldId, fresh-idx)
+      // Never use movementNo alone to prevent edits on one row from bleeding into sibling rows of the same movement
       const override = overridesMap[stableId] 
-        || overridesMap[baseStableId]
-        || (rawMoveNo && overridesMap[`${rawMoveNo}_${cleanItem}`])
-        || (rawMoveNo && overridesMap[rawMoveNo]) 
         || overridesMap[fallbackOldId] 
         || overridesMap[`fresh-${idx}`] 
+        || overridesMap[baseStableId]
         || {};
 
       const rawPo = getRowValueFlexible(
@@ -3060,9 +3075,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           });
 
           updatedDataMap.set(overrideKey, updatedData);
-          if (matchedRecord.movementNo) {
-            updatedDataMap.set(matchedRecord.movementNo, updatedData);
-          }
 
           updatedCount++;
         }
@@ -3079,20 +3091,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             movementNo: item.movementNo,
             ...item.data
           }, { merge: true });
-
-          if (item.movementNo) {
-            batch.set(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, item.movementNo), {
-              id: item.movementNo,
-              movementNo: item.movementNo,
-              ...item.data
-            }, { merge: true });
-          }
         });
         await batch.commit();
       }
 
       setData(prev => prev.map(item => {
-        const ov = updatedDataMap.get(item.id) || (item.movementNo ? updatedDataMap.get(item.movementNo) : undefined);
+        const ov = updatedDataMap.get(item.id);
         if (ov) {
           return {
             ...item,
@@ -4296,13 +4300,15 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsBulkEditModalOpen(true)}
-                  className="px-4 py-2 bg-white text-purple-900 hover:bg-purple-50 font-black text-xs rounded-xl shadow transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  <span>{isRtl ? 'تعديل جماعي (PO / POST DOCUMENT)' : 'Bulk Edit (PO / POST DOC)'}</span>
-                </button>
+                {canEditFreshSupply && (
+                  <button
+                    onClick={() => setIsBulkEditModalOpen(true)}
+                    className="px-4 py-2 bg-white text-purple-900 hover:bg-purple-50 font-black text-xs rounded-xl shadow transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>{isRtl ? 'تعديل جماعي (PO / POST DOCUMENT)' : 'Bulk Edit (PO / POST DOC)'}</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setSelectedRowIds([])}
                   className="px-3 py-2 bg-purple-800 hover:bg-purple-700 text-purple-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
@@ -4637,19 +4643,27 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
                         {visibleColumns.postDocument && (
                           <td 
-                            className="py-2.5 px-3 whitespace-nowrap cursor-pointer hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 transition-colors"
-                            onClick={() => setSelectedRecord(record)}
-                            title={isRtl ? 'انقر لكتابة أو تعديل مستند POST DOCUMENT' : 'Click to write or edit POST DOCUMENT'}
+                            className={`py-2.5 px-3 whitespace-nowrap ${canEditFreshSupply ? 'cursor-pointer hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40' : ''} transition-colors`}
+                            onClick={() => {
+                              if (canEditFreshSupply) {
+                                setSelectedRecord(record);
+                              }
+                            }}
+                            title={canEditFreshSupply ? (isRtl ? 'انقر لكتابة أو تعديل مستند POST DOCUMENT' : 'Click to write or edit POST DOCUMENT') : undefined}
                           >
                             {(record.postDocument || record.sapExecutionNo) ? (
                               <span className="font-mono font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-[11px]">
                                 {record.postDocument || record.sapExecutionNo}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 text-[10.5px] font-bold">
-                                <Edit3 className="w-3 h-3" />
-                                <span>{isRtl ? 'كتابة المستند' : 'Add Doc'}</span>
-                              </span>
+                              canEditFreshSupply ? (
+                                <span className="inline-flex items-center gap-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 text-[10.5px] font-bold">
+                                  <Edit3 className="w-3 h-3" />
+                                  <span>{isRtl ? 'كتابة المستند' : 'Add Doc'}</span>
+                                </span>
+                              ) : (
+                                <span className="text-zinc-400 text-[11px]">-</span>
+                              )
                             )}
                           </td>
                         )}
@@ -4767,13 +4781,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         {visibleColumns.actions && (
                           <td className="py-3 px-3 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => setSelectedRecord(record)}
-                                className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
-                                title={isRtl ? 'عرض وتعديل بيانات التوريد وتنفيذ الساب' : 'View & Edit Supply / SAP'}
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
+                              {canEditFreshSupply ? (
+                                <button
+                                  onClick={() => setSelectedRecord(record)}
+                                  className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors cursor-pointer"
+                                  title={isRtl ? 'تعديل بيانات التوريد وتنفيذ الساب' : 'Edit Supply / SAP'}
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => setSelectedRecord(record)}
+                                  className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 rounded-lg transition-colors cursor-pointer"
+                                  title={isRtl ? 'عرض تفاصيل الحركة' : 'View Details'}
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleCopyRecord(record)}
                                 className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 rounded-lg transition-colors cursor-pointer"
@@ -5447,9 +5471,21 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   <Sprout className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base">
-                    {isRtl ? 'بيانات إذن استلام ومعاينة الفريش' : 'Fresh Delivery & Inspection Record'}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-base">
+                      {isRtl ? 'بيانات إذن استلام ومعاينة الفريش' : 'Fresh Delivery & Inspection Record'}
+                    </h3>
+                    {canEditFreshSupply ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/40 text-emerald-100 border border-emerald-400/40 text-[10px] font-bold">
+                        {isRtl ? 'صلاحية التعديل مفعلة' : 'Editable'}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/40 text-amber-100 border border-amber-400/40 text-[10px] font-bold flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" />
+                        {isRtl ? 'للمعاينة فقط' : 'Read-Only'}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-emerald-100 font-mono">
                     {isRtl ? `حركة رقم: ${selectedRecord.movementNo} | تاريخ: ${selectedRecord.date}` : `Move #${selectedRecord.movementNo} | ${selectedRecord.date}`}
                   </p>
@@ -5507,6 +5543,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 </div>
 
                 <form onSubmit={(e) => { e.preventDefault(); handleSaveRecordDetails(); }} className="space-y-6">
+                  <fieldset disabled={!canEditFreshSupply} className="space-y-6">
                     
                     {/* SECTION 1: Documents & SAP Execution */}
                     <div className="p-5 bg-zinc-50 dark:bg-zinc-850/60 rounded-3xl border border-zinc-200 dark:border-zinc-800 space-y-4">
@@ -5976,7 +6013,10 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                       />
                     </div>
 
-                    {/* Save Button */}
+                  </fieldset>
+
+                  {/* Save Button or Read-Only Mode Notice */}
+                  {canEditFreshSupply ? (
                     <div className="pt-2 flex items-center justify-end gap-3">
                       <button
                         type="button"
@@ -5998,8 +6038,29 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                         <span>{isRtl ? 'حفظ البيانات والمزامنة' : 'Save Details'}</span>
                       </button>
                     </div>
+                  ) : (
+                    <div className="pt-2">
+                      <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold text-xs">
+                          <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>
+                            {isRtl 
+                              ? 'وضع المعاينة فقط: زر وحفظ التعديلات يقتصر حصرياً على: Admin، مسئول التنفيذ، مسئول الاعتماد، مسئول التسعير'
+                              : 'Read-only mode: Editing is restricted to Admin, Execution Officer, Approval Officer, and Pricing Officer'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRecord(null)}
+                          className="px-4 py-2 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 text-zinc-800 dark:text-zinc-200 font-bold rounded-xl text-xs cursor-pointer"
+                        >
+                          {isRtl ? 'إغلاق' : 'Close'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                  </form>
+                </form>
                 </div>
 
             </div>
@@ -6117,7 +6178,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       </AnimatePresence>
 
       {/* Bulk Edit Modal - Designed with the exact same display style and cards as the Edit Modal */}
-      {isBulkEditModalOpen && (
+      {isBulkEditModalOpen && canEditFreshSupply && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white dark:bg-zinc-900 rounded-3xl max-w-3xl w-full border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             

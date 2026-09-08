@@ -165,7 +165,8 @@ export const translations = {
     purchaseOrders: "أوامر التوريد",
     registrationOfficer: "مسئول التسجيل",
     approvalOfficer: "مسئول الاعتماد",
-    executionOfficer: "مسئول التنفيذ"
+    executionOfficer: "مسئول التنفيذ",
+    pricingOfficer: "مسئول التسعير"
   },
   en: {
     warehouseManager: "Warehouse Manager",
@@ -333,6 +334,7 @@ export const translations = {
     purchaseOrders: "Purchase Orders",
     registrationOfficer: "Registration Officer",
     approvalOfficer: "Approval Officer",
-    executionOfficer: "Execution Officer"
+    executionOfficer: "Execution Officer",
+    pricingOfficer: "Pricing Officer"
   }
 };

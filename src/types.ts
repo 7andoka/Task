@@ -17,9 +17,11 @@ export type UserRole =
   | 'Registration Officer'
   | 'Approval Officer'
   | 'Execution Officer'
+  | 'Pricing Officer'
   | 'مسئول التسجيل'
   | 'مسئول الاعتماد'
-  | 'مسئول التنفيذ';
+  | 'مسئول التنفيذ'
+  | 'مسئول التسعير';
 
 export type SupplyStatus = 'Security Entry' | 'Quality Inspection' | 'Warehouse Unloading' | 'Security Exit' | 'Completed';
 export type QualityDecision = 'Accepted' | 'Rejected' | 'Under Inspection' | 'Not Unloaded';
