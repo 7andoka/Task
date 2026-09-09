@@ -409,7 +409,7 @@ const CHART_COLORS = [
 
 interface MultiSelectProps {
   label: string;
-  options: { id: string; label: string }[];
+  options: { id: string; label: string; count?: number }[];
   selected: string[];
   onChange: (selected: string[]) => void;
   icon: React.ReactNode;
@@ -634,6 +634,12 @@ function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSe
                         <span className="truncate">{option.label}</span>
                       </div>
 
+                      {option.count !== undefined && (
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-900/50 group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors shrink-0 mx-1">
+                          {option.count}
+                        </span>
+                      )}
+
                       <span className="text-[10px] text-zinc-400 group-hover:text-purple-600 opacity-0 group-hover:opacity-100 font-bold transition-opacity shrink-0">
                         {isRtl ? 'تحديد ↵' : 'Select ↵'}
                       </span>
@@ -722,6 +728,61 @@ export const formatUnifiedDate = (d: Date | null | undefined): string => {
   const month = pad(d.getMonth() + 1);
   const year = d.getFullYear();
   return `${day}/${month}/${year}`;
+};
+
+// Helper to check whether a record matches the active DateRangeFilter value
+export const checkRecordMatchesDate = (record: FreshSupplyRecord, filter: DateFilterValue): boolean => {
+  if (filter.mode === 'all') return true;
+
+  const recordDate = record.parsedDate || parseFlexibleDate(record.date) || (record.originalDate ? parseFlexibleDate(record.originalDate) : null);
+
+  if (filter.mode === 'single') {
+    if (!filter.singleDate) return true;
+    if (record.date === filter.singleDate || record.originalDate === filter.singleDate) {
+      return true;
+    }
+    const singleD = parseFlexibleDate(filter.singleDate) || new Date(filter.singleDate);
+    if (recordDate && !isNaN(singleD.getTime())) {
+      return (
+        recordDate.getFullYear() === singleD.getFullYear() &&
+        recordDate.getMonth() === singleD.getMonth() &&
+        recordDate.getDate() === singleD.getDate()
+      );
+    }
+    return false;
+  }
+
+  let startD: Date | null = null;
+  let endD: Date | null = null;
+
+  if (filter.mode === 'range') {
+    if (filter.startDate) {
+      startD = parseFlexibleDate(filter.startDate) || new Date(filter.startDate);
+      if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
+    }
+    if (filter.endDate) {
+      endD = parseFlexibleDate(filter.endDate) || new Date(filter.endDate);
+      if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
+    }
+  } else if (filter.mode === 'preset' && filter.presetKey) {
+    const preset = getPresetDates(filter.presetKey);
+    if (preset.startDate) {
+      startD = parseFlexibleDate(preset.startDate) || new Date(preset.startDate);
+      if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
+    }
+    if (preset.endDate) {
+      endD = parseFlexibleDate(preset.endDate) || new Date(preset.endDate);
+      if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
+    }
+  }
+
+  if (startD || endD) {
+    if (!recordDate) return false;
+    if (startD && recordDate < startD) return false;
+    if (endD && recordDate > endD) return false;
+  }
+
+  return true;
 };
 
 export default function FreshSupply({ lang, user }: FreshSupplyProps) {
@@ -1931,6 +1992,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const filterOptions = useMemo(() => {
     const dependentFiltered = (excludeKey: string) => {
       return data.filter(record => {
+        // Main Category Filter
         if (excludeKey !== 'category' && mainCategoryFilter !== 'ALL') {
           const v = detectFreshVariety(record.itemName);
           const { isOlive, isPepper, isOther } = classifyItemCategory(record.itemName, v);
@@ -1938,6 +2000,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           if (mainCategoryFilter === 'PEPPER' && !isPepper) return false;
           if (mainCategoryFilter === 'OTHER' && !isOther) return false;
         }
+
+        // Analysis Filter
+        if (excludeKey !== 'analysis' && analysisFilter !== 'ALL') {
+          const analysis = (record.initialAnalysis || '').trim();
+          if (analysisFilter === 'PESTICIDE_FREE' && !analysis.includes('خالي مبيدات')) return false;
+          if (analysisFilter === 'PESTICIDES' && (!analysis.includes('مبيدات') || analysis.includes('خالي'))) return false;
+          if (analysisFilter === 'RANDOM' && !analysis.includes('عشوائي')) return false;
+          if (analysisFilter === 'NONE' && analysis !== '') return false;
+        }
+
+        // Multi-Select Variety Filter
+        if (excludeKey !== 'variety' && selectedVarieties.length > 0) {
+          const v = detectFreshVariety(record.itemName);
+          if (!selectedVarieties.includes(v)) return false;
+        }
+
+        // Item Filter
         if (excludeKey !== 'item' && selectedItems.length > 0) {
           const normSelectedItems = selectedItems.map(i => normalizeArabicSearch(i).trim()).filter(Boolean);
           const normItem = normalizeArabicSearch(record.itemName).trim();
@@ -1947,6 +2026,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             (normOrigItem !== '' && normSelectedItems.includes(normOrigItem));
           if (!isItemMatch) return false;
         }
+
+        // Supplier Filter
         if (excludeKey !== 'supplier' && selectedSuppliers.length > 0) {
           const normSelected = selectedSuppliers.map(s => normalizeArabicSearch(s).trim()).filter(Boolean);
           const normCostCenter = normalizeArabicSearch(record.costCenter).trim();
@@ -1956,13 +2037,24 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             (normOrigCostCenter !== '' && normSelected.includes(normOrigCostCenter));
           if (!isMatch) return false;
         }
+
+        // Store Filter
         if (excludeKey !== 'store' && selectedStores.length > 0 && !selectedStores.includes(record.store)) {
           return false;
         }
+
+        // Location Filter
         if (excludeKey !== 'location' && selectedLocations.length > 0 && !selectedLocations.includes(record.location)) {
           return false;
         }
-        if (poFilter !== 'ALL') {
+
+        // SMART DATE DEPENDENCY (Restricts items, suppliers, stores by chosen day or period)
+        if (excludeKey !== 'date' && dateFilter.mode !== 'all') {
+          if (!checkRecordMatchesDate(record, dateFilter)) return false;
+        }
+
+        // PO Filter
+        if (excludeKey !== 'po' && poFilter !== 'ALL') {
           const poVal = record.po !== undefined && record.po !== null ? String(record.po).trim() : '';
           const hasPo = poVal !== '' && 
                         poVal !== '-' && 
@@ -1975,7 +2067,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           if (poFilter === 'EXISTS' && !hasPo) return false;
           if (poFilter === 'EMPTY' && hasPo) return false;
         }
-        if (sapFilter !== 'ALL') {
+
+        // SAP Filter
+        if (excludeKey !== 'sap' && sapFilter !== 'ALL') {
           const rawSap = (record.postDocument || record.sapExecutionNo);
           const sapVal = rawSap !== undefined && rawSap !== null ? String(rawSap).trim() : '';
           const hasSap = sapVal !== '' && 
@@ -1989,39 +2083,64 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           if (sapFilter === 'EXISTS' && !hasSap) return false;
           if (sapFilter === 'EMPTY' && hasSap) return false;
         }
+
+        // Pricing Status Filter
+        if (excludeKey !== 'pricingStatus' && canViewPrice && pricingStatusFilter !== 'ALL') {
+          if (pricingStatusFilter === 'APP_PRICED') {
+            if (!record.price || record.price <= 0) return false;
+          } else if (pricingStatusFilter === 'PENDING_PRICING') {
+            if (record.price !== undefined && record.price > 0) return false;
+          }
+        }
+
         return true;
       });
     };
 
-    const itemsSet = new Set<string>();
+    // Calculate count and options for items
+    const itemCounts = new Map<string, number>();
     const varietiesSet = new Set<string>();
     dependentFiltered('item').forEach(r => {
       if (r.itemName) {
-        itemsSet.add(r.itemName);
+        itemCounts.set(r.itemName, (itemCounts.get(r.itemName) || 0) + 1);
         varietiesSet.add(detectFreshVariety(r.itemName));
       }
     });
 
-    const suppliersSet = new Set<string>();
+    // Calculate count and options for suppliers
+    const supplierCounts = new Map<string, number>();
     dependentFiltered('supplier').forEach(r => {
-      if (r.costCenter) suppliersSet.add(r.costCenter);
+      if (r.costCenter) {
+        supplierCounts.set(r.costCenter, (supplierCounts.get(r.costCenter) || 0) + 1);
+      }
     });
 
-    const storesSet = new Set<string>();
+    // Calculate count and options for stores
+    const storeCounts = new Map<string, number>();
     dependentFiltered('store').forEach(r => {
-      if (r.store) storesSet.add(r.store);
+      if (r.store) {
+        storeCounts.set(r.store, (storeCounts.get(r.store) || 0) + 1);
+      }
     });
 
-    const locationsSet = new Set<string>();
+    // Calculate count and options for locations
+    const locationCounts = new Map<string, number>();
     dependentFiltered('location').forEach(r => {
-      if (r.location) locationsSet.add(r.location);
+      if (r.location) {
+        locationCounts.set(r.location, (locationCounts.get(r.location) || 0) + 1);
+      }
     });
 
-    const datesSet = new Set<string>();
-    data.forEach(r => { if (r.date) datesSet.add(r.date); });
+    // Calculate available dates matching all other active filters (smart cascading dates)
+    const dateCounts = new Map<string, number>();
+    dependentFiltered('date').forEach(r => {
+      if (r.date) {
+        dateCounts.set(r.date, (dateCounts.get(r.date) || 0) + 1);
+      }
+    });
 
     // Sort unique dates descending (newest first)
-    const sortedUniqueDates = Array.from(datesSet).sort((a, b) => {
+    const sortedUniqueDates = Array.from(dateCounts.keys()).sort((a, b) => {
       const da = parseFlexibleDate(a);
       const db = parseFlexibleDate(b);
       const timeA = da ? da.getTime() : 0;
@@ -2030,14 +2149,68 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     });
 
     return {
-      items: Array.from(itemsSet).sort(),
+      items: Array.from(itemCounts.keys())
+        .sort((a, b) => a.localeCompare(b, isRtl ? 'ar' : 'en'))
+        .map(i => ({ id: i, label: i, count: itemCounts.get(i) })),
       varieties: Array.from(varietiesSet).map(v => ({ id: v, label: getFreshVarietyName(v, isRtl) })),
-      suppliers: Array.from(suppliersSet).sort(),
-      stores: Array.from(storesSet).sort(),
-      locations: Array.from(locationsSet).sort(),
+      suppliers: Array.from(supplierCounts.keys())
+        .sort((a, b) => a.localeCompare(b, isRtl ? 'ar' : 'en'))
+        .map(s => ({ id: s, label: s, count: supplierCounts.get(s) })),
+      stores: Array.from(storeCounts.keys())
+        .sort((a, b) => a.localeCompare(b, isRtl ? 'ar' : 'en'))
+        .map(st => ({ id: st, label: st, count: storeCounts.get(st) })),
+      locations: Array.from(locationCounts.keys())
+        .sort((a, b) => a.localeCompare(b, isRtl ? 'ar' : 'en'))
+        .map(l => ({ id: l, label: l, count: locationCounts.get(l) })),
       dates: sortedUniqueDates
     };
-  }, [data, mainCategoryFilter, selectedItems, selectedSuppliers, selectedStores, selectedLocations, poFilter, sapFilter, isRtl]);
+  }, [
+    data,
+    mainCategoryFilter,
+    analysisFilter,
+    selectedVarieties,
+    selectedItems,
+    selectedSuppliers,
+    selectedStores,
+    selectedLocations,
+    dateFilter,
+    poFilter,
+    sapFilter,
+    pricingStatusFilter,
+    canViewPrice,
+    isRtl
+  ]);
+
+  // Auto-prune stale selections when other filters (e.g. date) narrow down available options
+  useEffect(() => {
+    if (selectedSuppliers.length > 0 && data.length > 0 && filterOptions.suppliers.length > 0) {
+      const validSet = new Set(filterOptions.suppliers.map(s => s.id));
+      const pruned = selectedSuppliers.filter(s => validSet.has(s));
+      if (pruned.length !== selectedSuppliers.length) {
+        setSelectedSuppliers(pruned);
+      }
+    }
+  }, [filterOptions.suppliers, data.length]);
+
+  useEffect(() => {
+    if (selectedItems.length > 0 && data.length > 0 && filterOptions.items.length > 0) {
+      const validSet = new Set(filterOptions.items.map(i => i.id));
+      const pruned = selectedItems.filter(i => validSet.has(i));
+      if (pruned.length !== selectedItems.length) {
+        setSelectedItems(pruned);
+      }
+    }
+  }, [filterOptions.items, data.length]);
+
+  useEffect(() => {
+    if (selectedStores.length > 0 && data.length > 0 && filterOptions.stores.length > 0) {
+      const validSet = new Set(filterOptions.stores.map(st => st.id));
+      const pruned = selectedStores.filter(st => validSet.has(st));
+      if (pruned.length !== selectedStores.length) {
+        setSelectedStores(pruned);
+      }
+    }
+  }, [filterOptions.stores, data.length]);
 
   // Filtered & Sorted Records
   const filteredData = useMemo(() => {
@@ -2131,56 +2304,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         if (!selectedVarieties.includes(v)) return false;
       }
 
-      // 10. Date Filter
+      // 10. Date Filter (Unified Smart Check)
       if (dateFilter.mode !== 'all') {
-        if (dateFilter.mode === 'single' && dateFilter.singleDate) {
-          let matchesSingle = false;
-          if (record.date === dateFilter.singleDate || record.originalDate === dateFilter.singleDate) {
-            matchesSingle = true;
-          } else {
-            const singleD = parseFlexibleDate(dateFilter.singleDate) || new Date(dateFilter.singleDate);
-            if (record.parsedDate && !isNaN(singleD.getTime())) {
-              if (
-                record.parsedDate.getFullYear() === singleD.getFullYear() &&
-                record.parsedDate.getMonth() === singleD.getMonth() &&
-                record.parsedDate.getDate() === singleD.getDate()
-              ) {
-                matchesSingle = true;
-              }
-            }
-          }
-          if (!matchesSingle) return false;
-        } else {
-          let startD: Date | null = null;
-          let endD: Date | null = null;
-
-          if (dateFilter.mode === 'range') {
-            if (dateFilter.startDate) {
-              startD = parseFlexibleDate(dateFilter.startDate) || new Date(dateFilter.startDate);
-              if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
-            }
-            if (dateFilter.endDate) {
-              endD = parseFlexibleDate(dateFilter.endDate) || new Date(dateFilter.endDate);
-              if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
-            }
-          } else if (dateFilter.mode === 'preset' && dateFilter.presetKey) {
-            const preset = getPresetDates(dateFilter.presetKey);
-            if (preset.startDate) {
-              startD = parseFlexibleDate(preset.startDate) || new Date(preset.startDate);
-              if (!isNaN(startD.getTime())) startD.setHours(0, 0, 0, 0);
-            }
-            if (preset.endDate) {
-              endD = parseFlexibleDate(preset.endDate) || new Date(preset.endDate);
-              if (!isNaN(endD.getTime())) endD.setHours(23, 59, 59, 999);
-            }
-          }
-
-          if (startD || endD) {
-            if (!record.parsedDate) return false;
-            if (startD && record.parsedDate < startD) return false;
-            if (endD && record.parsedDate > endD) return false;
-          }
-        }
+        if (!checkRecordMatchesDate(record, dateFilter)) return false;
       }
 
       // PO Filter
@@ -4233,7 +4359,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           <div className="shrink-0">
             <MultiSelect
               label={isRtl ? 'جميع الأصناف' : 'All Items'}
-              options={filterOptions.items.map(i => ({ id: i, label: i }))}
+              options={filterOptions.items}
               selected={selectedItems}
               onChange={setSelectedItems}
               icon={<Sprout size={14} className="text-emerald-500" />}
@@ -4245,7 +4371,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           <div className="shrink-0">
             <MultiSelect
               label={isRtl ? 'جميع الموردين' : 'All Suppliers'}
-              options={filterOptions.suppliers.map(s => ({ id: s, label: s }))}
+              options={filterOptions.suppliers}
               selected={selectedSuppliers}
               onChange={setSelectedSuppliers}
               icon={<Building2 size={14} className="text-purple-500" />}
@@ -4257,7 +4383,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           <div className="shrink-0">
             <MultiSelect
               label={isRtl ? 'كل المخازن' : 'All Stores'}
-              options={filterOptions.stores.map(st => ({ id: st, label: st }))}
+              options={filterOptions.stores}
               selected={selectedStores}
               onChange={setSelectedStores}
               icon={<Container size={14} className="text-blue-500" />}
@@ -4534,12 +4660,22 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
             {/* Date Filter Chip */}
             {dateFilter.mode !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold">
                 <Calendar size={12} className="text-amber-500" />
-                <span>{isRtl ? 'فلتر التاريخ مفعل' : 'Date Filter Active'}</span>
+                <span>
+                  {dateFilter.mode === 'single' && dateFilter.singleDate
+                    ? (isRtl ? `التاريخ: ${dateFilter.singleDate}` : `Date: ${dateFilter.singleDate}`)
+                    : dateFilter.mode === 'range' && (dateFilter.startDate || dateFilter.endDate)
+                    ? (isRtl ? `الفترة: ${dateFilter.startDate || '...'} إلى ${dateFilter.endDate || '...'}` : `Period: ${dateFilter.startDate || '...'} to ${dateFilter.endDate || '...'}`)
+                    : dateFilter.mode === 'preset' && dateFilter.presetKey
+                    ? (isRtl ? `الفترة: ${dateFilter.presetKey === 'today' ? 'اليوم' : dateFilter.presetKey === 'yesterday' ? 'أمس' : dateFilter.presetKey === 'last7' ? 'آخر 7 أيام' : dateFilter.presetKey === 'last30' ? 'آخر 30 يوم' : dateFilter.presetKey === 'thisMonth' ? 'هذا الشهر' : dateFilter.presetKey}` : `Period: ${dateFilter.presetKey}`)
+                    : (isRtl ? 'فلتر التاريخ مفعل' : 'Date Filter Active')
+                  }
+                </span>
                 <button
                   onClick={() => setDateFilter({ mode: 'all' })}
                   className="hover:text-red-500 cursor-pointer p-0.5"
+                  title={isRtl ? 'إلغاء فلتر التاريخ' : 'Clear date filter'}
                 >
                   <X size={12} />
                 </button>
