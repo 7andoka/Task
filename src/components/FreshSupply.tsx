@@ -99,7 +99,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { collection, doc, getDocs, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, writeBatch, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLLECTIONS } from '../constants';
 import { FreshItemsDashboard } from './FreshItemsDashboard';
@@ -730,6 +730,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
 
   // State
   const [data, setData] = useState<FreshSupplyRecord[]>([]);
+  const rawCsvDataRef = useRef<any[]>([]);
+  const overridesRef = useRef<Record<string, any>>({});
+  const isInitialSyncDoneRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(() => {
@@ -1091,6 +1094,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       snapshot.forEach(docSnap => {
         overridesMap[docSnap.id] = docSnap.data();
       });
+      overridesRef.current = overridesMap;
     } catch (firestoreErr) {
       console.error("Firestore fetch overrides error:", firestoreErr);
       toast.error(isRtl ? 'تعذر جلب التعديلات السحابية من Firestore' : 'Failed to fetch cloud overrides from Firestore');
@@ -1750,6 +1754,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           try {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
+              rawCsvDataRef.current = parsed;
               setData(processCsvData(parsed, overrides));
               setLoading(false);
             }
@@ -1772,7 +1777,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         skipEmptyLines: true,
         complete: (results) => {
           if (results.data && results.data.length > 0) {
-            const processed = processCsvData(results.data, overrides);
+            rawCsvDataRef.current = results.data;
+            const processed = processCsvData(results.data, overridesRef.current || overrides);
             setData(processed);
             localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(results.data));
             const nowFormatted = new Date().toLocaleTimeString(isRtl ? 'ar-EG' : 'en-US', {
@@ -1819,7 +1825,106 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   };
 
   useEffect(() => {
+    // 1. Initial fetch from Google Sheet and Firestore overrides
     fetchData(false);
+
+    // 2. Periodic background check for new Google Sheet rows (every 60s)
+    const interval = setInterval(() => {
+      fetchData(false);
+    }, 60000);
+
+    // 3. Real-time listener for Firestore overrides (modifications, additions, deletions by any user)
+    const unsubOverrides = onSnapshot(
+      collection(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES),
+      (snapshot) => {
+        const overridesMap: Record<string, any> = {};
+        snapshot.docs.forEach((docSnap) => {
+          overridesMap[docSnap.id] = docSnap.data();
+        });
+        overridesRef.current = overridesMap;
+
+        // Friendly live toast when modifications are saved by another user
+        if (isInitialSyncDoneRef.current) {
+          const docChanges = snapshot.docChanges();
+          const externalChanges = docChanges.filter(chg => {
+            const d = chg.doc.data();
+            return (chg.type === 'modified' || chg.type === 'added') && 
+                   d.updatedBy && 
+                   d.updatedBy !== (user?.displayName || user?.username);
+          });
+          if (externalChanges.length > 0) {
+            const lastUpdatedBy = externalChanges[externalChanges.length - 1].doc.data().updatedBy;
+            toast.info(
+              isRtl 
+                ? `تم تحديث البيانات وتزامنها لحظياً عبر السحابة بواسطة (${lastUpdatedBy})` 
+                : `Data updated and synced in real time by (${lastUpdatedBy})`,
+              { id: 'realtime-sync-toast', duration: 3000 }
+            );
+          }
+        } else {
+          isInitialSyncDoneRef.current = true;
+        }
+
+        // Apply updated overrides to in-memory state immediately
+        setData(prevData => {
+          if (!prevData || prevData.length === 0) return prevData;
+          if (rawCsvDataRef.current && rawCsvDataRef.current.length > 0) {
+            return processCsvData(rawCsvDataRef.current, overridesMap);
+          }
+          return prevData.map(item => {
+            const ov = overridesMap[item.id] || overridesMap[item.movementNo];
+            if (!ov) return item;
+            return {
+              ...item,
+              po: ov.po !== undefined ? String(ov.po).trim() : item.po,
+              sapExecutionNo: ov.sapExecutionNo !== undefined ? String(ov.sapExecutionNo).trim() : item.sapExecutionNo,
+              postDocument: ov.postDocument !== undefined ? String(ov.postDocument).trim() : (ov.sapExecutionNo !== undefined ? String(ov.sapExecutionNo).trim() : item.postDocument),
+              region: ov.region !== undefined ? String(ov.region).trim() : item.region,
+              initialAnalysis: ov.initialAnalysis !== undefined ? String(ov.initialAnalysis).trim() : item.initialAnalysis,
+              price: ov.price !== undefined ? Number(ov.price) || 0 : item.price,
+              qualityDiscountPercent: ov.qualityDiscountPercent !== undefined ? Number(ov.qualityDiscountPercent) || 0 : item.qualityDiscountPercent,
+              paymentMethod: ov.paymentMethod !== undefined ? String(ov.paymentMethod).trim() : item.paymentMethod,
+              routing: ov.routing !== undefined ? String(ov.routing).trim() : item.routing,
+              notes: ov.notes !== undefined ? String(ov.notes).trim() : item.notes,
+              updatedAt: ov.updatedAt || item.updatedAt,
+              updatedBy: ov.updatedBy || item.updatedBy,
+              isPricedInProgram: ov.isPricedInProgram !== undefined ? ov.isPricedInProgram : item.isPricedInProgram
+            };
+          });
+        });
+
+        // Also keep selectedRecord updated if modal is currently open
+        setSelectedRecord(prev => {
+          if (!prev) return null;
+          const ov = overridesMap[prev.id] || overridesMap[prev.movementNo];
+          if (!ov) return prev;
+          return {
+            ...prev,
+            po: ov.po !== undefined ? String(ov.po).trim() : prev.po,
+            sapExecutionNo: ov.sapExecutionNo !== undefined ? String(ov.sapExecutionNo).trim() : prev.sapExecutionNo,
+            postDocument: ov.postDocument !== undefined ? String(ov.postDocument).trim() : (ov.sapExecutionNo !== undefined ? String(ov.sapExecutionNo).trim() : prev.postDocument),
+            region: ov.region !== undefined ? String(ov.region).trim() : prev.region,
+            initialAnalysis: ov.initialAnalysis !== undefined ? String(ov.initialAnalysis).trim() : prev.initialAnalysis,
+            price: ov.price !== undefined ? Number(ov.price) || 0 : prev.price,
+            qualityDiscountPercent: ov.qualityDiscountPercent !== undefined ? Number(ov.qualityDiscountPercent) || 0 : prev.qualityDiscountPercent,
+            paymentMethod: ov.paymentMethod !== undefined ? String(ov.paymentMethod).trim() : prev.paymentMethod,
+            routing: ov.routing !== undefined ? String(ov.routing).trim() : prev.routing,
+            notes: ov.notes !== undefined ? String(ov.notes).trim() : prev.notes,
+            updatedAt: ov.updatedAt || prev.updatedAt,
+            updatedBy: ov.updatedBy || prev.updatedBy,
+            isPricedInProgram: ov.isPricedInProgram !== undefined ? ov.isPricedInProgram : prev.isPricedInProgram
+          };
+        });
+      },
+      (error) => {
+        console.error("Fresh supply real-time overrides listener error:", error);
+      }
+    );
+
+    return () => {
+      clearInterval(interval);
+      unsubOverrides();
+    };
   }, []);
 
   // Filter options (Smart & Dependent)
@@ -3818,6 +3923,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                     {isRtl ? `آخر مزامنة: ${lastSynced}` : `Last sync: ${lastSynced}`}
                   </span>
                 )}
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-300/70 dark:border-emerald-800 shadow-xs">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>{isRtl ? 'تزامن لحظي مباشر' : 'Live Sync Active'}</span>
+                </span>
               </p>
             </div>
           </div>

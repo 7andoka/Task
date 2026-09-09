@@ -213,7 +213,12 @@
         "initialAnalysis": { "type": "string" },
         "region": { "type": "string" },
         "price": { "type": "number" },
+        "qualityDiscountPercent": { "type": "number" },
+        "postDocument": { "type": "string" },
+        "sapExecutionNo": { "type": "string" },
         "paymentMethod": { "type": "string" },
+        "routing": { "type": "string" },
+        "isPricedInProgram": { "type": "boolean" },
         "notes": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "updatedBy": { "type": "string" }
