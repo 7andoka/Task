@@ -785,6 +785,37 @@ export const checkRecordMatchesDate = (record: FreshSupplyRecord, filter: DateFi
   return true;
 };
 
+// Helper to check whether a record matches the universal search query
+export const checkRecordMatchesSearch = (record: FreshSupplyRecord, term: string, rawTerm: string): boolean => {
+  if (!term && !rawTerm) return true;
+  return (
+    matchesArabicSearch(record.itemName, term) ||
+    (record.originalItemName ? matchesArabicSearch(record.originalItemName, term) : false) ||
+    matchesArabicSearch(record.costCenter, term) ||
+    (record.originalCostCenter ? matchesArabicSearch(record.originalCostCenter, term) : false) ||
+    matchesArabicSearch(record.costCenterCode, term) ||
+    matchesArabicSearch(record.truckNo, term) ||
+    matchesArabicSearch(record.driver, term) ||
+    matchesArabicSearch(record.movementNo, term) ||
+    matchesArabicSearch(record.po, term) ||
+    (record.sapExecutionNo ? matchesArabicSearch(record.sapExecutionNo, term) : false) ||
+    (record.initialAnalysis ? matchesArabicSearch(record.initialAnalysis, term) : false) ||
+    (record.region ? matchesArabicSearch(record.region, term) : false) ||
+    (record.paymentMethod ? matchesArabicSearch(record.paymentMethod, term) : false) ||
+    matchesArabicSearch(record.postDocument, term) ||
+    matchesArabicSearch(record.sapCode, term) ||
+    matchesArabicSearch(record.oldCode, term) ||
+    matchesArabicSearch(record.date, term) ||
+    (record.originalDate ? matchesArabicSearch(record.originalDate, term) : false) ||
+    matchesArabicSearch(record.store, term) ||
+    matchesArabicSearch(record.location, term) ||
+    (record.vendorDocNo ? matchesArabicSearch(record.vendorDocNo, term) : false) ||
+    (record.notes ? matchesArabicSearch(record.notes, term) : false) ||
+    (record.itemName ? record.itemName.toLowerCase().includes(rawTerm) : false) ||
+    (record.costCenter ? record.costCenter.toLowerCase().includes(rawTerm) : false)
+  );
+};
+
 export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const isRtl = lang === 'ar';
   const t = translations[lang];
@@ -1889,12 +1920,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     // 1. Initial fetch from Google Sheet and Firestore overrides
     fetchData(false);
 
-    // 2. Periodic background check for new Google Sheet rows (every 60s)
-    const interval = setInterval(() => {
-      fetchData(false);
-    }, 60000);
-
-    // 3. Real-time listener for Firestore overrides (modifications, additions, deletions by any user)
+    // 2. Real-time listener for Firestore overrides (modifications, additions, deletions by any user)
     const unsubOverrides = onSnapshot(
       collection(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES),
       (snapshot) => {
@@ -1983,15 +2009,23 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     );
 
     return () => {
-      clearInterval(interval);
       unsubOverrides();
     };
   }, []);
 
-  // Filter options (Smart & Dependent)
+  // Filter options (Smart & Dependent - Multi-way Cascading)
   const filterOptions = useMemo(() => {
+    const trimmedSearch = searchTerm.trim();
+    const searchNormalized = trimmedSearch ? normalizeArabicSearch(trimmedSearch) : '';
+    const searchRaw = trimmedSearch ? trimmedSearch.toLowerCase() : '';
+
     const dependentFiltered = (excludeKey: string) => {
       return data.filter(record => {
+        // Universal Search Query (Multi-way Cascading includes search term)
+        if (excludeKey !== 'search' && trimmedSearch) {
+          if (!checkRecordMatchesSearch(record, searchNormalized, searchRaw)) return false;
+        }
+
         // Main Category Filter
         if (excludeKey !== 'category' && mainCategoryFilter !== 'ALL') {
           const v = detectFreshVariety(record.itemName);
@@ -2166,6 +2200,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     };
   }, [
     data,
+    searchTerm,
     mainCategoryFilter,
     analysisFilter,
     selectedVarieties,
@@ -2181,70 +2216,45 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     isRtl
   ]);
 
-  // Auto-prune stale selections when other filters (e.g. date) narrow down available options
+  // Auto-prune stale selections when other dropdown filters (e.g. date) narrow down available options
   useEffect(() => {
-    if (selectedSuppliers.length > 0 && data.length > 0 && filterOptions.suppliers.length > 0) {
+    if (!searchTerm.trim() && selectedSuppliers.length > 0 && data.length > 0 && filterOptions.suppliers.length > 0) {
       const validSet = new Set(filterOptions.suppliers.map(s => s.id));
       const pruned = selectedSuppliers.filter(s => validSet.has(s));
       if (pruned.length !== selectedSuppliers.length) {
         setSelectedSuppliers(pruned);
       }
     }
-  }, [filterOptions.suppliers, data.length]);
+  }, [filterOptions.suppliers, data.length, searchTerm]);
 
   useEffect(() => {
-    if (selectedItems.length > 0 && data.length > 0 && filterOptions.items.length > 0) {
+    if (!searchTerm.trim() && selectedItems.length > 0 && data.length > 0 && filterOptions.items.length > 0) {
       const validSet = new Set(filterOptions.items.map(i => i.id));
       const pruned = selectedItems.filter(i => validSet.has(i));
       if (pruned.length !== selectedItems.length) {
         setSelectedItems(pruned);
       }
     }
-  }, [filterOptions.items, data.length]);
+  }, [filterOptions.items, data.length, searchTerm]);
 
   useEffect(() => {
-    if (selectedStores.length > 0 && data.length > 0 && filterOptions.stores.length > 0) {
+    if (!searchTerm.trim() && selectedStores.length > 0 && data.length > 0 && filterOptions.stores.length > 0) {
       const validSet = new Set(filterOptions.stores.map(st => st.id));
       const pruned = selectedStores.filter(st => validSet.has(st));
       if (pruned.length !== selectedStores.length) {
         setSelectedStores(pruned);
       }
     }
-  }, [filterOptions.stores, data.length]);
+  }, [filterOptions.stores, data.length, searchTerm]);
 
   // Filtered & Sorted Records
   const filteredData = useMemo(() => {
     return data.filter(record => {
-      // 1. Search Query
+      // 1. Search Query (Unified with checkRecordMatchesSearch)
       if (searchTerm.trim()) {
         const term = normalizeArabicSearch(searchTerm);
         const rawTerm = searchTerm.toLowerCase().trim();
-        const match = 
-          matchesArabicSearch(record.itemName, term) ||
-          (record.originalItemName && matchesArabicSearch(record.originalItemName, term)) ||
-          matchesArabicSearch(record.costCenter, term) ||
-          (record.originalCostCenter && matchesArabicSearch(record.originalCostCenter, term)) ||
-          matchesArabicSearch(record.costCenterCode, term) ||
-          matchesArabicSearch(record.truckNo, term) ||
-          matchesArabicSearch(record.driver, term) ||
-          matchesArabicSearch(record.movementNo, term) ||
-          matchesArabicSearch(record.po, term) ||
-          (record.sapExecutionNo && matchesArabicSearch(record.sapExecutionNo, term)) ||
-          (record.initialAnalysis && matchesArabicSearch(record.initialAnalysis, term)) ||
-          (record.region && matchesArabicSearch(record.region, term)) ||
-          (record.paymentMethod && matchesArabicSearch(record.paymentMethod, term)) ||
-          matchesArabicSearch(record.postDocument, term) ||
-          matchesArabicSearch(record.sapCode, term) ||
-          matchesArabicSearch(record.oldCode, term) ||
-          matchesArabicSearch(record.date, term) ||
-          (record.originalDate && matchesArabicSearch(record.originalDate, term)) ||
-          matchesArabicSearch(record.store, term) ||
-          matchesArabicSearch(record.location, term) ||
-          (record.vendorDocNo && matchesArabicSearch(record.vendorDocNo, term)) ||
-          (record.notes && matchesArabicSearch(record.notes, term)) ||
-          record.itemName.toLowerCase().includes(rawTerm) ||
-          record.costCenter.toLowerCase().includes(rawTerm);
-        if (!match) return false;
+        if (!checkRecordMatchesSearch(record, term, rawTerm)) return false;
       }
 
       // 2. Main Category Filter (Olives, Pepper, Other)
