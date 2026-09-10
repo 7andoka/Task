@@ -1234,20 +1234,21 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         ...updatedData
       };
 
-      // 1. Persist directly to Cloud Firestore ONLY for this specific row's unique ID
+      // 1. Persist directly to Cloud Firestore for this specific row's unique ID
       await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, overrideKey), {
         id: overrideKey,
         movementNo: selectedRecord.movementNo || '',
         ...updatedData
       }, { merge: true });
 
-      // Clean up legacy movement-wide override document if one existed so sibling rows remain untouched
-      if (selectedRecord.movementNo) {
-        try {
-          await deleteDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, selectedRecord.movementNo));
-        } catch (delErr) {
-          // ignore if document does not exist
-        }
+      // Also ensure the clean stable ID without trailing row index is kept in sync
+      const cleanKey = overrideKey.replace(/_\d+$/, '');
+      if (cleanKey && cleanKey !== overrideKey) {
+        await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, cleanKey), {
+          id: cleanKey,
+          movementNo: selectedRecord.movementNo || '',
+          ...updatedData
+        }, { merge: true });
       }
 
       // 2. Update in-memory state ONLY for this exact record (single row edit, never affecting other rows of the same movement)
@@ -1297,12 +1298,15 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         updatedBy: user?.displayName || user?.username || (isRtl ? 'فريق الجودة' : 'Quality Team')
       }, { merge: true });
 
-      if (quickDiscountRecord.movementNo) {
-        try {
-          await deleteDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, quickDiscountRecord.movementNo));
-        } catch (e) {
-          // ignore
-        }
+      const cleanKey = quickDiscountRecord.id.replace(/_\d+$/, '');
+      if (cleanKey && cleanKey !== quickDiscountRecord.id) {
+        await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, cleanKey), {
+          id: cleanKey,
+          movementNo: quickDiscountRecord.movementNo || '',
+          qualityDiscountPercent: num,
+          updatedAt: new Date().toISOString(),
+          updatedBy: user?.displayName || user?.username || (isRtl ? 'فريق الجودة' : 'Quality Team')
+        }, { merge: true });
       }
 
       setData(prev => prev.map(item => item.id === quickDiscountRecord.id ? { ...item, qualityDiscountPercent: num } : item));
@@ -1336,12 +1340,16 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         updatedBy: user?.displayName || user?.username || (isRtl ? 'فريق المخزن' : 'Warehouse Team')
       }, { merge: true });
 
-      if (quickPostDocRecord.movementNo) {
-        try {
-          await deleteDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, quickPostDocRecord.movementNo));
-        } catch (e) {
-          // ignore
-        }
+      const cleanKey = quickPostDocRecord.id.replace(/_\d+$/, '');
+      if (cleanKey && cleanKey !== quickPostDocRecord.id) {
+        await setDoc(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, cleanKey), {
+          id: cleanKey,
+          movementNo: quickPostDocRecord.movementNo || '',
+          postDocument: docVal,
+          sapExecutionNo: docVal,
+          updatedAt: new Date().toISOString(),
+          updatedBy: user?.displayName || user?.username || (isRtl ? 'فريق المخزن' : 'Warehouse Team')
+        }, { merge: true });
       }
 
       setData(prev => prev.map(item => item.id === quickPostDocRecord.id ? { 
@@ -1425,12 +1433,13 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
             ...updatedData
           }, { merge: true });
 
-          if (record.movementNo) {
-            try {
-              batch.delete(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, record.movementNo));
-            } catch (e) {
-              // ignore
-            }
+          const cleanKey = record.id.replace(/_\d+$/, '');
+          if (cleanKey && cleanKey !== record.id) {
+            batch.set(doc(db, COLLECTIONS.FRESH_SUPPLY_OVERRIDES, cleanKey), {
+              id: cleanKey,
+              movementNo: record.movementNo || '',
+              ...updatedData
+            }, { merge: true });
           }
         });
         await batch.commit();
@@ -1580,6 +1589,39 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       }
     });
 
+    // Build lookup maps for overrides:
+    // 1) baseStableIdPrefixMap: indexes historical overrides (including those with _idx suffixes)
+    // Prioritizing updates made today (2026-09-10) and yesterday (2026-09-09), newest updates first
+    const baseStableIdPrefixMap = new Map<string, any>();
+    const sortedOverrideEntries = Object.entries(overridesMap).sort((a, b) => {
+      const aVal = a[1] as any;
+      const bVal = b[1] as any;
+      const aTime = aVal?.updatedAt ? new Date(aVal.updatedAt).getTime() : 0;
+      const bTime = bVal?.updatedAt ? new Date(bVal.updatedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    sortedOverrideEntries.forEach(([key, val]) => {
+      if (val && typeof val === 'object') {
+        const updatedAtStr = String(val?.updatedAt || '');
+        // Allow updates from 2026-09-01 onwards (covering 1-Sep to 7-Sep documents up to today)
+        const isFromSeptOrNewer = !val.updatedAt || updatedAtStr >= '2026-09-01';
+        if (isFromSeptOrNewer) {
+          const stripped = key.replace(/_\d+$/, '');
+          if (!baseStableIdPrefixMap.has(stripped)) {
+            baseStableIdPrefixMap.set(stripped, val);
+          }
+          // Also map clean key itself
+          if (!baseStableIdPrefixMap.has(key)) {
+            baseStableIdPrefixMap.set(key, val);
+          }
+        }
+      }
+    });
+
+    // Track occurrences of baseStableId to ensure unique, stable IDs for identical sibling rows within the same movement
+    const idOccurrences = new Map<string, number>();
+
     // ==========================================
     // 3. MAP INTO FINAL RECORD STRUCTURE
     // ==========================================
@@ -1625,20 +1667,36 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const cleanItem = finalSapCode || finalItemName || '';
       const cleanQty = String(row['اضافة'] || row['الكمية'] || '').replace(/,/g, '').trim();
 
-      // Deterministic stable ID for the movement (guaranteed unique by appending idx)
+      // Deterministic stable ID for the shipment row (purely shipment-based, independent of row index shifts in Google Sheets)
       const baseStableId = rawMoveNo 
         ? `move_${rawMoveNo}_${cleanItem}_${rawTruck}_${cleanQty}`.replace(/[^a-zA-Z0-9_\-\u0600-\u06FF]/g, '_')
-        : `fresh-${idx}-${cleanItem}`;
-      const stableId = `${baseStableId}_${idx}`;
+        : `fresh-${cleanItem}_${rawTruck}_${cleanQty}`;
+      
+      const occ = idOccurrences.get(baseStableId) || 0;
+      idOccurrences.set(baseStableId, occ + 1);
+      const stableId = occ === 0 ? baseStableId : `${baseStableId}__d${occ}`;
       const fallbackOldId = `fresh-${idx}-${rawMoveNo || Math.random().toString(36).substr(2, 9)}`;
 
-      // Check overrides strictly by row-specific unique IDs (stableId, fallbackOldId, fresh-idx)
-      // Never use movementNo alone to prevent edits on one row from bleeding into sibling rows of the same movement
-      const override = overridesMap[stableId] 
-        || overridesMap[fallbackOldId] 
-        || overridesMap[`fresh-${idx}`] 
-        || overridesMap[baseStableId]
-        || {};
+      // Resolve override with prioritization:
+      // 1. Exact stableId match
+      // 2. Exact baseStableId match (clean document)
+      // 3. Historical prefix match (matches previous row indices, prioritizing today's and yesterday's updates)
+      // 4. Historical index matches (stableId_idx, fresh-idx, fallback)
+      const isAllowedOverride = (cand: any) => {
+        if (!cand || typeof cand !== 'object') return false;
+        if (!cand.updatedAt) return true;
+        return String(cand.updatedAt) >= '2026-09-01';
+      };
+
+      const candidateOverrides = [
+        overridesMap[stableId],
+        overridesMap[baseStableId],
+        baseStableIdPrefixMap.get(baseStableId),
+        overridesMap[`${baseStableId}_${idx}`],
+        overridesMap[fallbackOldId],
+        overridesMap[`fresh-${idx}`]
+      ];
+      const override = candidateOverrides.find(isAllowedOverride) || {};
 
       const rawPo = getRowValueFlexible(
         row,
@@ -1705,9 +1763,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         ? String(override.region).trim() 
         : rawRegion;
 
-      const rawPriceVal = override.price !== undefined && override.price !== '' 
+      const moveLevelOverride = rawMoveNo && overridesMap[rawMoveNo] ? overridesMap[rawMoveNo] : undefined;
+      const rawPriceVal = (override.price !== undefined && override.price !== '' && Number(override.price) > 0) 
         ? override.price 
-        : getRowValueFlexible(row, 'السعر الأساسي (ج.م/كجم)', 'السعر الأساسي', 'السعر الاساسي', 'السعر', 'سعر الكيلو', 'Base Price', 'Price');
+        : (moveLevelOverride && moveLevelOverride.price !== undefined && moveLevelOverride.price !== '' && Number(moveLevelOverride.price) > 0)
+          ? moveLevelOverride.price
+          : getRowValueFlexible(row, 'السعر الأساسي (ج.م/كجم)', 'السعر الأساسي', 'السعر الاساسي', 'السعر', 'سعر الكيلو', 'Base Price', 'Price');
       const price = rawPriceVal !== undefined && rawPriceVal !== '-' && rawPriceVal !== '' ? Number(rawPriceVal) || 0 : 0;
       
       const rawDiscountVal = override.qualityDiscountPercent !== undefined && override.qualityDiscountPercent !== '' 
