@@ -1604,9 +1604,9 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     sortedOverrideEntries.forEach(([key, val]) => {
       if (val && typeof val === 'object') {
         const updatedAtStr = String(val?.updatedAt || '');
-        // Allow updates from 2026-09-01 onwards (covering 1-Sep to 7-Sep documents up to today)
-        const isFromSeptOrNewer = !val.updatedAt || updatedAtStr >= '2026-09-01';
-        if (isFromSeptOrNewer) {
+        // Allow updates from August 2026 onwards (covering 09.08.2026 to 31.08.2026 and September)
+        const isFromAugOrNewer = !val.updatedAt || updatedAtStr >= '2026-08-01';
+        if (isFromAugOrNewer) {
           const stripped = key.replace(/_\d+$/, '');
           if (!baseStableIdPrefixMap.has(stripped)) {
             baseStableIdPrefixMap.set(stripped, val);
@@ -1685,7 +1685,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const isAllowedOverride = (cand: any) => {
         if (!cand || typeof cand !== 'object') return false;
         if (!cand.updatedAt) return true;
-        return String(cand.updatedAt) >= '2026-09-01';
+        return String(cand.updatedAt) >= '2026-08-01';
       };
 
       const candidateOverrides = [
