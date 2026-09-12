@@ -1,12 +1,16 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { AnimatePresence, motion } from 'motion/react';
+import { normalizeArabicSearch, matchesArabicSearch } from '../utils/arabic';
 import { 
   Search, 
   Filter, 
   Download, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronDown,
+  Check,
   Printer, 
   X, 
   Scale, 
@@ -16,6 +20,7 @@ import {
   Truck,
   Hash,
   User,
+  Users,
   RotateCcw,
   CheckCircle2,
   Package,
@@ -27,6 +32,338 @@ import { PrintTicketModal } from './PrintTicketModal';
 interface ScaleReportsProps {
   lang: Language;
   user?: UserProfile;
+}
+
+// Option item for searchable multi-select
+export interface MultiSelectSearchOption {
+  id: string;
+  label: string;
+  count?: number;
+}
+
+interface MultiSelectSearchProps {
+  label: string;
+  placeholder?: string;
+  options: MultiSelectSearchOption[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+  icon?: React.ReactNode;
+  lang: Language;
+  align?: 'right' | 'left';
+  id?: string;
+}
+
+// Reusable Searchable Multi-Select Dropdown Component
+function MultiSelectSearch({
+  label,
+  placeholder,
+  options,
+  selected,
+  onChange,
+  icon,
+  lang,
+  align = 'right',
+  id
+}: MultiSelectSearchProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const isRtl = lang === 'ar';
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      // Auto-focus search input with small timeout for smooth transition
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  // Filter options based on typed search query (using Arabic normalization & case-insensitivity)
+  const filteredOptions = useMemo(() => {
+    if (!searchQuery.trim()) return options;
+    const q = searchQuery.trim();
+    return options.filter(opt => 
+      matchesArabicSearch(opt.label, q) ||
+      matchesArabicSearch(opt.id, q) ||
+      opt.label.toLowerCase().includes(q.toLowerCase()) ||
+      opt.id.toLowerCase().includes(q.toLowerCase())
+    );
+  }, [options, searchQuery]);
+
+  const toggleOption = (optId: string) => {
+    if (selected.includes(optId)) {
+      onChange(selected.filter(item => item !== optId));
+    } else {
+      onChange([...selected, optId]);
+    }
+  };
+
+  const selectOnlyOption = (optId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange([optId]);
+  };
+
+  const selectAllFiltered = () => {
+    const allFilteredIds = filteredOptions.map(o => o.id);
+    const combined = Array.from(new Set([...selected, ...allFilteredIds]));
+    onChange(combined);
+  };
+
+  const clearAll = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    onChange([]);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && filteredOptions.length > 0) {
+      e.preventDefault();
+      toggleOption(filteredOptions[0].id);
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
+  };
+
+  const selectedLabels = useMemo(() => {
+    return selected.map(sId => {
+      const opt = options.find(o => o.id === sId);
+      return opt ? opt.label : sId;
+    });
+  }, [selected, options]);
+
+  return (
+    <div className="relative w-full" ref={containerRef} id={id}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer select-none text-right ${
+          selected.length > 0
+            ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-400 dark:border-emerald-600 text-emerald-900 dark:text-emerald-200 shadow-2xs ring-1 ring-emerald-500/20'
+            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-750'
+        }`}
+        title={selected.length > 0 ? selectedLabels.join(', ') : label}
+      >
+        <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+          {icon && <span className="shrink-0 text-emerald-600 dark:text-emerald-400">{icon}</span>}
+          {selected.length === 0 && (
+            <span className="truncate text-slate-700 dark:text-slate-300">{label}</span>
+          )}
+          {selected.length === 1 && (
+            <span className="truncate font-black text-emerald-800 dark:text-emerald-300">
+              {selectedLabels[0]}
+            </span>
+          )}
+          {selected.length > 1 && (
+            <div className="flex items-center gap-1 truncate">
+              <span className="truncate">{label}</span>
+              <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono shrink-0">
+                {selected.length}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-0.5 shrink-0">
+          {selected.length > 0 && (
+            <span
+              onClick={clearAll}
+              title={isRtl ? 'إلغاء التحديد' : 'Clear'}
+              className="p-0.5 text-slate-400 hover:text-rose-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors cursor-pointer"
+            >
+              <X size={12} />
+            </span>
+          )}
+          <ChevronDown
+            size={13}
+            className={`text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          />
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.98 }}
+            transition={{ duration: 0.12 }}
+            className={`absolute top-full mt-1.5 min-w-[260px] sm:min-w-[280px] max-w-[340px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-2.5 overflow-hidden text-right ${
+              align === 'left' ? 'left-0' : 'right-0'
+            }`}
+            dir={isRtl ? 'rtl' : 'ltr'}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800 px-1">
+              <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                {icon}
+                <span>{label}</span>
+                <span className="text-[10px] text-slate-400 font-mono font-normal">
+                  ({options.length})
+                </span>
+              </span>
+              {selected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="text-[10.5px] text-rose-600 hover:underline font-bold cursor-pointer"
+                >
+                  {isRtl ? 'إلغاء التحديد' : 'Clear'}
+                </button>
+              )}
+            </div>
+
+            {/* Search Input Box */}
+            <div className="relative mb-2">
+              <Search size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder || (isRtl ? 'ابحث بالكتابة هنا...' : 'Type to search...')}
+                className="w-full pr-8 pl-7 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-900 dark:text-slate-100"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Quick Actions Bar */}
+            <div className="flex items-center justify-between px-1 py-1 mb-1.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg text-[10.5px] font-bold text-slate-500">
+              <span className="text-slate-400">
+                {isRtl ? `النتائج: ${filteredOptions.length}` : `Results: ${filteredOptions.length}`}
+              </span>
+              <div className="flex items-center gap-2">
+                {filteredOptions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={selectAllFiltered}
+                    className="text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+                  >
+                    {isRtl ? 'تحديد الظاهر' : 'Select All'}
+                  </button>
+                )}
+                {selected.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    className="text-rose-600 hover:underline cursor-pointer"
+                  >
+                    {isRtl ? 'مسح الكل' : 'Clear All'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Selected Chips inside Dropdown */}
+            {selected.length > 0 && (
+              <div className="mb-2 p-1.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40">
+                <div className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 mb-1 flex items-center justify-between">
+                  <span>{isRtl ? 'المحدد حالياً:' : 'Selected:'}</span>
+                  <span className="font-mono text-[9px] bg-emerald-200/60 dark:bg-emerald-800/60 px-1 rounded">
+                    {selected.length}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto custom-scrollbar">
+                  {selected.map(sId => {
+                    const opt = options.find(o => o.id === sId);
+                    return (
+                      <span
+                        key={sId}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-white dark:bg-slate-800 text-emerald-800 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60 shadow-2xs"
+                      >
+                        <span className="truncate max-w-[120px]">{opt ? opt.label : sId}</span>
+                        <span
+                          onClick={() => toggleOption(sId)}
+                          className="hover:text-rose-600 cursor-pointer p-0.5"
+                        >
+                          <X size={10} />
+                        </span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Options List */}
+            <div className="max-h-52 overflow-y-auto space-y-0.5 custom-scrollbar pr-0.5">
+              {filteredOptions.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-400 font-medium">
+                  {isRtl ? 'لا توجد عناصر مطابقة للبحث' : 'No matching options found'}
+                </div>
+              ) : (
+                filteredOptions.map(option => {
+                  const isChecked = selected.includes(option.id);
+                  return (
+                    <div
+                      key={option.id}
+                      onClick={() => toggleOption(option.id)}
+                      className={`group w-full flex items-center justify-between px-2 py-1.5 rounded-xl text-xs transition-colors cursor-pointer select-none ${
+                        isChecked
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 font-bold'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300 font-medium'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                        <div
+                          className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                            isChecked
+                              ? 'bg-emerald-600 border-emerald-600 text-white'
+                              : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 group-hover:border-emerald-400'
+                          }`}
+                        >
+                          {isChecked && <Check size={11} strokeWidth={3} />}
+                        </div>
+                        <span className="truncate" title={option.label}>
+                          {option.label}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {option.count !== undefined && (
+                          <span className="text-[10px] text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md">
+                            {option.count}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => selectOnlyOption(option.id, e)}
+                          className="opacity-0 group-hover:opacity-100 text-[9.5px] px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 hover:bg-emerald-200 text-emerald-800 dark:text-emerald-200 rounded font-bold transition-opacity"
+                          title={isRtl ? 'تحديد هذا العنصر فقط' : 'Select only this'}
+                        >
+                          {isRtl ? 'فقط' : 'Only'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 // Robust number parser that handles Arabic-Indic digits, thousand separator commas, spaces, currency symbols
@@ -87,16 +424,16 @@ export default function ScaleReports({ lang, user }: ScaleReportsProps) {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Dropdown Filter States
-  const [searchOperationNo, setSearchOperationNo] = useState('');
-  const [searchSupplier, setSearchSupplier] = useState('');
-  const [searchCustomer, setSearchCustomer] = useState('');
-  const [searchProduct, setSearchProduct] = useState('');
-  const [searchVehicle, setSearchVehicle] = useState('');
-  const [searchDriver, setSearchDriver] = useState('');
-  const [searchStatus, setSearchStatus] = useState('');
-  const [searchUser, setSearchUser] = useState('');
-  const [searchDate, setSearchDate] = useState('');
+  // Multi-Select Search Filter States
+  const [selectedOperationNos, setSelectedOperationNos] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
+  const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [searchDateFrom, setSearchDateFrom] = useState('');
   const [searchDateTo, setSearchDateTo] = useState('');
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(true);
@@ -165,96 +502,79 @@ export default function ScaleReports({ lang, user }: ScaleReportsProps) {
     return Array.from(colSet);
   }, [data]);
 
-  // Dynamic Unique Filter Options derived from the actual table data
-  const uniqueOperationNos = useMemo(() => {
-    const set = new Set<string>();
+  // Helper to extract unique options and record counts for multi-select dropdowns
+  const getUniqueOptionsWithCount = (candidates: string[]): MultiSelectSearchOption[] => {
+    const counts = new Map<string, number>();
     data.forEach(row => {
-      const val = getRowFieldValue(row, ['رقم العملية', 'رقم التذكرة', 'تذكرة', 'ticket', 'id', 'no', 'operation']);
-      if (val) set.add(val);
+      const val = getRowFieldValue(row, candidates);
+      if (val) {
+        counts.set(val, (counts.get(val) || 0) + 1);
+      }
     });
-    return Array.from(set).sort((a, b) => getTicketSortKey({ 'رقم العملية': b }) - getTicketSortKey({ 'رقم العملية': a }));
+    return Array.from(counts.entries()).map(([val, count]) => ({
+      id: val,
+      label: val,
+      count
+    }));
+  };
+
+  // Dynamic Unique Filter Options derived from actual table data with counts
+  const uniqueOperationNos = useMemo(() => {
+    const list = getUniqueOptionsWithCount(['رقم العملية', 'رقم التذكرة', 'تذكرة', 'ticket', 'id', 'no', 'operation']);
+    return list.sort((a, b) => getTicketSortKey({ 'رقم العملية': b.id }) - getTicketSortKey({ 'رقم العملية': a.id }));
   }, [data]);
 
   const uniqueSuppliers = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach(row => {
-      const val = getRowFieldValue(row, ['المورد', 'supplier']);
-      if (val) set.add(val);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+    const list = getUniqueOptionsWithCount(['المورد', 'supplier']);
+    return list.sort((a, b) => a.label.localeCompare(b.label, 'ar'));
   }, [data]);
 
   const uniqueCustomers = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach(row => {
-      const val = getRowFieldValue(row, ['العميل', 'customer']);
-      if (val) set.add(val);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+    const list = getUniqueOptionsWithCount(['العميل', 'customer']);
+    return list.sort((a, b) => a.label.localeCompare(b.label, 'ar'));
   }, [data]);
 
   const uniqueProducts = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach(row => {
-      const val = getRowFieldValue(row, ['الصنف', 'item', 'material', 'خام']);
-      if (val) set.add(val);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+    const list = getUniqueOptionsWithCount(['الصنف', 'item', 'material', 'خام']);
+    return list.sort((a, b) => a.label.localeCompare(b.label, 'ar'));
   }, [data]);
 
   const uniqueVehicles = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach(row => {
-      const val = getRowFieldValue(row, ['رقم السيارة', 'السيارة', 'vehicle', 'car', 'plate']);
-      if (val) set.add(val);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const list = getUniqueOptionsWithCount(['رقم السيارة', 'السيارة', 'vehicle', 'car', 'plate']);
+    return list.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
   }, [data]);
 
   const uniqueDrivers = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach(row => {
-      const val = getRowFieldValue(row, ['السائق', 'driver']);
-      if (val) set.add(val);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+    const list = getUniqueOptionsWithCount(['السائق', 'driver']);
+    return list.sort((a, b) => a.label.localeCompare(b.label, 'ar'));
   }, [data]);
 
   const uniqueStatuses = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach(row => {
-      const val = getRowFieldValue(row, ['الحالة', 'حالة', 'status']);
-      if (val) set.add(val);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+    const list = getUniqueOptionsWithCount(['الحالة', 'حالة', 'status']);
+    return list.sort((a, b) => a.label.localeCompare(b.label, 'ar'));
   }, [data]);
 
   const uniqueUsers = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach(row => {
-      const val = getRowFieldValue(row, ['المستخدم', 'user', 'محرر']);
-      if (val) set.add(val);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+    const list = getUniqueOptionsWithCount(['المستخدم', 'user', 'محرر']);
+    return list.sort((a, b) => a.label.localeCompare(b.label, 'ar'));
   }, [data]);
 
   const uniqueDates = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach(row => {
-      const val = getRowFieldValue(row, ['تاريخ', 'date']);
-      if (val) set.add(val);
-    });
-    return Array.from(set).sort((a, b) => b.localeCompare(a));
+    const list = getUniqueOptionsWithCount(['تاريخ', 'date']);
+    return list.sort((a, b) => b.label.localeCompare(a.label));
   }, [data]);
 
-  // Filter data based on dropdown criteria and global search
+  // Filter data based on multi-select dropdown criteria, date range, and global search
   const filteredData = useMemo(() => {
     return data.filter(row => {
-      // Global search across all columns
+      // Global search across all columns with Arabic normalization
       if (globalSearch.trim()) {
         const query = globalSearch.toLowerCase().trim();
         const matchesAny = Object.values(row).some(val => 
-          val !== null && val !== undefined && String(val).toLowerCase().includes(query)
+          val !== null && val !== undefined && (
+            matchesArabicSearch(String(val), query) ||
+            String(val).toLowerCase().includes(query)
+          )
         );
         if (!matchesAny) return false;
       }
@@ -269,53 +589,66 @@ export default function ScaleReports({ lang, user }: ScaleReportsProps) {
       const statusVal = getRowFieldValue(row, ['الحالة', 'حالة', 'status']);
       const userVal = getRowFieldValue(row, ['المستخدم', 'user', 'محرر']);
 
-      // Dropdown filters (Exact matching on non-empty selection)
-      if (searchOperationNo && opNo !== searchOperationNo) return false;
-      if (searchSupplier && supplierVal !== searchSupplier) return false;
-      if (searchCustomer && customerVal !== searchCustomer) return false;
-      if (searchProduct && productVal !== searchProduct) return false;
-      if (searchVehicle && vehicleVal !== searchVehicle) return false;
-      if (searchDriver && driverVal !== searchDriver) return false;
-      if (searchStatus && statusVal !== searchStatus) return false;
-      if (searchUser && userVal !== searchUser) return false;
-      if (searchDate && dateVal !== searchDate) return false;
+      // Multi-select matching (allows choosing multiple items per category)
+      if (selectedOperationNos.length > 0 && !selectedOperationNos.includes(opNo)) return false;
+      if (selectedStatuses.length > 0 && !selectedStatuses.includes(statusVal)) return false;
+      if (selectedSuppliers.length > 0 && !selectedSuppliers.includes(supplierVal)) return false;
+      if (selectedCustomers.length > 0 && !selectedCustomers.includes(customerVal)) return false;
+      if (selectedProducts.length > 0 && !selectedProducts.includes(productVal)) return false;
+      if (selectedVehicles.length > 0 && !selectedVehicles.includes(vehicleVal)) return false;
+      if (selectedDrivers.length > 0 && !selectedDrivers.includes(driverVal)) return false;
+      if (selectedDates.length > 0 && !selectedDates.includes(dateVal)) return false;
+      if (selectedUsers.length > 0 && !selectedUsers.includes(userVal)) return false;
 
-      // Optional date range
+      // Optional date range filter
       if (searchDateFrom && dateVal && dateVal < searchDateFrom) return false;
       if (searchDateTo && dateVal && dateVal > searchDateTo) return false;
 
       return true;
     });
-  }, [data, globalSearch, searchOperationNo, searchSupplier, searchCustomer, searchProduct, searchVehicle, searchDriver, searchStatus, searchUser, searchDate, searchDateFrom, searchDateTo]);
+  }, [
+    data, 
+    globalSearch, 
+    selectedOperationNos, 
+    selectedStatuses, 
+    selectedSuppliers, 
+    selectedCustomers, 
+    selectedProducts, 
+    selectedVehicles, 
+    selectedDrivers, 
+    selectedDates, 
+    selectedUsers, 
+    searchDateFrom, 
+    searchDateTo
+  ]);
 
-  // Active filters count
-  const activeFiltersCount = [
-    searchOperationNo,
-    searchSupplier,
-    searchCustomer,
-    searchProduct,
-    searchVehicle,
-    searchDriver,
-    searchStatus,
-    searchUser,
-    searchDate,
-    searchDateFrom,
-    searchDateTo,
-    globalSearch
-  ].filter(Boolean).length;
+  // Active filters count across all categories
+  const activeFiltersCount = 
+    selectedOperationNos.length +
+    selectedStatuses.length +
+    selectedSuppliers.length +
+    selectedCustomers.length +
+    selectedProducts.length +
+    selectedVehicles.length +
+    selectedDrivers.length +
+    selectedDates.length +
+    selectedUsers.length +
+    (searchDateFrom ? 1 : 0) +
+    (searchDateTo ? 1 : 0) +
+    (globalSearch.trim() ? 1 : 0);
 
-  // Reset filters
+  // Reset all filters
   const resetFilters = () => {
     setGlobalSearch('');
-    setSearchOperationNo('');
-    setSearchSupplier('');
-    setSearchCustomer('');
-    setSearchProduct('');
-    setSearchVehicle('');
-    setSearchDriver('');
-    setSearchStatus('');
-    setSearchUser('');
-    setSearchDate('');
+    setSelectedOperationNos([]);
+    setSelectedStatuses([]);
+    setSelectedSuppliers([]);
+    setSelectedCustomers([]);
+    setSelectedProducts([]);
+    setSelectedVehicles([]);
+    setSelectedDrivers([]);
+    setSelectedDates([]);
+    setSelectedUsers([]);
     setSearchDateFrom('');
     setSearchDateTo('');
     setCurrentPage(1);
@@ -554,209 +887,340 @@ export default function ScaleReports({ lang, user }: ScaleReportsProps) {
           </div>
         </div>
 
-        {/* Dynamic Dropdown Filters Based on Table Data */}
+        {/* Dynamic Multi-Select Searchable Filters Based on Table Data */}
         {showAdvancedSearch && (
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2 text-[11px] font-bold">
               
               {/* 1. رقم الكارتة / التذكرة */}
               <div className="space-y-0.5">
-                <label className="text-slate-500 text-[10px] block flex items-center gap-1">
+                <label className="text-slate-500 text-[10px] flex items-center gap-1">
                   <Hash size={11} className="text-emerald-600" />
-                  <span>{isRtl ? 'رقم الكارتة / التذكرة' : 'Ticket No'}</span>
+                  <span>{isRtl ? 'رقم الكارتة' : 'Ticket No'}</span>
                 </label>
-                <select
-                  value={searchOperationNo}
-                  onChange={(e) => {
-                    setSearchOperationNo(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className={`w-full px-2 py-1 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
-                    searchOperationNo 
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-600 dark:text-emerald-200' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  <option value="">{isRtl ? 'الكل (جميع الكارتات)' : 'All Tickets'}</option>
-                  {uniqueOperationNos.map((op, idx) => (
-                    <option key={idx} value={op}>{op}</option>
-                  ))}
-                </select>
+                <MultiSelectSearch
+                  id="scale-filter-ticket"
+                  label={isRtl ? 'رقم الكارتة' : 'Ticket No'}
+                  placeholder={isRtl ? 'بحث برقم الكارتة...' : 'Search ticket...'}
+                  icon={<Hash size={12} />}
+                  options={uniqueOperationNos}
+                  selected={selectedOperationNos}
+                  onChange={(val) => { setSelectedOperationNos(val); setCurrentPage(1); }}
+                  lang={lang}
+                  align={isRtl ? 'right' : 'left'}
+                />
               </div>
 
-              {/* 2. فلتر الحالة (مطلوب جديد) */}
+              {/* 2. فلتر الحالة */}
               <div className="space-y-0.5">
-                <label className="text-slate-500 text-[10px] block flex items-center gap-1">
+                <label className="text-slate-500 text-[10px] flex items-center gap-1">
                   <CheckCircle2 size={11} className="text-emerald-600" />
                   <span>{isRtl ? 'الحالة' : 'Status'}</span>
                 </label>
-                <select
-                  value={searchStatus}
-                  onChange={(e) => {
-                    setSearchStatus(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className={`w-full px-2 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                    searchStatus 
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-600 dark:text-emerald-200' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  <option value="">{isRtl ? 'الكل (جميع الحالات)' : 'All Statuses'}</option>
-                  {uniqueStatuses.map((st, idx) => (
-                    <option key={idx} value={st}>{st}</option>
-                  ))}
-                </select>
+                <MultiSelectSearch
+                  id="scale-filter-status"
+                  label={isRtl ? 'الحالة' : 'Status'}
+                  placeholder={isRtl ? 'بحث بالحالة...' : 'Search status...'}
+                  icon={<CheckCircle2 size={12} />}
+                  options={uniqueStatuses}
+                  selected={selectedStatuses}
+                  onChange={(val) => { setSelectedStatuses(val); setCurrentPage(1); }}
+                  lang={lang}
+                  align={isRtl ? 'right' : 'left'}
+                />
               </div>
 
               {/* 3. المورد */}
               <div className="space-y-0.5">
-                <label className="text-slate-500 text-[10px] block">
-                  {isRtl ? 'المورد' : 'Supplier'}
+                <label className="text-slate-500 text-[10px] flex items-center gap-1">
+                  <User size={11} className="text-emerald-600" />
+                  <span>{isRtl ? 'المورد' : 'Supplier'}</span>
                 </label>
-                <select
-                  value={searchSupplier}
-                  onChange={(e) => {
-                    setSearchSupplier(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className={`w-full px-2 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer truncate ${
-                    searchSupplier 
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-600 dark:text-emerald-200' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  <option value="">{isRtl ? 'الكل (جميع الموردين)' : 'All Suppliers'}</option>
-                  {uniqueSuppliers.map((sup, idx) => (
-                    <option key={idx} value={sup}>{sup}</option>
-                  ))}
-                </select>
+                <MultiSelectSearch
+                  id="scale-filter-supplier"
+                  label={isRtl ? 'المورد' : 'Supplier'}
+                  placeholder={isRtl ? 'بحث باسم المورد...' : 'Search supplier...'}
+                  icon={<User size={12} />}
+                  options={uniqueSuppliers}
+                  selected={selectedSuppliers}
+                  onChange={(val) => { setSelectedSuppliers(val); setCurrentPage(1); }}
+                  lang={lang}
+                  align={isRtl ? 'right' : 'left'}
+                />
               </div>
 
               {/* 4. العميل */}
               <div className="space-y-0.5">
-                <label className="text-slate-500 text-[10px] block">
-                  {isRtl ? 'العميل' : 'Customer'}
+                <label className="text-slate-500 text-[10px] flex items-center gap-1">
+                  <Users size={11} className="text-emerald-600" />
+                  <span>{isRtl ? 'العميل' : 'Customer'}</span>
                 </label>
-                <select
-                  value={searchCustomer}
-                  onChange={(e) => {
-                    setSearchCustomer(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className={`w-full px-2 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer truncate ${
-                    searchCustomer 
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-600 dark:text-emerald-200' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  <option value="">{isRtl ? 'الكل (جميع العملاء)' : 'All Customers'}</option>
-                  {uniqueCustomers.map((cust, idx) => (
-                    <option key={idx} value={cust}>{cust}</option>
-                  ))}
-                </select>
+                <MultiSelectSearch
+                  id="scale-filter-customer"
+                  label={isRtl ? 'العميل' : 'Customer'}
+                  placeholder={isRtl ? 'بحث باسم العميل...' : 'Search customer...'}
+                  icon={<Users size={12} />}
+                  options={uniqueCustomers}
+                  selected={selectedCustomers}
+                  onChange={(val) => { setSelectedCustomers(val); setCurrentPage(1); }}
+                  lang={lang}
+                  align={isRtl ? 'right' : 'left'}
+                />
               </div>
 
               {/* 5. الصنف / الخام */}
               <div className="space-y-0.5">
-                <label className="text-slate-500 text-[10px] block flex items-center gap-1">
+                <label className="text-slate-500 text-[10px] flex items-center gap-1">
                   <Package size={11} className="text-emerald-600" />
                   <span>{isRtl ? 'الصنف / الخام' : 'Item / Crop'}</span>
                 </label>
-                <select
-                  value={searchProduct}
-                  onChange={(e) => {
-                    setSearchProduct(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className={`w-full px-2 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer truncate ${
-                    searchProduct 
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-600 dark:text-emerald-200' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  <option value="">{isRtl ? 'الكل (جميع الأصناف)' : 'All Items'}</option>
-                  {uniqueProducts.map((p, idx) => (
-                    <option key={idx} value={p}>{p}</option>
-                  ))}
-                </select>
+                <MultiSelectSearch
+                  id="scale-filter-product"
+                  label={isRtl ? 'الصنف' : 'Item'}
+                  placeholder={isRtl ? 'بحث بالصنف...' : 'Search item...'}
+                  icon={<Package size={12} />}
+                  options={uniqueProducts}
+                  selected={selectedProducts}
+                  onChange={(val) => { setSelectedProducts(val); setCurrentPage(1); }}
+                  lang={lang}
+                  align={isRtl ? 'left' : 'right'}
+                />
               </div>
 
               {/* 6. رقم السيارة */}
               <div className="space-y-0.5">
-                <label className="text-slate-500 text-[10px] block flex items-center gap-1">
+                <label className="text-slate-500 text-[10px] flex items-center gap-1">
                   <Truck size={11} className="text-emerald-600" />
                   <span>{isRtl ? 'رقم السيارة' : 'Vehicle'}</span>
                 </label>
-                <select
-                  value={searchVehicle}
-                  onChange={(e) => {
-                    setSearchVehicle(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className={`w-full px-2 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                    searchVehicle 
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-600 dark:text-emerald-200' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  <option value="">{isRtl ? 'الكل (جميع السيارات)' : 'All Vehicles'}</option>
-                  {uniqueVehicles.map((v, idx) => (
-                    <option key={idx} value={v}>{v}</option>
-                  ))}
-                </select>
+                <MultiSelectSearch
+                  id="scale-filter-vehicle"
+                  label={isRtl ? 'السيارة' : 'Vehicle'}
+                  placeholder={isRtl ? 'بحث برقم السيارة...' : 'Search vehicle...'}
+                  icon={<Truck size={12} />}
+                  options={uniqueVehicles}
+                  selected={selectedVehicles}
+                  onChange={(val) => { setSelectedVehicles(val); setCurrentPage(1); }}
+                  lang={lang}
+                  align={isRtl ? 'left' : 'right'}
+                />
               </div>
 
               {/* 7. اسم السائق */}
               <div className="space-y-0.5">
-                <label className="text-slate-500 text-[10px] block">
-                  {isRtl ? 'السائق' : 'Driver'}
+                <label className="text-slate-500 text-[10px] flex items-center gap-1">
+                  <User size={11} className="text-emerald-600" />
+                  <span>{isRtl ? 'السائق' : 'Driver'}</span>
                 </label>
-                <select
-                  value={searchDriver}
-                  onChange={(e) => {
-                    setSearchDriver(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className={`w-full px-2 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer truncate ${
-                    searchDriver 
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-600 dark:text-emerald-200' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  <option value="">{isRtl ? 'الكل (جميع السائقين)' : 'All Drivers'}</option>
-                  {uniqueDrivers.map((d, idx) => (
-                    <option key={idx} value={d}>{d}</option>
-                  ))}
-                </select>
+                <MultiSelectSearch
+                  id="scale-filter-driver"
+                  label={isRtl ? 'السائق' : 'Driver'}
+                  placeholder={isRtl ? 'بحث باسم السائق...' : 'Search driver...'}
+                  icon={<User size={12} />}
+                  options={uniqueDrivers}
+                  selected={selectedDrivers}
+                  onChange={(val) => { setSelectedDrivers(val); setCurrentPage(1); }}
+                  lang={lang}
+                  align={isRtl ? 'left' : 'right'}
+                />
               </div>
 
               {/* 8. التاريخ */}
               <div className="space-y-0.5">
-                <label className="text-slate-500 text-[10px] block flex items-center gap-1">
+                <label className="text-slate-500 text-[10px] flex items-center gap-1">
                   <Calendar size={11} className="text-emerald-600" />
                   <span>{isRtl ? 'التاريخ' : 'Date'}</span>
                 </label>
-                <select
-                  value={searchDate}
-                  onChange={(e) => {
-                    setSearchDate(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className={`w-full px-2 py-1 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
-                    searchDate 
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-600 dark:text-emerald-200' 
-                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                  }`}
-                >
-                  <option value="">{isRtl ? 'الكل (جميع التواريخ)' : 'All Dates'}</option>
-                  {uniqueDates.map((dt, idx) => (
-                    <option key={idx} value={dt}>{dt}</option>
-                  ))}
-                </select>
+                <MultiSelectSearch
+                  id="scale-filter-date"
+                  label={isRtl ? 'التاريخ' : 'Date'}
+                  placeholder={isRtl ? 'بحث بالتاريخ...' : 'Search date...'}
+                  icon={<Calendar size={12} />}
+                  options={uniqueDates}
+                  selected={selectedDates}
+                  onChange={(val) => { setSelectedDates(val); setCurrentPage(1); }}
+                  lang={lang}
+                  align={isRtl ? 'left' : 'right'}
+                />
               </div>
 
             </div>
+
+            {/* Additional Date Range & User Filter Row */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] text-slate-500 font-bold flex items-center gap-1">
+                  <Calendar size={12} className="text-emerald-600" />
+                  <span>{isRtl ? 'نطاق التاريخ (من / إلى):' : 'Date Range (From / To):'}</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={searchDateFrom}
+                    onChange={(e) => { setSearchDateFrom(e.target.value); setCurrentPage(1); }}
+                    className="px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    title={isRtl ? 'من تاريخ' : 'From Date'}
+                  />
+                  <span className="text-slate-400 font-bold">←</span>
+                  <input
+                    type="date"
+                    value={searchDateTo}
+                    onChange={(e) => { setSearchDateTo(e.target.value); setCurrentPage(1); }}
+                    className="px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    title={isRtl ? 'إلى تاريخ' : 'To Date'}
+                  />
+                  {(searchDateFrom || searchDateTo) && (
+                    <button
+                      type="button"
+                      onClick={() => { setSearchDateFrom(''); setSearchDateTo(''); setCurrentPage(1); }}
+                      className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                      title={isRtl ? 'مسح نطاق التاريخ' : 'Clear range'}
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {uniqueUsers.length > 0 && (
+                <div className="flex items-center gap-2 w-full sm:w-auto sm:min-w-[200px]">
+                  <span className="text-[11px] text-slate-500 font-bold shrink-0">
+                    {isRtl ? 'المستخدم:' : 'User:'}
+                  </span>
+                  <div className="flex-1">
+                    <MultiSelectSearch
+                      id="scale-filter-user"
+                      label={isRtl ? 'المستخدم / المحرر' : 'Operator / User'}
+                      placeholder={isRtl ? 'بحث بالمستخدم...' : 'Search user...'}
+                      icon={<User size={12} />}
+                      options={uniqueUsers}
+                      selected={selectedUsers}
+                      onChange={(val) => { setSelectedUsers(val); setCurrentPage(1); }}
+                      lang={lang}
+                      align={isRtl ? 'left' : 'right'}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Active Filters Tag Pills */}
+            {activeFiltersCount > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                <span className="text-slate-500 font-bold flex items-center gap-1">
+                  <Filter size={11} className="text-emerald-600" />
+                  <span>{isRtl ? 'الفلاتر النشطة:' : 'Active:'}</span>
+                </span>
+
+                {selectedOperationNos.map(id => (
+                  <span key={'op-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold">
+                    <span>{isRtl ? 'كارتة:' : 'Ticket:'} {id}</span>
+                    <button type="button" onClick={() => setSelectedOperationNos(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {selectedStatuses.map(id => (
+                  <span key={'st-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold">
+                    <span>{isRtl ? 'الحالة:' : 'Status:'} {id}</span>
+                    <button type="button" onClick={() => setSelectedStatuses(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {selectedSuppliers.map(id => (
+                  <span key={'sup-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold">
+                    <span>{isRtl ? 'المورد:' : 'Supplier:'} {id}</span>
+                    <button type="button" onClick={() => setSelectedSuppliers(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {selectedCustomers.map(id => (
+                  <span key={'cust-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold">
+                    <span>{isRtl ? 'العميل:' : 'Customer:'} {id}</span>
+                    <button type="button" onClick={() => setSelectedCustomers(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {selectedProducts.map(id => (
+                  <span key={'prod-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold">
+                    <span>{isRtl ? 'الصنف:' : 'Item:'} {id}</span>
+                    <button type="button" onClick={() => setSelectedProducts(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {selectedVehicles.map(id => (
+                  <span key={'veh-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold">
+                    <span>{isRtl ? 'سيارة:' : 'Vehicle:'} {id}</span>
+                    <button type="button" onClick={() => setSelectedVehicles(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {selectedDrivers.map(id => (
+                  <span key={'drv-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold">
+                    <span>{isRtl ? 'سائق:' : 'Driver:'} {id}</span>
+                    <button type="button" onClick={() => setSelectedDrivers(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {selectedDates.map(id => (
+                  <span key={'dt-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold font-mono">
+                    <span>{id}</span>
+                    <button type="button" onClick={() => setSelectedDates(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {selectedUsers.map(id => (
+                  <span key={'usr-' + id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold">
+                    <span>{isRtl ? 'مستخدم:' : 'User:'} {id}</span>
+                    <button type="button" onClick={() => setSelectedUsers(prev => prev.filter(x => x !== id))} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+
+                {searchDateFrom && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold font-mono">
+                    <span>{isRtl ? 'من:' : 'From:'} {searchDateFrom}</span>
+                    <button type="button" onClick={() => setSearchDateFrom('')} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                )}
+
+                {searchDateTo && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 rounded-lg font-bold font-mono">
+                    <span>{isRtl ? 'إلى:' : 'To:'} {searchDateTo}</span>
+                    <button type="button" onClick={() => setSearchDateTo('')} className="hover:text-rose-600 cursor-pointer">
+                      <X size={11} />
+                    </button>
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="px-2 py-0.5 text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 rounded-lg flex items-center gap-1 transition-colors cursor-pointer border border-rose-200 dark:border-rose-900"
+                >
+                  <RotateCcw size={10} />
+                  <span>{isRtl ? 'مسح الكل' : 'Clear All'}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
