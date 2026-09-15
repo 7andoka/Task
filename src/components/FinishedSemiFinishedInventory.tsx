@@ -676,8 +676,13 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
       const unitKey = findColumnKey(['وحدة', 'unit']) || '';
       const unit = unitKey ? String(row[unitKey] || 'قطعة') : 'قطعة';
 
-      // Group aggregated balance by item code, name, and group (NOT by individual store)
-      const key = `${code}_${name}_${group}`;
+      // Robust normalization of key components to avoid duplicates caused by spacing, casing, or Arabic letter variants
+      const normCode = code.replace(/[\s\u200B-\u200D\uFEFF]/g, '').toLowerCase();
+      const normName = name.replace(/\s+/g, ' ').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ي/g, 'ى');
+      const normGroup = group.replace(/\s+/g, ' ').trim().toLowerCase();
+
+      // If item code exists, prefer it as the primary key; otherwise combine with normalized name
+      const key = (normCode && normCode !== '-') ? `CODE_${normCode}` : `NAME_${normName}_${normGroup}`;
 
       if (!map.has(key)) {
         map.set(key, {
@@ -699,17 +704,23 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
         if (store && store !== '-') {
           entry.storeNames.add(store);
         }
+        // Prefer keeping non-empty code/name if existing was empty
+        if ((!entry.itemCode || entry.itemCode === '-') && code && code !== '-') {
+          entry.itemCode = code;
+        }
         entry.opening += row._opening;
         entry.addition += row._addition;
         entry.dispatch += row._dispatch;
         entry.ret += row._return;
         entry.adjustment += row._adjustment;
-        entry.currentBalance += row._currentBalance;
+        // Total balance recalculated accurately from aggregated components
+        entry.currentBalance = entry.opening + entry.addition + entry.ret + entry.adjustment - entry.dispatch;
       }
     });
 
     let list = Array.from(map.values()).map(item => ({
       ...item,
+      currentBalance: item.opening + item.addition + item.ret + item.adjustment - item.dispatch,
       storeName: balanceSearchStore.trim() 
         ? balanceSearchStore.trim() 
         : (item.storeNames.size === 0 
