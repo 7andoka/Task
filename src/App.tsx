@@ -14,7 +14,7 @@ import ColdStorage from './components/ColdStorage';
 import RawMaterial from './components/RawMaterial';
 import ThirdPartyProcessing from './components/ThirdPartyProcessing';
 import OliveStock from './components/OliveStock';
-import CsvDataView from './components/CsvDataView';
+import FinishedSemiFinishedInventory from './components/FinishedSemiFinishedInventory';
 import RawMaterialsInventory from './components/RawMaterialsInventory';
 import ScaleReports from './components/ScaleReports';
 import FreshSupply from './components/FreshSupply';
@@ -53,7 +53,7 @@ export default function App() {
       { id: 'rawMaterial' },
       { id: 'thirdPartyProcessing' },
       { id: 'oliveStock' },
-      { id: 'finishedProduct' },
+      { id: 'finishedSemiFinished' },
       { id: 'tasks' },
       { id: 'team' },
       { id: 'users' },
@@ -71,7 +71,12 @@ export default function App() {
     // 2. Non-admin users ONLY have access to the pages explicitly granted in their permissions array
     const permissions = u.permissions || [];
     return menuItems
-      .filter(item => permissions.includes(item.id))
+      .filter(item => {
+        if (item.id === 'finishedSemiFinished') {
+          return permissions.includes('finishedSemiFinished') || permissions.includes('finishedProduct');
+        }
+        return permissions.includes(item.id);
+      })
       .map(item => item.id);
   };
 
@@ -510,8 +515,9 @@ export default function App() {
         return <ThirdPartyProcessing lang={lang} user={user} />;
       case 'oliveStock':
         return <OliveStock lang={lang} user={user} />;
+      case 'finishedSemiFinished':
       case 'finishedProduct':
-        return <CsvDataView lang={lang} />;
+        return <FinishedSemiFinishedInventory lang={lang} user={user} />;
       case 'tasks':
         return <TaskList lang={lang} user={user} tasks={tasks} subordinates={subordinates} allUsers={allUsers} />;
       case 'team':

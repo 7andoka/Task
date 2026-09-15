@@ -27,7 +27,8 @@ import {
   Sprout,
   Layers,
   Scale,
-  FileText
+  FileText,
+  Boxes
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -125,7 +126,7 @@ export default function Layout({
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
     { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing, icon: ClipboardList },
     { id: 'oliveStock', label: t.oliveStock, icon: Database },
-    { id: 'finishedProduct', label: t.finishedProduct, icon: Package },
+    { id: 'finishedSemiFinished', label: t.finishedSemiFinished, icon: Boxes },
     { id: 'tasks', label: t.tasks, icon: CheckSquare },
     { id: 'team', label: t.team, icon: Users, roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
     { id: 'users', label: t.userManagement, icon: Users, roles: ['Warehouse Manager', 'Admin'] },
@@ -141,6 +142,9 @@ export default function Layout({
 
     // 2. Non-admin users ONLY see pages explicitly granted by the Admin in permissions
     const userPermissions = user?.permissions || [];
+    if (item.id === 'finishedSemiFinished') {
+      return userPermissions.includes('finishedSemiFinished') || userPermissions.includes('finishedProduct');
+    }
     return userPermissions.includes(item.id);
   });
 
