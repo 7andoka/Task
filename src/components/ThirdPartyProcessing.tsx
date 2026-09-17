@@ -600,6 +600,19 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     }
   };
 
+  const handleUpdatePoNumber = async (jobId: string, newPo: string) => {
+    try {
+      const trimmedPo = (newPo || '').trim();
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, jobId), {
+        poNumber: trimmedPo,
+        serverTimestamp: serverTimestamp()
+      });
+      toast.success(lang === 'ar' ? 'تم تحديث رقم PO بنجاح' : 'PO number updated successfully');
+    } catch (error) {
+      toast.error(lang === 'ar' ? 'فشل تحديث رقم PO' : 'Failed to update PO number');
+    }
+  };
+
   const handleUpdateJobActionState = (jobId: string, field: string, value: any) => {
     setJobActionsState(prev => ({
       ...prev,
@@ -1582,6 +1595,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         wasteQty: 0,
         status: 'Pending Warehouse',
         notes: '',
+        poNumber: '',
         processOperation: ''
       });
     } catch (error) {
@@ -1616,6 +1630,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       wasteQty: job.wasteQty || 0,
       status: job.status,
       notes: job.notes || '',
+      poNumber: job.poNumber || '',
       processOperation: job.processOperation || ''
     });
     setEditingJobId(job.id);
@@ -1625,9 +1640,17 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
   const filteredJobs = jobs.filter(job => {
     // Search filter
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) return true;
+
     const matchesSearch = (
-      job.warehouseName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.notes?.toLowerCase().includes(searchTerm.toLowerCase())
+      job.warehouseName?.toLowerCase().includes(term) ||
+      job.warehouseCode?.toLowerCase().includes(term) ||
+      job.jobCode?.toLowerCase().includes(term) ||
+      job.poNumber?.toLowerCase().includes(term) ||
+      job.notes?.toLowerCase().includes(term) ||
+      job.inputs?.some(i => i.itemCode?.toLowerCase().includes(term) || i.itemName?.toLowerCase().includes(term)) ||
+      job.outputs?.some(o => o.itemCode?.toLowerCase().includes(term) || o.itemName?.toLowerCase().includes(term))
     );
     if (!matchesSearch) return false;
 
@@ -1714,11 +1737,13 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     try {
       const rawPrice = jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || 0);
       const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice || '0')) || 0;
+      const po = (jobActionsState[job.id]?.poNumber !== undefined ? jobActionsState[job.id]?.poNumber : (job.poNumber || '')).trim();
       const updateData = {
         status: 'Pending Completion',
         purchasingApproverId: user.uid,
         purchasingApprovalTime: new Date().toISOString(),
         confirmedPrice: price,
+        poNumber: po,
         serverTimestamp: serverTimestamp()
       };
       await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
@@ -4326,6 +4351,21 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                 </select>
               </div>
 
+              {hasRole(['Admin', 'Purchasing Operations']) && (
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    {lang === 'ar' ? 'رقم أمر الشراء (PO Number)' : 'PO Number'}
+                  </label>
+                  <input
+                    type="text"
+                    value={newJob.poNumber || ''}
+                    onChange={(e) => setNewJob({ ...newJob, poNumber: e.target.value })}
+                    placeholder={lang === 'ar' ? 'مثال: PO-10293' : 'e.g. PO-10293'}
+                    className="w-full px-4 py-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border-2 border-blue-200 dark:border-blue-900/40 focus:border-blue-500 outline-none transition-all font-mono font-bold text-blue-900 dark:text-blue-200"
+                  />
+                </div>
+              )}
+
               {hasRole('Admin') && (
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
@@ -4546,7 +4586,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
               <input 
                 type="text"
-                placeholder={lang === 'ar' ? 'البحث في سجل التشغيل...' : 'Search processing history...'}
+                placeholder={lang === 'ar' ? 'بحث برقم PO، كود التشغيلة، المخزن، الصنف...' : 'Search by PO#, Job Code, Warehouse, Item...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 outline-none focus:border-emerald-500 transition-all shadow-sm"
@@ -4642,6 +4682,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                               {job.jobCode && (
                                 <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
                                   {job.jobCode}
+                                </span>
+                              )}
+                              {job.poNumber && (
+                                <span className="bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 rounded font-mono text-[10px] font-bold">
+                                  PO: {job.poNumber}
                                 </span>
                               )}
                             </span>
@@ -5050,9 +5095,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                                   onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', e.target.value)}
                                   className="w-full sm:w-28 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-bold text-center h-8"
                                 />
+                                <input
+                                  type="text"
+                                  placeholder={lang === 'ar' ? 'رقم PO' : 'PO Number'}
+                                  value={jobActionsState[job.id]?.poNumber !== undefined ? jobActionsState[job.id]?.poNumber : (job.poNumber || '')}
+                                  onChange={(e) => handleUpdateJobActionState(job.id, 'poNumber', e.target.value)}
+                                  className="w-full sm:w-28 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-mono font-bold text-center h-8"
+                                />
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleApprovePurchasing(job); }}
-                                  className="py-1.5 px-3 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all h-8"
+                                  className="py-1.5 px-3 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all h-8 shrink-0"
                                 >
                                   {lang === 'ar' ? 'اعتماد المشتريات' : 'Approve Purchasing'}
                                 </button>
@@ -5304,10 +5356,32 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                                  )}
                               </div>
                             )}
-                            {job.poNumber && (
+                            {(job.poNumber || hasRole(['Admin', 'Purchasing Operations'])) && (
                               <div className="p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800">
                                  <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block mb-1">{lang === 'ar' ? 'رقم PO' : 'PO Number'}</span>
-                                 <p className="text-xs font-mono font-bold text-blue-600">{job.poNumber}</p>
+                                 {hasRole(['Admin', 'Purchasing Operations']) ? (
+                                   <div className="flex items-center gap-2">
+                                     <input 
+                                       type="text"
+                                       placeholder={lang === 'ar' ? 'رقم PO' : 'PO Number'}
+                                       className="text-xs font-mono font-bold text-blue-600 bg-transparent border-b border-blue-500/30 outline-none w-28"
+                                       value={jobActionsState[job.id]?.poNumber !== undefined ? jobActionsState[job.id]?.poNumber : (job.poNumber || '')}
+                                       onChange={(e) => handleUpdateJobActionState(job.id, 'poNumber', e.target.value)}
+                                     />
+                                     <button 
+                                       onClick={(e) => { 
+                                         e.stopPropagation(); 
+                                         handleUpdatePoNumber(job.id, jobActionsState[job.id]?.poNumber !== undefined ? jobActionsState[job.id]?.poNumber! : (job.poNumber || '')); 
+                                       }}
+                                       className="p-1 text-blue-600 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-all"
+                                       title={lang === 'ar' ? 'حفظ رقم PO' : 'Save PO Number'}
+                                     >
+                                       <Save size={14} />
+                                     </button>
+                                   </div>
+                                 ) : (
+                                   <p className="text-xs font-mono font-bold text-blue-600">{job.poNumber}</p>
+                                 )}
                               </div>
                             )}
                           </div>
