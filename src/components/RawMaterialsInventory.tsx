@@ -207,7 +207,7 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
   const [isSapModalOpen, setIsSapModalOpen] = useState(false);
 
   // Active Tab: 'movements' | 'balances'
-  const [activeTab, setActiveTab] = useState<'movements' | 'balances'>('movements');
+  const [activeTab, setActiveTab] = useState<'movements' | 'balances'>('balances');
 
   // Search & Filter for Movements
   const [searchTerm, setSearchTerm] = useState('');

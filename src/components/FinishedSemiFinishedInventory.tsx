@@ -258,7 +258,7 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Active Tab: 'movements' | 'balances'
-  const [activeTab, setActiveTab] = useState<'movements' | 'balances'>('movements');
+  const [activeTab, setActiveTab] = useState<'movements' | 'balances'>('balances');
 
   // Search & Filter for Movements
   const [searchTerm, setSearchTerm] = useState('');
