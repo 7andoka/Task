@@ -23,9 +23,11 @@ import {
   SlidersHorizontal,
   LayoutList,
   Database,
-  Calendar
+  Calendar,
+  Scale
 } from 'lucide-react';
 import { DateRangeFilter, DateFilterValue } from './DateRangeFilter';
+import SapReconciliationModal from './SapReconciliationModal';
 import { Language } from '../types';
 import { toast } from 'sonner';
 
@@ -200,6 +202,9 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // SAP Reconciliation Modal
+  const [isSapModalOpen, setIsSapModalOpen] = useState(false);
 
   // Active Tab: 'movements' | 'balances'
   const [activeTab, setActiveTab] = useState<'movements' | 'balances'>('movements');
@@ -767,6 +772,16 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
             </button>
           </div>
 
+          {/* SAP Reconciliation Button */}
+          <button
+            onClick={() => setIsSapModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold transition-all backdrop-blur-md border border-emerald-400/30 shadow-md cursor-pointer text-xs"
+            title={isRtl ? 'مطابقة ومقارنة أرصدة الخامات مع نظام الساب (SAP)' : 'SAP Stock Reconciliation'}
+          >
+            <Scale size={16} />
+            <span>{isRtl ? 'مطابقة رصيد الساب' : 'SAP Reconciliation'}</span>
+          </button>
+
           <button
             onClick={() => setRefreshKey(prev => prev + 1)}
             disabled={loading}
@@ -1254,6 +1269,16 @@ export default function RawMaterialsInventory({ lang }: RawMaterialsInventoryPro
           </div>
         </div>
       )}
+
+      {/* SAP Stock Reconciliation Modal */}
+      <SapReconciliationModal
+        isOpen={isSapModalOpen}
+        onClose={() => setIsSapModalOpen(false)}
+        title={isRtl ? 'مطابقة أرصدة خامات السيستم مع رصيد الساب (SAP)' : 'Raw Materials SAP Reconciliation'}
+        subtitle={isRtl ? 'مطابقة ومقارنة أرصدة الخامات والمستلزمات الحالية مع شيت رصيد الساب' : 'Reconcile raw material balances with SAP stock file'}
+        systemItems={balanceSummaryData}
+        lang={lang}
+      />
 
     </div>
   );

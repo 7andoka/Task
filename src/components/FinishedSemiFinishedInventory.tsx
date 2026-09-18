@@ -29,9 +29,11 @@ import {
   RotateCcw,
   CheckCircle2,
   Boxes,
-  Info
+  Info,
+  Scale
 } from 'lucide-react';
 import { DateRangeFilter, DateFilterValue } from './DateRangeFilter';
+import SapReconciliationModal from './SapReconciliationModal';
 import { Language, UserProfile } from '../types';
 import { toast } from 'sonner';
 
@@ -244,6 +246,9 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
   // Modal State for Link Configuration
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [inputUrl, setInputUrl] = useState(sheetUrl);
+
+  // SAP Reconciliation Modal State
+  const [isSapModalOpen, setIsSapModalOpen] = useState(false);
 
   const [data, setData] = useState<any[]>([]);
   const [rawColumns, setRawColumns] = useState<string[]>([]);
@@ -965,6 +970,16 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
             </button>
           )}
 
+          {/* SAP Stock Reconciliation Button */}
+          <button
+            onClick={() => setIsSapModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold transition-all backdrop-blur-md border border-emerald-400/30 shadow-md cursor-pointer text-xs"
+            title={isRtl ? 'مطابقة ومقارنة أرصدة المنتجات مع نظام الساب (SAP)' : 'SAP Stock Reconciliation'}
+          >
+            <Scale size={15} />
+            <span>{isRtl ? 'مطابقة رصيد الساب' : 'SAP Reconciliation'}</span>
+          </button>
+
           {/* Refresh Button */}
           <button
             onClick={() => setRefreshKey(prev => prev + 1)}
@@ -1637,6 +1652,16 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
           </div>
         </div>
       )}
+
+      {/* SAP Stock Reconciliation Modal */}
+      <SapReconciliationModal
+        isOpen={isSapModalOpen}
+        onClose={() => setIsSapModalOpen(false)}
+        title={isRtl ? 'مطابقة أرصدة المنتجات بالسيستم مع رصيد الساب (SAP)' : 'Finished/Semi-Finished SAP Reconciliation'}
+        subtitle={isRtl ? 'مطابقة ومقارنة أرصدة المنتج التام والنصف مصنع الحالية مع شيت رصيد الساب' : 'Reconcile finished and semi-finished product balances with SAP stock file'}
+        systemItems={balanceSummaryData}
+        lang={lang}
+      />
 
     </div>
   );
