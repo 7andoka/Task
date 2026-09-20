@@ -73,41 +73,32 @@ export default function SapReconciliationModal({
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [hideZeroBalances, setHideZeroBalances] = useState<boolean>(true);
 
   // ---------------------------------------------------------------------------
   // 1. Export System Items Template (Excel)
   // ---------------------------------------------------------------------------
   const handleExportSystemTemplate = () => {
     try {
-      const exportRows = systemItems.map((item, idx) => ({
-        'م': idx + 1,
+      const exportRows = systemItems.map((item) => ({
         'كود الصنف': item.itemCode || '-',
-        'اسم الصنف': item.itemName || '-',
-        'المجموعة': item.groupName || '-',
-        'الوحدة': item.unit || 'كجم',
-        'رصيد السيستم': Number(item.currentBalance || 0),
-        'رصيد الساب (SAP Balance)': '' // Blank column for user input
+        'الكمية': '' // Blank column for user input / SAP stock quantity
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(exportRows);
       
       // Auto width columns
       worksheet['!cols'] = [
-        { wch: 6 },
-        { wch: 18 },
-        { wch: 40 },
-        { wch: 20 },
-        { wch: 10 },
-        { wch: 18 },
-        { wch: 24 }
+        { wch: 22 },
+        { wch: 18 }
       ];
 
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'أكواد السيستم للمطابقة');
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'قالب المطابقة');
       
-      const fileName = `أكواد_الأصناف_لمطابقة_الساب_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const fileName = `قالب_مطابقة_الأرصدة_${new Date().toISOString().slice(0, 10)}.xlsx`;
       XLSX.writeFile(workbook, fileName);
-      toast.success(isRtl ? 'تم تصدير ملف أكواد الأصناف بنجاح' : 'System item codes exported successfully');
+      toast.success(isRtl ? 'تم تصدير قالب المطابقة (كود الصنف والكمية) بنجاح' : 'Template exported successfully');
     } catch (err: any) {
       toast.error(isRtl ? `خطأ أثناء تصدير الملف: ${err.message}` : `Export error: ${err.message}`);
     }
@@ -126,17 +117,28 @@ export default function SapReconciliationModal({
     const foundName = columns.find(col => nameCandidates.some(c => col.toLowerCase().trim().includes(c)));
 
     // Auto-detect Qty column
-    const qtyCandidates = ['رصيد الساب', 'رصيد ساب', 'الرصيد', 'كمية الساب', 'كمية', 'sap balance', 'sap qty', 'quantity', 'balance', 'stock', 'unrestricted', 'المخزون', 'رصيد السيستم'];
+    const qtyCandidates = ['الكمية', 'رصيد الساب', 'رصيد ساب', 'الرصيد', 'كمية الساب', 'كمية', 'sap balance', 'sap qty', 'quantity', 'balance', 'stock', 'unrestricted', 'المخزون', 'رصيد السيستم'];
     const foundQty = columns.find(col => qtyCandidates.some(c => col.toLowerCase().trim().includes(c)));
 
-    if (foundCode) setSelectedCodeCol(foundCode);
-    else if (columns.length > 0) setSelectedCodeCol(columns[0]);
+    if (foundCode) {
+      setSelectedCodeCol(foundCode);
+    } else if (columns.length > 0) {
+      setSelectedCodeCol(columns[0]);
+    }
 
-    if (foundName) setSelectedNameCol(foundName);
-    else if (columns.length > 1) setSelectedNameCol(columns[1]);
+    if (foundName) {
+      setSelectedNameCol(foundName);
+    } else {
+      setSelectedNameCol('');
+    }
 
-    if (foundQty) setSelectedQtyCol(foundQty);
-    else if (columns.length > 2) setSelectedQtyCol(columns[2]);
+    if (foundQty) {
+      setSelectedQtyCol(foundQty);
+    } else if (columns.length === 2 && columns[0] === (foundCode || columns[0])) {
+      setSelectedQtyCol(columns[1]);
+    } else if (columns.length > 2) {
+      setSelectedQtyCol(columns[2]);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -309,6 +311,12 @@ export default function SapReconciliationModal({
       if (sapEntry) {
         if (matchedKey) processedSystemKeys.add(matchedKey);
         const sapQty = sapEntry.qty;
+
+        // Skip items with 0 balance on both sides if option enabled
+        if (hideZeroBalances && Math.abs(systemQty) < 0.0001 && Math.abs(sapQty) < 0.0001) {
+          return;
+        }
+
         const variance = systemQty - sapQty;
 
         let status: 'MATCHED' | 'SURPLUS' | 'DEFICIT' = 'MATCHED';
@@ -345,6 +353,10 @@ export default function SapReconciliationModal({
         });
       } else {
         // Item exists in System but missing in SAP uploaded file
+        if (hideZeroBalances && Math.abs(systemQty) < 0.0001) {
+          return;
+        }
+
         comparisonList.push({
           itemCode: sysItem.itemCode || '-',
           itemName: sysItem.itemName || '-',
@@ -364,6 +376,10 @@ export default function SapReconciliationModal({
     // Add items present in SAP file but NOT in System
     sapMap.forEach((sapEntry, key) => {
       if (!processedSystemKeys.has(key)) {
+        if (hideZeroBalances && Math.abs(sapEntry.qty) < 0.0001) {
+          return;
+        }
+
         comparisonList.push({
           itemCode: sapEntry.code || '-',
           itemName: sapEntry.name || '-',
@@ -381,7 +397,7 @@ export default function SapReconciliationModal({
     });
 
     return comparisonList;
-  }, [sapFileRows, selectedCodeCol, selectedNameCol, selectedQtyCol, systemItems]);
+  }, [sapFileRows, selectedCodeCol, selectedNameCol, selectedQtyCol, systemItems, hideZeroBalances]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -575,15 +591,15 @@ export default function SapReconciliationModal({
               </div>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
                 {isRtl 
-                  ? 'قم بتصدير ملف شيت يحتوي على أكواد وأسماء الأصناف ورصيد السيستم للبدء بمطابقتها.' 
-                  : 'Export Excel template containing all system codes and balances.'}
+                  ? 'قم بتصدير قالب شيت يحتوي على (كود الصنف والكمية) فقط لإدخال رصيد الساب ومطابقته مباشرة.' 
+                  : 'Export Excel template containing (Item Code & Quantity) columns only.'}
               </p>
               <button
                 onClick={handleExportSystemTemplate}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
               >
                 <FileSpreadsheet size={16} />
-                <span>{isRtl ? 'تحميل قالب أكواد الأصناف (Excel)' : 'Download System Item Codes (Excel)'}</span>
+                <span>{isRtl ? 'تحميل قالب المطابقة (كود الصنف والكمية)' : 'Download Reconciliation Template (Code & Qty)'}</span>
               </button>
             </div>
 
@@ -789,6 +805,17 @@ export default function SapReconciliationModal({
                     {isRtl ? 'مطابق' : 'Matched'} ({stats.matched})
                   </button>
                 </div>
+
+                {/* Hide Zero Balances Toggle */}
+                <label className="flex items-center gap-2 text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900/80 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 cursor-pointer select-none shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={hideZeroBalances}
+                    onChange={(e) => setHideZeroBalances(e.target.checked)}
+                    className="w-4 h-4 rounded border-zinc-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                  />
+                  <span>{isRtl ? 'إخفاء الأصناف صفرية الرصيد' : 'Hide Zero Balances'}</span>
+                </label>
 
                 {/* Search Input & Export Actions */}
                 <div className="flex items-center gap-2">
