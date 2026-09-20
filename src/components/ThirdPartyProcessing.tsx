@@ -553,6 +553,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       qualityComments?: string;
       confirmedPrice?: number | string;
       poNumber?: string;
+      executionNumber?: string;
       defectForeignBodies?: number;
       defectOlivesInsects?: number;
       defectSoftTexture?: number;
@@ -1648,6 +1649,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       job.warehouseCode?.toLowerCase().includes(term) ||
       job.jobCode?.toLowerCase().includes(term) ||
       job.poNumber?.toLowerCase().includes(term) ||
+      job.executionNumber?.toLowerCase().includes(term) ||
       job.notes?.toLowerCase().includes(term) ||
       job.inputs?.some(i => i.itemCode?.toLowerCase().includes(term) || i.itemName?.toLowerCase().includes(term)) ||
       job.outputs?.some(o => o.itemCode?.toLowerCase().includes(term) || o.itemName?.toLowerCase().includes(term))
@@ -1738,48 +1740,74 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const rawPrice = jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice || 0);
       const price = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice || '0')) || 0;
       const po = (jobActionsState[job.id]?.poNumber !== undefined ? jobActionsState[job.id]?.poNumber : (job.poNumber || '')).trim();
-      const updateData = {
-        status: 'Pending Completion',
+      
+      const isPendingPurchasing = job.status === 'Pending Purchasing';
+
+      const updateData: any = {
         purchasingApproverId: user.uid,
         purchasingApprovalTime: new Date().toISOString(),
         confirmedPrice: price,
         poNumber: po,
         serverTimestamp: serverTimestamp()
       };
+
+      if (isPendingPurchasing) {
+        updateData.status = 'Pending Completion';
+      }
+
       await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
       playNotificationSound(false);
       triggerVibration([300, 100, 300]);
-      toast.success(lang === 'ar' ? 'تم اعتماد المشتريات بنجاح' : 'Purchasing approval successful');
+      toast.success(lang === 'ar' 
+        ? (isPendingPurchasing ? 'تم اعتماد المشتريات والانتقال إلى مرحلة قيد الإكمال' : 'تم تحديث بيانات المشتريات بنجاح') 
+        : 'Purchasing details saved');
 
       // Auto share after purchasing approval
       handleShareWhatsApp({ ...job, ...updateData } as ProcessingJob);
     } catch (error) {
-      toast.error(lang === 'ar' ? 'فشل الاعتماد' : 'Approval failed');
+      toast.error(lang === 'ar' ? 'فشل الحفظ' : 'Approval failed');
     }
   };
 
   const handleCompleteJob = async (job: ProcessingJob) => {
     try {
-      const po = jobActionsState[job.id]?.poNumber || '';
-      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), {
+      const execNo = (jobActionsState[job.id]?.executionNumber !== undefined 
+        ? jobActionsState[job.id]?.executionNumber 
+        : (job.executionNumber || '')).trim();
+
+      const po = (jobActionsState[job.id]?.poNumber !== undefined 
+        ? jobActionsState[job.id]?.poNumber 
+        : (job.poNumber || '')).trim();
+
+      if (!execNo) {
+        toast.error(lang === 'ar' ? 'يرجى كتابة رقم التنفيذ الخاص بالمخزن قبل إكمال التشغيلة' : 'Please enter execution number before completing the job');
+        return;
+      }
+
+      const updateData: any = {
         status: 'Completed',
         completerId: user.uid,
         completionTime: new Date().toISOString(),
-        poNumber: po,
+        executionNumber: execNo,
         serverTimestamp: serverTimestamp()
-      });
+      };
+
+      if (po) {
+        updateData.poNumber = po;
+      }
+
+      await updateDoc(doc(db, COLLECTIONS.THIRD_PARTY_PROCESSING, job.id), updateData);
       playNotificationSound(false);
       triggerVibration([300, 100, 300, 100, 300]);
-      toast.success(lang === 'ar' ? 'تم إكمال التشغيلة بنجاح' : 'Job completed successfully');
+      toast.success(lang === 'ar' ? 'تم إكمال التشغيلة بنجاح برقم التنفيذ' : 'Job completed successfully');
       
-      // Auto share Word via Outlook after completion
+      // Auto share after completion
       handleShareWhatsApp({ 
         ...job, 
-        status: 'Completed', 
-        poNumber: po 
-      });
+        ...updateData
+      } as ProcessingJob);
     } catch (error) {
-      toast.error(lang === 'ar' ? 'فشل الإكمال' : 'Completion failed');
+      toast.error(lang === 'ar' ? 'فشل إكمال التشغيلة' : 'Completion failed');
     }
   };
 
@@ -1853,6 +1881,9 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     const text = isRtl
       ? `📋 *تقرير عملية تشغيل (Third Party Job)*\n\n` +
         `• *رقم العملية:* ${job.jobCode || '-'}\n` +
+        (job.poNumber ? `• *رقم PO:* ${job.poNumber}\n` : '') +
+        (job.executionNumber ? `• *رقم التنفيذ:* ${job.executionNumber}\n` : '') +
+        (job.confirmedPrice ? `• *السعر/كجم:* ${job.confirmedPrice} EGP\n` : '') +
         `• *التاريخ:* ${job.date}\n` +
         `• *المخزن:* ${job.warehouseName || '-'}\n` +
         `• *الحالة:* ${job.status}\n\n` +
@@ -1865,6 +1896,9 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         (job.qualityComments ? `*تعليقات الجودة:* ${job.qualityComments}\n` : '')
       : `📋 *Processing Job Report*\n\n` +
         `• *Job Code:* ${job.jobCode || '-'}\n` +
+        (job.poNumber ? `• *PO Number:* ${job.poNumber}\n` : '') +
+        (job.executionNumber ? `• *Execution No:* ${job.executionNumber}\n` : '') +
+        (job.confirmedPrice ? `• *Price/kg:* ${job.confirmedPrice} EGP\n` : '') +
         `• *Date:* ${job.date}\n` +
         `• *Warehouse:* ${job.warehouseName || '-'}\n` +
         `• *Status:* ${job.status}\n\n` +
@@ -2476,7 +2510,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         `${rle}${rlm}التاريخ: ${job.date}${pdf}\n` +
         `${rle}${rlm}الحالة: ${job.status}${pdf}\n` +
         `${rle}${rlm}رقم العملية: ${job.jobCode || '-'}${pdf}\n` +
-        `${rle}${rlm}رقم PO: ${job.poNumber || '-'}${pdf}\n\n` +
+        `${rle}${rlm}رقم PO: ${job.poNumber || '-'}${pdf}\n` +
+        `${rle}${rlm}رقم التنفيذ: ${job.executionNumber || '-'}${pdf}\n\n` +
         (commentsText ? `${commentsText.split('\n').map(line => `${rle}${rlm}${line}${pdf}`).join('\n')}\n\n` : '') +
         `${rle}${rlm}يرجى مراجعة ملف Word المرفق.${pdf}`
       ) : (
@@ -2487,7 +2522,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         `Date: ${job.date}\n` +
         `Status: ${job.status}\n` +
         `Job Code: ${job.jobCode || '-'}\n` +
-        `PO Number: ${job.poNumber || '-'}\n\n` +
+        `PO Number: ${job.poNumber || '-'}\n` +
+        `Execution No: ${job.executionNumber || '-'}\n\n` +
         (commentsText ? `${commentsText}\n\n` : '') +
         `Please review the attached Word file.`
       );
@@ -4689,6 +4725,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                                   PO: {job.poNumber}
                                 </span>
                               )}
+                              {job.confirmedPrice !== undefined && job.confirmedPrice !== null && job.confirmedPrice > 0 && (
+                                <span className="bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded font-mono text-[10px] font-bold">
+                                  {job.confirmedPrice} EGP/kg
+                                </span>
+                              )}
+                              {job.executionNumber && (
+                                <span className="bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800 px-1.5 py-0.5 rounded font-mono text-[10px] font-bold">
+                                  {lang === 'ar' ? 'تنفيذ:' : 'Exec:'} {job.executionNumber}
+                                </span>
+                              )}
                             </span>
                             <span className="w-1 h-1 bg-zinc-300 dark:bg-zinc-700 rounded-full" />
                             <span className="flex items-center gap-1">
@@ -5083,49 +5129,78 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                                </div>
                              )}
 
-                            {/* Purchasing Actions */}
-                            {hasRole(['Admin', 'Purchasing Operations']) && job.status === 'Pending Purchasing' && (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-1.5 rounded-xl w-full sm:w-auto shadow-sm">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  min="0"
-                                  placeholder={lang === 'ar' ? 'سعر الكيلو (مثال: 1.75)' : 'Price/kg (e.g. 1.75)'}
-                                  value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice !== undefined && job.confirmedPrice !== null ? job.confirmedPrice : '')}
-                                  onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', e.target.value)}
-                                  className="w-full sm:w-28 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-bold text-center h-8"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder={lang === 'ar' ? 'رقم PO' : 'PO Number'}
-                                  value={jobActionsState[job.id]?.poNumber !== undefined ? jobActionsState[job.id]?.poNumber : (job.poNumber || '')}
-                                  onChange={(e) => handleUpdateJobActionState(job.id, 'poNumber', e.target.value)}
-                                  className="w-full sm:w-28 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-mono font-bold text-center h-8"
-                                />
+                            {/* Purchasing Actions (When Pending Purchasing or Pending Completion) */}
+                            {hasRole(['Admin', 'Purchasing Operations']) && (job.status === 'Pending Purchasing' || job.status === 'Pending Completion') && (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800/50 p-2 rounded-xl w-full sm:w-auto shadow-sm">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 shrink-0">
+                                    {lang === 'ar' ? 'السعر:' : 'Price:'}
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    placeholder={lang === 'ar' ? 'سعر الكيلو (مثال: 1.75)' : 'Price/kg (e.g. 1.75)'}
+                                    value={jobActionsState[job.id]?.confirmedPrice !== undefined ? jobActionsState[job.id]?.confirmedPrice : (job.confirmedPrice !== undefined && job.confirmedPrice !== null ? job.confirmedPrice : '')}
+                                    onChange={(e) => handleUpdateJobActionState(job.id, 'confirmedPrice', e.target.value)}
+                                    className="w-full sm:w-28 p-1.5 text-[10px] rounded-lg bg-white dark:bg-zinc-800 border border-emerald-300 dark:border-emerald-700 outline-none font-bold text-center h-8"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 shrink-0">
+                                    {lang === 'ar' ? 'رقم PO:' : 'PO:'}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    placeholder={lang === 'ar' ? 'رقم PO' : 'PO Number'}
+                                    value={jobActionsState[job.id]?.poNumber !== undefined ? jobActionsState[job.id]?.poNumber : (job.poNumber || '')}
+                                    onChange={(e) => handleUpdateJobActionState(job.id, 'poNumber', e.target.value)}
+                                    className="w-full sm:w-28 p-1.5 text-[10px] rounded-lg bg-white dark:bg-zinc-800 border border-emerald-300 dark:border-emerald-700 outline-none font-mono font-bold text-center h-8"
+                                  />
+                                </div>
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleApprovePurchasing(job); }}
-                                  className="py-1.5 px-3 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-all h-8 shrink-0"
+                                  className="py-1.5 px-3 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-700 transition-all h-8 shrink-0 shadow-sm"
                                 >
-                                  {lang === 'ar' ? 'اعتماد المشتريات' : 'Approve Purchasing'}
+                                  {job.status === 'Pending Purchasing' 
+                                    ? (lang === 'ar' ? 'اعتماد المشتريات (قيد الإكمال)' : 'Approve Purchasing')
+                                    : (lang === 'ar' ? 'حفظ المشتريات' : 'Save Purchasing')}
                                 </button>
                               </div>
                             )}
 
-                            {/* Warehouse Completion Actions */}
+                            {/* Warehouse Completion Actions (When Pending Completion) */}
                             {hasRole(['Admin', 'Warehouse Operations']) && job.status === 'Pending Completion' && (
-                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 p-1.5 rounded-xl w-full sm:w-auto shadow-sm">
-                                <input
-                                  type="text"
-                                  placeholder={lang === 'ar' ? 'رقم PO' : 'PO Number'}
-                                  value={jobActionsState[job.id]?.poNumber || ''}
-                                  onChange={(e) => handleUpdateJobActionState(job.id, 'poNumber', e.target.value)}
-                                  className="w-full sm:w-32 p-1.5 text-[10px] rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-mono font-bold text-center h-9"
-                                />
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-800/50 p-2 rounded-xl w-full sm:w-auto shadow-sm">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] font-black text-blue-800 dark:text-blue-300 shrink-0">
+                                    {lang === 'ar' ? 'رقم التنفيذ *:' : 'Exec No *:'}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    placeholder={lang === 'ar' ? 'رقم التنفيذ (المخزن)' : 'Execution Number'}
+                                    value={jobActionsState[job.id]?.executionNumber !== undefined ? jobActionsState[job.id]?.executionNumber : (job.executionNumber || '')}
+                                    onChange={(e) => handleUpdateJobActionState(job.id, 'executionNumber', e.target.value)}
+                                    className="w-full sm:w-36 p-1.5 text-[10px] rounded-lg bg-white dark:bg-zinc-800 border border-blue-400 dark:border-blue-600 outline-none font-mono font-black text-center text-blue-800 dark:text-blue-200 h-8 focus:ring-2 focus:ring-blue-500"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] font-bold text-zinc-500 shrink-0">
+                                    {lang === 'ar' ? 'رقم PO:' : 'PO:'}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    placeholder={lang === 'ar' ? 'رقم PO' : 'PO Number'}
+                                    value={jobActionsState[job.id]?.poNumber !== undefined ? jobActionsState[job.id]?.poNumber : (job.poNumber || '')}
+                                    onChange={(e) => handleUpdateJobActionState(job.id, 'poNumber', e.target.value)}
+                                    className="w-full sm:w-28 p-1.5 text-[10px] rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none font-mono font-bold text-center h-8"
+                                  />
+                                </div>
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleCompleteJob(job); }}
-                                  className="py-1.5 px-4 bg-blue-500 text-white rounded-lg text-[10px] font-bold hover:bg-blue-600 transition-all h-9"
+                                  className="py-1.5 px-4 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-all h-8 shrink-0 shadow-sm"
                                 >
-                                  {lang === 'ar' ? 'مكتمل' : 'Complete'}
+                                  {lang === 'ar' ? 'إكمال التشغيلة (مكتمل)' : 'Complete Job'}
                                 </button>
                               </div>
                             )}

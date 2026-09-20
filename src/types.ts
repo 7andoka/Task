@@ -252,6 +252,7 @@ export interface ProcessingJob {
   confirmedPrice?: number;
   qualityComments?: string;
   poNumber?: string;
+  executionNumber?: string;
 
   // Grading Specific Quality defects
   defectForeignBodies?: number;
