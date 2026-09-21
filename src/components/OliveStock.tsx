@@ -397,6 +397,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     if (isRtl) {
       if (loc === 'Richland') return 'ريتشلاند (Richland)';
       if (loc === 'Olive Land') return 'أوليف لاند (Olive Land)';
+      if (loc === 'JPS Warehouse') return 'مخزن JPS (JPS Warehouse)';
       return loc;
     }
     return loc;
@@ -611,16 +612,23 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
       let locDescr = locDescrIdx !== -1 && row[locDescrIdx] ? row[locDescrIdx] : (isRtl ? 'مخزن غير محدد' : 'Unknown');
       
-      // Grouping logic: Richland & Olive Land & merged warehouses
+      // Grouping logic: Richland & Olive Land & JPS Warehouse & merged warehouses
       const normalizedLoc = locDescr.toLowerCase().trim();
       const richlandTargets = [
         'raw material', 'wip production', 'qualtiy storage', 'quality storage', 'wip r2e', '10000 m',
         'pacakging', 'packaging', 'packaging warehouse', 'pacakging warehouse',
-        'unknown', 'غير محدد', 'مخزن غير محدد', 'unassigned', ''
+        'unknown', 'غير محدد', 'مخزن غير محدد', 'unassigned', '',
+        'olive raw materi', 'olive raw material', 'olive raw materials', 'olive raw'
       ];
 
       if (normalizedLoc.startsWith('ol tank')) {
         locDescr = 'Olive Land';
+      } else if (
+        normalizedLoc.includes('jps') ||
+        normalizedLoc.includes('jps wip') ||
+        normalizedLoc.includes('jps warehouse')
+      ) {
+        locDescr = 'JPS Warehouse';
       } else if (
         normalizedLoc.startsWith('tank') || 
         normalizedLoc.startsWith('wip tank') || 
@@ -629,6 +637,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         normalizedLoc.startsWith('unknown') ||
         normalizedLoc.startsWith('غير محدد') ||
         normalizedLoc.startsWith('مخزن غير محدد') ||
+        normalizedLoc.includes('olive raw') ||
+        normalizedLoc.includes('raw materi') ||
         richlandTargets.includes(normalizedLoc)
       ) {
         locDescr = 'Richland';
@@ -771,12 +781,14 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       Object.keys(row.locationQuantities).forEach(loc => locSet.add(loc));
     });
     
-    // Sort locations: Richland first, then others
+    // Sort locations: Richland first, then Olive Land, JPS Warehouse, then others
     const locs = Array.from(locSet).sort((a, b) => {
       if (a === 'Richland') return -1;
       if (b === 'Richland') return 1;
       if (a === 'Olive Land') return -1;
       if (b === 'Olive Land') return 1;
+      if (a === 'JPS Warehouse') return -1;
+      if (b === 'JPS Warehouse') return 1;
       return a.localeCompare(b);
     });
     return locs;
@@ -984,7 +996,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
             ? '#3b82f6' // Blue for Richland
             : location.toLowerCase().includes('olive land') 
               ? '#d946ef' // Fuchsia/Indigo for Olive Land
-              : ['#0ea5e9', '#8b5cf6', '#14b8a6', '#f43f5e', '#eab308'][idx % 5] // Multi-color rotation
+              : location.toLowerCase().includes('jps')
+                ? '#10b981' // Emerald for JPS Warehouse
+                : ['#0ea5e9', '#8b5cf6', '#14b8a6', '#f43f5e', '#eab308'][idx % 5] // Multi-color rotation
         };
       })
       .filter(item => item.value > 0)
@@ -2046,6 +2060,10 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 <div className="flex items-center gap-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-fuchsia-500" />
                   <span className="text-zinc-500">Olive Land Assets</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="text-zinc-500">JPS Warehouse Assets</span>
                 </div>
               </div>
             </div>
