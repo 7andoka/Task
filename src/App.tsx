@@ -43,7 +43,8 @@ export default function App() {
   const getAllowedTabs = (u: UserProfile | null): string[] => {
     if (!u) return [];
     
-    const menuItems = [
+    const menuItems: { id: string; roles?: string[] }[] = [
+      { id: 'kpis', roles: ['Admin', 'Warehouse Manager', 'Senior Manager', 'Manager'] },
       { id: 'scaleReports' },
       { id: 'supplyTracking' },
       { id: 'freshSupply' },
@@ -55,27 +56,35 @@ export default function App() {
       { id: 'oliveStock' },
       { id: 'finishedSemiFinished' },
       { id: 'tasks' },
-      { id: 'team' },
-      { id: 'users' },
+      { id: 'team', roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
+      { id: 'users', roles: ['Warehouse Manager', 'Admin'] },
       { id: 'settings' },
     ];
 
     const userRoles = u.roles || (u.role ? [u.role] : []);
     const isAdminOrWHManager = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
+    const userPermissions = u.permissions;
 
-    // 1. Admin and Warehouse Manager have access to all pages (new and existing)
-    if (isAdminOrWHManager) {
-      return menuItems.map(item => item.id);
-    }
-
-    // 2. Non-admin users ONLY have access to the pages explicitly granted in their permissions array
-    const permissions = u.permissions || [];
     return menuItems
       .filter(item => {
-        if (item.id === 'finishedSemiFinished') {
-          return permissions.includes('finishedSemiFinished') || permissions.includes('finishedProduct');
+        if (item.id === 'settings') return true;
+
+        if (item.roles && !item.roles.some((r: any) => userRoles.includes(r))) {
+          return false;
         }
-        return permissions.includes(item.id);
+
+        // 1. If user has custom permissions array set (including Admin/WH Manager)
+        if (Array.isArray(userPermissions) && userPermissions.length > 0) {
+          if (item.id === 'finishedSemiFinished') {
+            return userPermissions.includes('finishedSemiFinished') || userPermissions.includes('finishedProduct');
+          }
+          return userPermissions.includes(item.id);
+        }
+
+        // 2. Default fallback if permissions array is not set: Admin/WH Manager gets all allowed pages
+        if (isAdminOrWHManager) return true;
+
+        return false;
       })
       .map(item => item.id);
   };

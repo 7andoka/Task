@@ -1,6 +1,11 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Bell, Save, CheckCircle2, Download, Moon, Sun, Palette } from 'lucide-react';
+import { 
+  Bell, Save, CheckCircle2, Download, Moon, Sun, Palette, 
+  LayoutGrid, Check, BarChart3, Scale, Truck, Sprout, FileText, 
+  Layers, Snowflake, Package, ClipboardList, Database, Boxes, 
+  CheckSquare, Users, Settings as SettingsIcon, Shield 
+} from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile, NotificationPreferences } from '../types';
 import { storageService } from '../services/storageService';
@@ -29,6 +34,52 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
 
+  const allNavPages = React.useMemo(() => [
+    { id: 'kpis', label: lang === 'ar' ? 'لوحة المؤشرات والقيادة' : 'Executive KPIs Dashboard', icon: BarChart3, roles: ['Admin', 'Warehouse Manager', 'Senior Manager', 'Manager'] },
+    { id: 'scaleReports', label: t.scaleReports, icon: Scale },
+    { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
+    { id: 'freshSupply', label: t.freshSupply, icon: Sprout },
+    { id: 'purchaseOrders', label: t.purchaseOrders, icon: FileText },
+    { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory, icon: Layers },
+    { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
+    { id: 'rawMaterial', label: t.rawMaterial, icon: Package },
+    { id: 'thirdPartyProcessing', label: t.thirdPartyProcessing, icon: ClipboardList },
+    { id: 'oliveStock', label: t.oliveStock, icon: Database },
+    { id: 'finishedSemiFinished', label: t.finishedSemiFinished, icon: Boxes },
+    { id: 'tasks', label: t.tasks, icon: CheckSquare },
+    { id: 'team', label: t.team, icon: Users, roles: ['Warehouse Manager', 'Department Head', 'Supervisor', 'Admin', 'Senior Manager', 'Manager', 'Team Leader'] },
+    { id: 'users', label: t.userManagement, icon: Users, roles: ['Warehouse Manager', 'Admin'] },
+    { id: 'settings', label: t.settings, icon: SettingsIcon },
+  ].filter(item => {
+    const userRoles = user.roles || (user.role ? [user.role] : []);
+    if (item.roles) {
+      return item.roles.some((r: any) => userRoles.includes(r));
+    }
+    return true;
+  }), [lang, user, t]);
+
+  const [selectedPageIds, setSelectedPageIds] = React.useState<string[]>(() => {
+    if (Array.isArray(user.permissions) && user.permissions.length > 0) {
+      return user.permissions;
+    }
+    return allNavPages.map(p => p.id);
+  });
+
+  const togglePageVisibility = (pageId: string) => {
+    if (pageId === 'settings') return; // keep settings page accessible
+    setSelectedPageIds(prev => 
+      prev.includes(pageId) ? prev.filter(id => id !== pageId) : [...prev, pageId]
+    );
+  };
+
+  const handleSelectAllPages = () => {
+    setSelectedPageIds(allNavPages.map(p => p.id));
+  };
+
+  const handleDeselectAllPages = () => {
+    setSelectedPageIds(['settings']);
+  };
+
   React.useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault();
@@ -48,7 +99,11 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
   };
 
   const handleSave = async () => {
-    const updatedUser = { ...user, notificationPreferences: prefs };
+    const updatedUser = { 
+      ...user, 
+      notificationPreferences: prefs,
+      permissions: selectedPageIds
+    };
     
     // Update directly in firestore
     await storageService.saveUser(updatedUser);
@@ -61,7 +116,79 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Page Navigation Customization */}
+      <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 md:p-8 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <LayoutGrid size={24} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+                {lang === 'ar' ? 'تخصيص القائمة والصفحات الظاهرة' : 'Customize Visible Pages'}
+              </h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                {lang === 'ar' 
+                  ? 'اختر الصفحات التي ترغب بظهورها في القائمة الخاصة بك وإخفاء الصفحات غير المطلوبة' 
+                  : 'Select which pages appear in your navigation bar and hide unused ones'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleSelectAllPages}
+              className="px-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"
+            >
+              {lang === 'ar' ? 'تحديد الكل' : 'Select All'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeselectAllPages}
+              className="px-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-bold text-red-600 dark:text-red-400 transition-colors cursor-pointer"
+            >
+              {lang === 'ar' ? 'إلغاء الكل' : 'Deselect All'}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {allNavPages.map(page => {
+            const isSelected = selectedPageIds.includes(page.id);
+            const isSettings = page.id === 'settings';
+            return (
+              <button
+                key={page.id}
+                type="button"
+                onClick={() => togglePageVisibility(page.id)}
+                disabled={isSettings}
+                className={`flex items-center justify-between p-3.5 rounded-2xl border text-sm font-bold transition-all text-right ${
+                  isSettings 
+                    ? 'opacity-80 bg-zinc-100 dark:bg-zinc-800/80 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 cursor-not-allowed'
+                    : isSelected
+                    ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-500 text-emerald-800 dark:text-emerald-300 shadow-xs cursor-pointer'
+                    : 'bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700 cursor-pointer'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <page.icon size={18} className={isSelected ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400'} />
+                  <span className="truncate">{page.label}</span>
+                </div>
+                <div className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-all ${
+                  isSelected
+                    ? 'bg-emerald-500 border-emerald-500 text-white'
+                    : 'border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800'
+                }`}>
+                  {isSelected && <Check size={12} strokeWidth={3} />}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Theme Appearance Section */}
       <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 md:p-8 border border-zinc-200 dark:border-zinc-800 shadow-sm">
         <div className="flex items-center gap-4 mb-6">

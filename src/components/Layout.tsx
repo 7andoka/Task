@@ -134,18 +134,29 @@ export default function Layout({
   ];
 
   const filteredMenuItems = menuItems.filter(item => {
+    if (item.id === 'settings') return true;
+
     const userRoles = user?.roles || (user?.role ? [user.role] : []);
     const isAdminOrWHManager = userRoles.includes('Admin') || userRoles.includes('Warehouse Manager');
-    
-    // 1. Admin and Warehouse Manager have full access to all pages
+
+    if (item.roles && !item.roles.some((r: any) => userRoles.includes(r))) {
+      return false;
+    }
+
+    const userPermissions = user?.permissions;
+
+    // 1. If user has custom permissions array set (including Admin/WH Manager)
+    if (Array.isArray(userPermissions) && userPermissions.length > 0) {
+      if (item.id === 'finishedSemiFinished') {
+        return userPermissions.includes('finishedSemiFinished') || userPermissions.includes('finishedProduct');
+      }
+      return userPermissions.includes(item.id);
+    }
+
+    // 2. Default fallback if permissions array is not set: Admin/WH Manager gets all allowed pages
     if (isAdminOrWHManager) return true;
 
-    // 2. Non-admin users ONLY see pages explicitly granted by the Admin in permissions
-    const userPermissions = user?.permissions || [];
-    if (item.id === 'finishedSemiFinished') {
-      return userPermissions.includes('finishedSemiFinished') || userPermissions.includes('finishedProduct');
-    }
-    return userPermissions.includes(item.id);
+    return false;
   });
 
   return (

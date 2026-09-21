@@ -74,6 +74,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
   ];
 
   const availablePages = [
+    { id: 'kpis', label: lang === 'ar' ? 'لوحة المؤشرات والقيادة' : 'Executive KPIs Dashboard' },
     { id: 'scaleReports', label: t.scaleReports },
     { id: 'supplyTracking', label: t.supplyTracking },
     { id: 'freshSupply', label: t.freshSupply },
@@ -373,9 +374,9 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                 </div>
 
                 {(createForm.roles || [createForm.role]).some(r => r === 'Admin' || r === 'Warehouse Manager') && (
-                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
                     <Shield size={14} className="shrink-0" />
-                    <span>{lang === 'ar' ? 'هذا المستخدم يمتلك دور مدير النظام، وسيحصل تلقائياً على حق الوصول لجميع الصفحات.' : 'This user is an Admin/Manager and will automatically have access to all pages.'}</span>
+                    <span>{lang === 'ar' ? 'ملاحظة: يمكنك تخصيص واختيار الصفحات الظاهرة لهذا المدير بحرية أدناه.' : 'Note: You can freely customize the visible pages for this Admin/Manager below.'}</span>
                   </div>
                 )}
 
@@ -550,9 +551,9 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
                 </div>
 
                 {(editForm.roles || [editForm.role]).some(r => r === 'Admin' || r === 'Warehouse Manager') && (
-                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
                     <Shield size={14} className="shrink-0" />
-                    <span>{lang === 'ar' ? 'هذا المستخدم يمتلك دور مدير النظام، وسيحصل تلقائياً على حق الوصول لجميع الصفحات.' : 'This user is an Admin/Manager and will automatically have access to all pages.'}</span>
+                    <span>{lang === 'ar' ? 'ملاحظة: يمكنك تخصيص واختيار الصفحات الظاهرة لهذا المدير بحرية أدناه.' : 'Note: You can freely customize the visible pages for this Admin/Manager below.'}</span>
                   </div>
                 )}
 

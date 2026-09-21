@@ -20,6 +20,7 @@ import {
   Check,
   ChevronDown,
   X,
+  Calendar,
   PieChart as PieChartIcon
 } from 'lucide-react';
 import { 
@@ -54,11 +55,13 @@ interface PivotedStockRow {
   processType: string;
   locationQuantities: Record<string, number>;
   analyses: string[];
+  seasons: string[];
   rawRows: {
     quantity: number;
     location: string;
     analysis: string;
     batch: string;
+    season: string;
   }[];
 }
 
@@ -220,6 +223,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([]);
   const [selectedAnalyses, setSelectedAnalyses] = useState<string[]>([]);
+  const [selectedSeasons, setSelectedSeasons] = useState<string[]>([]);
 
   const isRtl = lang === 'ar';
 
@@ -354,6 +358,26 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-400 dark:border-emerald-500/10';
     }
     return 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20 dark:bg-zinc-500/5 dark:text-zinc-400 dark:border-zinc-500/10';
+  };
+
+  // Helper to detect season from batch code
+  // Batch must be EXACTLY "2026" OR end with letter "B" (case-insensitive) to be merged into "2026".
+  // Otherwise, it is classified as "unspecified" ("غير محدد").
+  const detectSeason = (batchVal: string): string => {
+    if (!batchVal) return 'unspecified';
+    const trimmed = batchVal.trim();
+    const normalized = trimmed.toUpperCase();
+
+    if (normalized === '2026' || normalized.endsWith('B')) {
+      return '2026';
+    }
+
+    return 'unspecified';
+  };
+
+  const getSeasonLabel = (id: string) => {
+    if (id === '2026') return isRtl ? 'موسم 2026' : 'Season 2026';
+    return isRtl ? 'غير محدد' : 'Unspecified';
   };
 
   const detectAttribute = (descr: string, type: 'size' | 'process' | 'direction'): string => {
@@ -621,7 +645,12 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         'olive raw materi', 'olive raw material', 'olive raw materials', 'olive raw'
       ];
 
-      if (normalizedLoc.startsWith('ol tank')) {
+      if (
+        normalizedLoc.includes('olive land') ||
+        normalizedLoc.includes('wip olive land') ||
+        normalizedLoc.startsWith('ol tank') ||
+        normalizedLoc.includes('ol tank')
+      ) {
         locDescr = 'Olive Land';
       } else if (
         normalizedLoc.includes('jps') ||
@@ -644,16 +673,18 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         locDescr = 'Richland';
       }
 
-      // Determine batch analysis
+      // Determine batch analysis & season
       const batchVal = batchIdx !== -1 && row[batchIdx] ? row[batchIdx].trim() : '';
       const prefix = batchVal.substring(0, 3).toUpperCase();
       const normalizedBatch = batchVal.toUpperCase();
       let rowAnalysis = 'none';
-      if (prefix === 'NOT' || prefix === 'PWL' || prefix === 'PNC' || prefix === 'RAN' || normalizedBatch.endsWith('NOT')) {
+      if (normalizedBatch.startsWith('N') || prefix === 'PWL' || prefix === 'PNC' || prefix === 'RAN' || normalizedBatch.endsWith('NOT')) {
         rowAnalysis = 'Not free';
-      } else if (prefix === 'FRE') {
+      } else if (normalizedBatch.startsWith('F')) {
         rowAnalysis = 'free';
       }
+
+      const rowSeason = detectSeason(batchVal);
 
       if (!pivotMap.has(code)) {
         pivotMap.set(code, {
@@ -666,6 +697,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           processType: detectAttribute(descr, 'process'),
           locationQuantities: {},
           analyses: [],
+          seasons: [],
           rawRows: []
         });
       }
@@ -678,11 +710,16 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         quantity,
         location: locDescr,
         analysis: rowAnalysis,
-        batch: batchVal
+        batch: batchVal,
+        season: rowSeason
       });
 
       if (!entry.analyses.includes(rowAnalysis)) {
         entry.analyses.push(rowAnalysis);
+      }
+
+      if (!entry.seasons.includes(rowSeason)) {
+        entry.seasons.push(rowSeason);
       }
     }
 
@@ -798,6 +835,10 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     return ['Manzanilla', 'Picual', 'Akas', 'Azizi', 'Kobrosi', 'Kalamata', 'Dolsy', 'Nour Sabah', 'Pepper', 'Other'];
   }, []);
 
+  const availableSeasons = useMemo(() => {
+    return ['2026', 'unspecified'];
+  }, []);
+
   const visibleLocations = useMemo(() => {
     if (selectedLocations.length === 0) {
       return storageLocations;
@@ -809,10 +850,14 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   const filteredDataset = useMemo(() => {
     return dataset
       .map(row => {
-        // If analysis filter is selected, we filter the rawRows inside
-        const activeRawRows = selectedAnalyses.length === 0
+        // If analysis or season filter is selected, we filter the rawRows inside
+        const activeRawRows = (selectedAnalyses.length === 0 && selectedSeasons.length === 0)
           ? row.rawRows
-          : row.rawRows.filter(r => selectedAnalyses.includes(r.analysis));
+          : row.rawRows.filter(r => {
+              const matchAnalysis = selectedAnalyses.length === 0 || selectedAnalyses.includes(r.analysis);
+              const matchSeason = selectedSeasons.length === 0 || selectedSeasons.includes(r.season);
+              return matchAnalysis && matchSeason;
+            });
 
         // Recompute quantities based on the active rawRows
         const totalQuantity = activeRawRows.reduce((sum, r) => sum + r.quantity, 0);
@@ -822,18 +867,20 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           locationQuantities[r.location] = (locationQuantities[r.location] || 0) + r.quantity;
         });
 
-        // Unique analyses remaining with quantity > 0
+        // Unique analyses and seasons remaining with quantity > 0
         const activeAnalyses = Array.from(new Set(activeRawRows.filter(r => r.quantity > 0).map(r => r.analysis)));
+        const activeSeasons = Array.from(new Set(activeRawRows.filter(r => r.quantity > 0).map(r => r.season)));
 
         return {
           ...row,
           totalQuantity,
           locationQuantities,
-          analyses: activeAnalyses
+          analyses: activeAnalyses,
+          seasons: activeSeasons
         };
       })
       .filter(row => {
-        // Only keep rows that have stock remaining after analysis filter
+        // Only keep rows that have stock remaining after analysis/season filter
         if (row.totalQuantity <= 0) return false;
 
         const matchesSearch = 
@@ -862,7 +909,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
         return matchesSearch && matchesLocation && matchesVariety && matchesSize && matchesTreatment && matchesProcess;
       });
-  }, [dataset, searchTerm, selectedLocations, selectedVarieties, selectedSizes, selectedTreatments, selectedProcesses, selectedAnalyses]);
+  }, [dataset, searchTerm, selectedLocations, selectedVarieties, selectedSizes, selectedTreatments, selectedProcesses, selectedAnalyses, selectedSeasons]);
 
   // Unmodified totals block, independent of filters
   const unmodifiedTotals = useMemo(() => {
@@ -1086,6 +1133,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         [isRtl ? 'الحجم' : 'Size']: item.size || '—',
         [isRtl ? 'التشغيل' : 'Process']: getAttributeLabel(item.processType, 'process'),
         [isRtl ? 'التوجيه' : 'Treatment']: getAttributeLabel(item.treatment, 'direction'),
+        [isRtl ? 'الموسم' : 'Season']: item.seasons.map(s => getSeasonLabel(s)).join(', '),
         [isRtl ? 'التحليل' : 'Analysis']: item.analyses.map(a => getAnalysisLabel(a)).join(', '),
         [isRtl ? 'إجمالي الكمية (كجم)' : 'Total Qty (Kg)']: item.totalQuantity,
       };
@@ -1698,7 +1746,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 />
               </div>
 
-              {(searchTerm !== '' || selectedLocations.length > 0 || selectedVarieties.length > 0 || selectedSizes.length > 0 || selectedTreatments.length > 0 || selectedProcesses.length > 0 || selectedAnalyses.length > 0) && (
+              {(searchTerm !== '' || selectedLocations.length > 0 || selectedVarieties.length > 0 || selectedSizes.length > 0 || selectedTreatments.length > 0 || selectedProcesses.length > 0 || selectedAnalyses.length > 0 || selectedSeasons.length > 0) && (
                 <button
                   onClick={() => {
                     setSearchTerm('');
@@ -1708,6 +1756,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                     setSelectedTreatments([]);
                     setSelectedProcesses([]);
                     setSelectedAnalyses([]);
+                    setSelectedSeasons([]);
                   }}
                   className="text-xs text-red-500 hover:text-red-750 font-bold px-3 py-1.5 transition-colors underline decoration-dotted flex items-center gap-1"
                 >
@@ -1718,6 +1767,16 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 justify-start md:justify-end">
+              {/* Season Multi-Filter */}
+              <MultiSelect
+                lang={lang}
+                label={isRtl ? 'الموسم' : 'Season'}
+                icon={<Calendar size={12} />}
+                options={availableSeasons.map(s => ({ id: s, label: getSeasonLabel(s) }))}
+                selected={selectedSeasons}
+                onChange={setSelectedSeasons}
+              />
+
               {/* Variety Multi-Filter */}
               <MultiSelect
                 lang={lang}
@@ -1918,6 +1977,11 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                             {row.treatment && (
                               <span className="bg-emerald-50/50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 text-[9px] px-2 py-0.5 rounded-lg font-extrabold border border-emerald-100 dark:border-emerald-900/30 whitespace-nowrap shadow-xs">
                                 {getAttributeLabel(row.treatment, 'direction')}
+                              </span>
+                            )}
+                            {row.seasons && row.seasons.length > 0 && (
+                              <span className="bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[9px] px-2 py-0.5 rounded-lg font-extrabold border border-amber-200 dark:border-amber-900/30 whitespace-nowrap shadow-xs">
+                                {row.seasons.map(s => getSeasonLabel(s)).join(', ')}
                               </span>
                             )}
                           </div>
