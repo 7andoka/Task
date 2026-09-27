@@ -508,6 +508,8 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBackgroundModalOpen, setIsBackgroundModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<JobStatus | 'All'>('All');
+  const [poFilter, setPoFilter] = useState<'All' | 'completed' | 'incomplete'>('All');
   const [toEmails, setToEmails] = useState<string[]>(['Khaled.Shaaban@RichLandfi.com']);
   const [ccEmails, setCcEmails] = useState<string[]>([]);
   const [newEmail, setNewEmail] = useState('');
@@ -1640,6 +1642,20 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
   };
 
   const filteredJobs = jobs.filter(job => {
+    // Status filter
+    if (statusFilter !== 'All' && job.status !== statusFilter) {
+      return false;
+    }
+
+    // Supply order (PO) filter
+    if (poFilter === 'completed') {
+      const hasPo = !!job.poNumber && job.poNumber.trim().length > 0;
+      if (!hasPo) return false;
+    } else if (poFilter === 'incomplete') {
+      const hasPo = !!job.poNumber && job.poNumber.trim().length > 0;
+      if (hasPo) return false;
+    }
+
     // Search filter
     const term = searchTerm.toLowerCase().trim();
     if (!term) return true;
@@ -4616,22 +4632,117 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Stats/Filters */}
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="relative w-full md:w-96">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+          {/* Stats/Filters Bar */}
+          <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            {/* Search Box */}
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={17} />
               <input 
                 type="text"
                 placeholder={lang === 'ar' ? 'بحث برقم PO، كود التشغيلة، المخزن، الصنف...' : 'Search by PO#, Job Code, Warehouse, Item...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 outline-none focus:border-emerald-500 transition-all shadow-sm"
+                className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 outline-none focus:border-emerald-500 text-sm transition-all"
               />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')} 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5 rounded-md"
+                  title={lang === 'ar' ? 'مسح البحث' : 'Clear search'}
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
 
-            <div className="flex items-center gap-4 bg-white dark:bg-zinc-900 p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-              <div className="px-4 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 text-sm font-medium">
-                {lang === 'ar' ? 'إجمالي العمليات:' : 'Total Jobs:'} {filteredJobs.length}
+            {/* Filter Selectors */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Status Filter */}
+              <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-800/80 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm">
+                <Filter size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
+                  {lang === 'ar' ? 'الحالة:' : 'Status:'}
+                </span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as JobStatus | 'All')}
+                  className="bg-transparent text-xs font-bold text-zinc-800 dark:text-zinc-100 outline-none cursor-pointer pr-1"
+                >
+                  <option value="All" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {lang === 'ar' ? 'جميع الحالات' : 'All Statuses'}
+                  </option>
+                  <option value="Pending Warehouse" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {getJobStatusLabel('Pending Warehouse', lang === 'ar')}
+                  </option>
+                  <option value="Pending Quality" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {getJobStatusLabel('Pending Quality', lang === 'ar')}
+                  </option>
+                  <option value="Pending Purchasing" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {getJobStatusLabel('Pending Purchasing', lang === 'ar')}
+                  </option>
+                  <option value="Pending Completion" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {getJobStatusLabel('Pending Completion', lang === 'ar')}
+                  </option>
+                  <option value="Completed" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {getJobStatusLabel('Completed', lang === 'ar')}
+                  </option>
+                  <option value="Rejected" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {getJobStatusLabel('Rejected', lang === 'ar')}
+                  </option>
+                  <option value="Draft" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {getJobStatusLabel('Draft', lang === 'ar')}
+                  </option>
+                </select>
+              </div>
+
+              {/* Supply Order (PO) Filter */}
+              <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-800/80 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm">
+                <FileText size={15} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 shrink-0">
+                  {lang === 'ar' ? 'أمر التوريد:' : 'Supply Order:'}
+                </span>
+                <select
+                  value={poFilter}
+                  onChange={(e) => setPoFilter(e.target.value as 'All' | 'completed' | 'incomplete')}
+                  className="bg-transparent text-xs font-bold text-zinc-800 dark:text-zinc-100 outline-none cursor-pointer pr-1"
+                >
+                  <option value="All" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {lang === 'ar' ? 'الكل' : 'All'}
+                  </option>
+                  <option value="completed" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {lang === 'ar' ? 'مكتمل (يوجد أمر توريد)' : 'Complete (Has PO)'}
+                  </option>
+                  <option value="incomplete" className="bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100">
+                    {lang === 'ar' ? 'غير مكتمل (بدون أمر توريد)' : 'Incomplete (No PO)'}
+                  </option>
+                </select>
+              </div>
+
+              {/* Reset button if any filter is active */}
+              {(statusFilter !== 'All' || poFilter !== 'All' || searchTerm) && (
+                <button
+                  onClick={() => {
+                    setStatusFilter('All');
+                    setPoFilter('All');
+                    setSearchTerm('');
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors border border-red-200 dark:border-red-900/50"
+                  title={lang === 'ar' ? 'إعادة ضبط الفلاتر' : 'Reset Filters'}
+                >
+                  <X size={14} />
+                  <span>{lang === 'ar' ? 'إلغاء الفلاتر' : 'Reset'}</span>
+                </button>
+              )}
+
+              {/* Jobs Count Badge */}
+              <div className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1">
+                <span>{lang === 'ar' ? 'العدد:' : 'Total:'}</span>
+                <span className="font-black text-sm">{filteredJobs.length}</span>
+                {jobs.length !== filteredJobs.length && (
+                  <span className="text-[11px] opacity-75 font-normal">
+                    ({lang === 'ar' ? 'من أصل' : 'of'} {jobs.length})
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -4642,9 +4753,23 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                 <div className="w-16 h-16 bg-zinc-50 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4">
                   <History className="text-zinc-400" />
                 </div>
-                <p className="text-zinc-500 dark:text-zinc-400 font-medium">
-                  {lang === 'ar' ? 'لا توجد عمليات تشغيل مسجلة بعد' : 'No processing jobs recorded yet'}
+                <p className="text-zinc-500 dark:text-zinc-400 font-medium text-center">
+                  {jobs.length === 0
+                    ? (lang === 'ar' ? 'لا توجد عمليات تشغيل مسجلة بعد' : 'No processing jobs recorded yet')
+                    : (lang === 'ar' ? 'لا توجد عمليات تشغيل تطابق الفلاتر المحددة' : 'No processing jobs match the selected filters')}
                 </p>
+                {jobs.length > 0 && (statusFilter !== 'All' || poFilter !== 'All' || searchTerm) && (
+                  <button
+                    onClick={() => {
+                      setStatusFilter('All');
+                      setPoFilter('All');
+                      setSearchTerm('');
+                    }}
+                    className="mt-4 px-4 py-2 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 transition-colors"
+                  >
+                    {lang === 'ar' ? 'إلغاء جميع الفلاتر' : 'Reset all filters'}
+                  </button>
+                )}
               </div>
             ) : (
               filteredJobs.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((job) => {
