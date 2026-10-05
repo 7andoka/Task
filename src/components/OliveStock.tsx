@@ -611,26 +611,53 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   };
 
   const dataset = useMemo<PivotedStockRow[]>(() => {
-    if (rawData.length <= 1) return [];
+    if (!rawData || rawData.length === 0) return [];
     
-    const headers = rawData[0].map(h => h.trim().toLowerCase());
-    const materialIdx = headers.findIndex(h => h === 'material' || h.includes('material code'));
-    const descrIdx = headers.findIndex(h => h === 'material description' || (h.includes('descr') && h.includes('material')));
-    const unrestrictedIdx = headers.findIndex(h => h === 'unrestricted' || h.includes('unrestricted') || h.includes('qty') || h.includes('quantity'));
-    const locDescrIdx = headers.findIndex(h => h === 'descr. of storage loc.' || h.includes('storage loc') || h.includes('location descr'));
-    const batchIdx = headers.findIndex(h => h === 'batch' || h.includes('batch') || h.includes('تشغيلة'));
+    let materialIdx = -1;
+    let descrIdx = -1;
+    let unrestrictedIdx = -1;
+    let locDescrIdx = -1;
+    let batchIdx = -1;
+    let startRow = 0;
 
-    if (materialIdx === -1 || unrestrictedIdx === -1) return [];
+    // Check if row 0 has textual column headers
+    const row0 = rawData[0].map(h => (h || '').trim().toLowerCase());
+    const hasHeaderRow = row0.some(h => 
+      h === 'material' || 
+      h.includes('material code') || 
+      h.includes('unrestricted') || 
+      h.includes('storage loc') || 
+      h === 'batch'
+    );
+
+    if (hasHeaderRow) {
+      materialIdx = row0.findIndex(h => h === 'material' || h.includes('material code'));
+      descrIdx = row0.findIndex(h => h === 'material description' || (h.includes('descr') && h.includes('material')));
+      unrestrictedIdx = row0.findIndex(h => h === 'unrestricted' || h.includes('unrestricted') || h.includes('qty') || h.includes('quantity'));
+      locDescrIdx = row0.findIndex(h => h === 'descr. of storage loc.' || h.includes('storage loc') || h.includes('location descr'));
+      batchIdx = row0.findIndex(h => h === 'batch' || h.includes('batch') || h.includes('تشغيلة'));
+      startRow = 1;
+    }
+
+    // Default column fallback if sheet data starts directly with data rows
+    if (materialIdx === -1) materialIdx = 0;
+    if (descrIdx === -1) descrIdx = 1;
+    if (unrestrictedIdx === -1) unrestrictedIdx = 2;
+    if (locDescrIdx === -1) locDescrIdx = 3;
+    if (batchIdx === -1) batchIdx = 6;
 
     const pivotMap = new Map<string, PivotedStockRow>();
 
-    for (let i = 1; i < rawData.length; i++) {
+    for (let i = startRow; i < rawData.length; i++) {
       const row = rawData[i];
       if (!row || row.length < 3 || !row[materialIdx]) continue;
+      
+      const rawCode = row[materialIdx].trim();
+      if (!rawCode || rawCode.toLowerCase() === 'material' || rawCode.toLowerCase() === 'material code') continue;
 
-      const code = row[materialIdx];
-      const descr = descrIdx !== -1 ? row[descrIdx] : '';
-      const rawQty = unrestrictedIdx !== -1 ? row[unrestrictedIdx] : '0';
+      const code = rawCode;
+      const descr = descrIdx !== -1 && row[descrIdx] ? row[descrIdx] : '';
+      const rawQty = unrestrictedIdx !== -1 && row[unrestrictedIdx] ? row[unrestrictedIdx] : '0';
       const cleanQtyStr = rawQty.replace(/"/g, '').replace(/,/g, '').trim();
       const quantity = parseFloat(cleanQtyStr) || 0;
 

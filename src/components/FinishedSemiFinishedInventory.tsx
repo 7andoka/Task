@@ -30,7 +30,10 @@ import {
   CheckCircle2,
   Boxes,
   Info,
-  Scale
+  Scale,
+  ShieldAlert,
+  Lock,
+  EyeOff
 } from 'lucide-react';
 import { DateRangeFilter, DateFilterValue } from './DateRangeFilter';
 import SapReconciliationModal from './SapReconciliationModal';
@@ -272,6 +275,7 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
   const [balanceSearchItem, setBalanceSearchItem] = useState('');
   const [balanceSearchGroup, setBalanceSearchGroup] = useState('');
   const [balanceSearchStore, setBalanceSearchStore] = useState('');
+  const [showZeroBalances, setShowZeroBalances] = useState(false);
 
   // Sorting
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -463,7 +467,10 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
   const colAddition = findColumnKey(['اضافه', 'اضافة', 'إضافة', 'addition', 'add', 'وارد', 'انتاج', 'إنتاج']);
   const colDispatch = findColumnKey(['صرف2', 'صرف 2', 'صرف', 'dispatch', 'issue', 'out', 'منصرف', 'مبيعات']);
   const colReturn = findColumnKey(['ارتجاع', 'مرتجع', 'return']);
-  const colAdjustment = findColumnKey(['تسوية', 'تسويه', 'adjustment', 'هولد', 'hold']);
+  const colAdjustment = findColumnKey(['تسوية', 'تسويه', 'adjustment']);
+  const colHold = findColumnKey(['هولد', 'رصيد هولد', 'كمية هولد', 'كميه هولد', 'رصيد الهولد', 'hold', 'on hold', 'blocked', 'محجوز', 'تحت الفحص', 'quality hold', 'hold qty', 'hold balance']);
+  const colAvailable = findColumnKey(['رصيد متاح', 'الرصيد المتاح', 'متاح', 'صافي الرصيد', 'صافى الرصيد', 'Sum of صافى الرصيد', 'unrestricted', 'available', 'available balance', 'net balance', 'free stock', 'حر']);
+  const colTotalBalance = findColumnKey(['اجمالي الرصيد', 'إجمالي الرصيد', 'اجمالى الرصيد', 'إجمالى الرصيد', 'الرصيد الإجمالي', 'الرصيد الاجمالي', 'Sum of اجمالى الرصيد', 'Sum of اجمالي الرصيد', 'اجمالي', 'إجمالي', 'اجمالى', 'إجمالى', 'total balance', 'gross balance', 'gross']);
   const colPreBalance = findColumnKey(['Sum of صافى الرصيد', 'صافى الرصيد', 'Sum of اجمالى الرصيد', 'اجمالى الرصيد', 'رصيد', 'الرصيد', 'balance', 'total balance', 'net balance']);
 
   // Process data with calculated or pre-existing Current Balance
@@ -481,6 +488,15 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
       const ret = colReturn ? parseNum(row[colReturn]) : 0;
       const adjustment = colAdjustment ? parseNum(row[colAdjustment]) : 0;
 
+      // Hold quantity
+      let hold = 0;
+      if (colHold && row[colHold] !== undefined && row[colHold] !== '') {
+        hold = parseNum(row[colHold]);
+      } else if (!colHold && colAdjustment && String(colAdjustment).toLowerCase().includes('هولد')) {
+        hold = adjustment;
+      }
+
+      // Movement balance calculation
       let currentBalance = 0;
       if (colOpening || colAddition || colDispatch) {
         // Full formula: Opening + Addition + Return + Adjustment - Dispatch
@@ -488,6 +504,27 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
       } else if (colPreBalance && row[colPreBalance] !== undefined && row[colPreBalance] !== '') {
         // Fallback to pre-calculated balance from sheet
         currentBalance = parseNum(row[colPreBalance]);
+      }
+
+      // Available & Total Balances
+      let availableBalance = 0;
+      let totalBalance = 0;
+
+      if (colAvailable && row[colAvailable] !== undefined && row[colAvailable] !== '') {
+        availableBalance = parseNum(row[colAvailable]);
+      } else {
+        availableBalance = currentBalance;
+      }
+
+      if (colTotalBalance && row[colTotalBalance] !== undefined && row[colTotalBalance] !== '') {
+        totalBalance = parseNum(row[colTotalBalance]);
+      } else {
+        totalBalance = availableBalance + hold;
+      }
+
+      // Ensure consistency: if total is given but available is not, available = total - hold
+      if (colTotalBalance && (!colAvailable || row[colAvailable] === undefined || row[colAvailable] === '')) {
+        availableBalance = totalBalance - hold;
       }
 
       return {
@@ -498,10 +535,13 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
         _dispatch: dispatch,
         _return: ret,
         _adjustment: adjustment,
-        _currentBalance: currentBalance
+        _hold: hold,
+        _availableBalance: availableBalance,
+        _totalBalance: totalBalance,
+        _currentBalance: availableBalance
       };
     });
-  }, [data, colOpening, colAddition, colDispatch, colReturn, colAdjustment, colPreBalance]);
+  }, [data, colOpening, colAddition, colDispatch, colReturn, colAdjustment, colHold, colAvailable, colTotalBalance, colPreBalance]);
 
   // Helper for multi-query matching
   const matchesMultiQuery = (target: string, query: string) => {
@@ -669,6 +709,9 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
       dispatch: number;
       ret: number;
       adjustment: number;
+      holdBalance: number;
+      availableBalance: number;
+      totalBalance: number;
       currentBalance: number;
     }>();
 
@@ -702,7 +745,10 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
           dispatch: row._dispatch,
           ret: row._return,
           adjustment: row._adjustment,
-          currentBalance: row._currentBalance
+          holdBalance: row._hold || 0,
+          availableBalance: row._availableBalance || 0,
+          totalBalance: row._totalBalance || 0,
+          currentBalance: row._currentBalance || 0
         });
       } else {
         const entry = map.get(key)!;
@@ -718,30 +764,53 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
         entry.dispatch += row._dispatch;
         entry.ret += row._return;
         entry.adjustment += row._adjustment;
-        // Total balance recalculated accurately from aggregated components
-        entry.currentBalance = entry.opening + entry.addition + entry.ret + entry.adjustment - entry.dispatch;
+        entry.holdBalance += (row._hold || 0);
+        entry.availableBalance += (row._availableBalance || 0);
+        entry.totalBalance += (row._totalBalance || 0);
+        entry.currentBalance += (row._currentBalance || 0);
       }
     });
 
-    let list = Array.from(map.values()).map(item => ({
-      ...item,
-      currentBalance: item.opening + item.addition + item.ret + item.adjustment - item.dispatch,
-      storeName: balanceSearchStore.trim() 
-        ? balanceSearchStore.trim() 
-        : (item.storeNames.size === 0 
-            ? (isRtl ? 'كافة المخازن' : 'All Stores') 
-            : (item.storeNames.size === 1 
-                ? Array.from(item.storeNames)[0] 
-                : `${isRtl ? 'مجمع (' : 'Consolidated ('}${item.storeNames.size}${isRtl ? ' مخازن)' : ' stores)'}`))
-    }));
+    let list = Array.from(map.values()).map(item => {
+      const holdBalance = item.holdBalance;
+      let availableBalance = item.availableBalance;
+      let totalBalance = item.totalBalance;
 
-    if (balanceSearchItem.trim()) {
+      if (totalBalance === 0 && (availableBalance > 0 || holdBalance > 0)) {
+        totalBalance = availableBalance + holdBalance;
+      }
+      if (availableBalance === 0 && totalBalance > 0 && holdBalance === 0) {
+        availableBalance = totalBalance;
+      }
+
+      return {
+        ...item,
+        holdBalance,
+        availableBalance,
+        totalBalance,
+        currentBalance: availableBalance,
+        storeName: balanceSearchStore.trim() 
+          ? balanceSearchStore.trim() 
+          : (item.storeNames.size === 0 
+              ? (isRtl ? 'كافة المخازن' : 'All Stores') 
+              : (item.storeNames.size === 1 
+                  ? Array.from(item.storeNames)[0] 
+                  : `${isRtl ? 'مجمع (' : 'Consolidated ('}${item.storeNames.size}${isRtl ? ' مخازن)' : ' stores)'}`))
+      };
+    });
+
+    const hasSearchQuery = !!balanceSearchItem.trim();
+
+    if (hasSearchQuery) {
       list = list.filter(item => {
         const combined = `${item.itemCode} ${item.itemName}`;
         return matchesMultiQuery(combined, balanceSearchItem) || 
                matchesMultiQuery(item.itemName, balanceSearchItem) ||
                matchesMultiQuery(item.itemCode, balanceSearchItem);
       });
+    } else if (!showZeroBalances) {
+      // Default: Hide items with zero total, available, and hold balance when not actively searching
+      list = list.filter(item => item.totalBalance !== 0 || item.availableBalance !== 0 || item.holdBalance !== 0);
     }
 
     if (balanceSearchGroup.trim()) {
@@ -751,11 +820,19 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
     }
 
     return list;
-  }, [processedData, colCode, colName, colGroup, colStore, colBatch, balanceSearchItem, balanceSearchGroup, balanceSearchStore, isRtl]);
+  }, [processedData, colCode, colName, colGroup, colStore, colBatch, balanceSearchItem, balanceSearchGroup, balanceSearchStore, showZeroBalances, isRtl]);
 
   // Overall statistics
+  const totalHoldSum = useMemo(() => {
+    return balanceSummaryData.reduce((acc, curr) => acc + curr.holdBalance, 0);
+  }, [balanceSummaryData]);
+
+  const totalAvailableSum = useMemo(() => {
+    return balanceSummaryData.reduce((acc, curr) => acc + curr.availableBalance, 0);
+  }, [balanceSummaryData]);
+
   const totalBalanceSum = useMemo(() => {
-    return balanceSummaryData.reduce((acc, curr) => acc + curr.currentBalance, 0);
+    return balanceSummaryData.reduce((acc, curr) => acc + curr.totalBalance, 0);
   }, [balanceSummaryData]);
 
   // Unique lists for Select components
@@ -835,39 +912,83 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
 
   // Export to Excel
   const exportToExcel = () => {
-    const exportRows = sortedData.map((row, idx) => {
-      const clean: any = { '#': idx + 1 };
-      rawColumns.forEach(col => {
-        clean[col] = row[col];
+    let exportRows: any[] = [];
+    if (activeTab === 'balances') {
+      exportRows = balanceSummaryData.map((item, idx) => ({
+        '#': idx + 1,
+        [isRtl ? 'كود الصنف / ساب' : 'Item / SAP Code']: item.itemCode,
+        [isRtl ? 'اسم المنتج / الصنف' : 'Item Name']: item.itemName,
+        [isRtl ? 'المخزن' : 'Store']: item.storeName,
+        [isRtl ? 'المجموعة' : 'Group / Category']: item.groupName,
+        [isRtl ? 'الوحدة' : 'Unit']: item.unit,
+        [isRtl ? 'رصيد أول المدة' : 'Opening']: item.opening,
+        [isRtl ? 'الوارد / الإضافة' : 'Addition']: item.addition,
+        [isRtl ? 'المنصرف / الصرف' : 'Dispatch']: item.dispatch,
+        [isRtl ? 'المرتجع' : 'Return']: item.ret,
+        [isRtl ? 'التسوية' : 'Adjustment']: item.adjustment,
+        [isRtl ? 'رصيد الهولد' : 'Hold Balance']: item.holdBalance,
+        [isRtl ? 'الرصيد المتاح' : 'Available Balance']: item.availableBalance,
+        [isRtl ? 'إجمالي الرصيد' : 'Total Balance']: item.totalBalance,
+      }));
+    } else {
+      exportRows = sortedData.map((row, idx) => {
+        const clean: any = { '#': idx + 1 };
+        rawColumns.forEach(col => {
+          clean[col] = row[col];
+        });
+        clean[isRtl ? 'رصيد الهولد' : 'Hold Balance'] = row._hold || 0;
+        clean[isRtl ? 'الرصيد المتاح' : 'Available Balance'] = row._availableBalance;
+        clean[isRtl ? 'إجمالي الرصيد' : 'Total Balance'] = row._totalBalance;
+        return clean;
       });
-      clean[isRtl ? 'الرصيد الحالي' : 'Current Balance'] = row._currentBalance;
-      return clean;
-    });
+    }
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Finished_SemiFinished');
-    XLSX.writeFile(workbook, `Finished_Semi_Finished_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, activeTab === 'balances' ? 'Balances' : 'Movements');
+    XLSX.writeFile(workbook, `Finished_Semi_Finished_${activeTab}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success(isRtl ? 'تم تصدير ملف Excel بنجاح' : 'Excel exported successfully');
   };
 
   // Export to CSV
   const exportToCSV = () => {
-    const exportRows = sortedData.map((row, idx) => {
-      const clean: any = { '#': idx + 1 };
-      rawColumns.forEach(col => {
-        clean[col] = row[col];
+    let exportRows: any[] = [];
+    if (activeTab === 'balances') {
+      exportRows = balanceSummaryData.map((item, idx) => ({
+        '#': idx + 1,
+        'Item Code': item.itemCode,
+        'Item Name': item.itemName,
+        'Store': item.storeName,
+        'Group': item.groupName,
+        'Unit': item.unit,
+        'Opening': item.opening,
+        'Addition': item.addition,
+        'Dispatch': item.dispatch,
+        'Return': item.ret,
+        'Adjustment': item.adjustment,
+        'Hold Balance': item.holdBalance,
+        'Available Balance': item.availableBalance,
+        'Total Balance': item.totalBalance,
+      }));
+    } else {
+      exportRows = sortedData.map((row, idx) => {
+        const clean: any = { '#': idx + 1 };
+        rawColumns.forEach(col => {
+          clean[col] = row[col];
+        });
+        clean['Hold Balance'] = row._hold || 0;
+        clean['Available Balance'] = row._availableBalance;
+        clean['Total Balance'] = row._totalBalance;
+        return clean;
       });
-      clean['Current Balance'] = row._currentBalance;
-      return clean;
-    });
+    }
 
     const csv = Papa.unparse(exportRows);
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Finished_Semi_Finished_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Finished_Semi_Finished_${activeTab}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -884,22 +1005,45 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
     doc.setFontSize(10);
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
 
-    const tableHeaders = ['#', ...rawColumns.slice(0, 6), 'Current Balance'];
-    const tableRows = sortedData.map((row, idx) => [
-      idx + 1,
-      ...rawColumns.slice(0, 6).map(c => row[c] ?? ''),
-      row._currentBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })
-    ]);
+    let tableHeaders: string[] = [];
+    let tableRows: any[][] = [];
+
+    if (activeTab === 'balances') {
+      tableHeaders = ['#', 'Code', 'Item Name', 'Store', 'Group', 'Unit', 'Opening', 'Addition', 'Dispatch', 'Hold', 'Available', 'Total'];
+      tableRows = balanceSummaryData.map((item, idx) => [
+        idx + 1,
+        item.itemCode,
+        item.itemName.slice(0, 30),
+        item.storeName,
+        item.groupName,
+        item.unit,
+        item.opening.toLocaleString(),
+        item.addition.toLocaleString(),
+        item.dispatch.toLocaleString(),
+        item.holdBalance.toLocaleString(),
+        item.availableBalance.toLocaleString(),
+        item.totalBalance.toLocaleString()
+      ]);
+    } else {
+      tableHeaders = ['#', ...rawColumns.slice(0, 5), 'Hold', 'Available', 'Total'];
+      tableRows = sortedData.map((row, idx) => [
+        idx + 1,
+        ...rawColumns.slice(0, 5).map(c => row[c] ?? ''),
+        (row._hold || 0).toLocaleString(undefined, { maximumFractionDigits: 2 }),
+        row._availableBalance.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+        row._totalBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })
+      ]);
+    }
 
     (doc as any).autoTable({
       head: [tableHeaders],
       body: tableRows,
       startY: 28,
-      styles: { fontSize: 8, cellPadding: 3 },
+      styles: { fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [13, 148, 136] }
     });
 
-    doc.save(`Finished_Semi_Finished_${new Date().toISOString().slice(0, 10)}.pdf`);
+    doc.save(`Finished_Semi_Finished_${activeTab}_${new Date().toISOString().slice(0, 10)}.pdf`);
     toast.success(isRtl ? 'تم تصدير ملف PDF بنجاح' : 'PDF exported successfully');
   };
 
@@ -1021,7 +1165,7 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
       </div>
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
         <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400">
             <Boxes size={20} />
@@ -1033,17 +1177,7 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
         </div>
 
         <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
-            <Layers size={20} />
-          </div>
-          <div>
-            <div className="text-[11px] font-bold text-zinc-500">{isRtl ? 'المجموعات' : 'Categories'}</div>
-            <div className="text-lg font-black text-zinc-900 dark:text-zinc-100">{uniqueGroupsList.length || 1}</div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
+          <div className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
             <Database size={20} />
           </div>
           <div>
@@ -1052,13 +1186,37 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400">
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-amber-200/70 dark:border-amber-900/50 shadow-xs flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
+            <ShieldAlert size={20} />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-zinc-500">{isRtl ? 'رصيد الهولد' : 'Hold Balance'}</div>
+            <div className="text-lg font-black text-amber-600 dark:text-amber-400">
+              {totalHoldSum.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 shadow-xs flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 size={20} />
           </div>
           <div>
-            <div className="text-[11px] font-bold text-zinc-500">{isRtl ? 'إجمالي الرصيد الحالي' : 'Total Stock Balance'}</div>
+            <div className="text-[11px] font-bold text-zinc-500">{isRtl ? 'الرصيد المتاح' : 'Available Balance'}</div>
             <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+              {totalAvailableSum.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-teal-200/70 dark:border-teal-900/50 shadow-xs flex items-center gap-3 col-span-2 sm:col-span-1">
+          <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400">
+            <Layers size={20} />
+          </div>
+          <div>
+            <div className="text-[11px] font-bold text-zinc-500">{isRtl ? 'إجمالي الرصيد' : 'Total Balance'}</div>
+            <div className="text-lg font-black text-teal-600 dark:text-teal-400">
               {totalBalanceSum.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </div>
           </div>
@@ -1373,6 +1531,45 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
             />
           </div>
 
+          {/* Sub-toolbar for Zero Balances Toggle & Active Filters Status */}
+          <div className="px-6 py-3 bg-zinc-100/70 dark:bg-zinc-800/80 border-b border-zinc-200 dark:border-zinc-700/80 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Zero Balance Toggle Button */}
+              <button
+                onClick={() => setShowZeroBalances(prev => !prev)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                  showZeroBalances 
+                    ? 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-xs' 
+                    : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                }`}
+                title={isRtl ? 'إظهار أو إخفاء الأصناف ذات الرصيد صفر (تظهر تلقائياً عند البحث بالاسم أو الكود)' : 'Toggle zero balances (visible automatically on search)'}
+              >
+                {showZeroBalances ? <Eye size={15} className="text-amber-600" /> : <EyeOff size={15} className="text-zinc-400" />}
+                <span>
+                  {showZeroBalances 
+                    ? (isRtl ? 'الأرصدة الصفرية: معروضة' : 'Zero Balances: Shown') 
+                    : (isRtl ? 'الأرصدة الصفرية: مخفية (افتراضي)' : 'Zero Balances: Hidden (Default)')
+                  }
+                </span>
+                <span className="text-[10px] opacity-75 font-normal">
+                  {showZeroBalances ? '' : (isRtl ? '— تظهر بالبحث' : '— shown on search')}
+                </span>
+              </button>
+
+              {balanceSearchItem.trim() && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                  <Search size={12} />
+                  <span>{isRtl ? `جاري البحث عن: "${balanceSearchItem}" (شاملاً الرصيد صفر)` : `Searching: "${balanceSearchItem}" (including zero)`}</span>
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
+              <span>{isRtl ? 'عدد الأصناف المعروضة:' : 'Displayed Items:'}</span>
+              <span className="text-zinc-900 dark:text-white font-black">{balanceSummaryData.length}</span>
+            </div>
+          </div>
+
           {/* Balances Table */}
           <div className="overflow-x-auto p-6 max-h-[65vh]">
             <table className="w-full border-collapse text-xs text-zinc-700 dark:text-zinc-300 text-right">
@@ -1389,24 +1586,44 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
                   <th className="py-3 px-4 text-center">{isRtl ? 'المنصرف / الصرف' : 'Dispatch'}</th>
                   <th className="py-3 px-4 text-center">{isRtl ? 'المرتجع' : 'Return'}</th>
                   <th className="py-3 px-4 text-center">{isRtl ? 'التسوية' : 'Adjustment'}</th>
-                  <th className="py-3 px-4 text-center bg-teal-500/10 text-teal-800 dark:text-teal-300">{isRtl ? 'الرصيد الحالي' : 'Current Balance'}</th>
+                  <th className="py-3 px-4 text-center bg-amber-500/10 text-amber-800 dark:text-amber-300 border-x border-amber-200/50 dark:border-amber-900/50">
+                    <div className="flex items-center justify-center gap-1">
+                      <ShieldAlert size={13} className="text-amber-600" />
+                      <span>{isRtl ? 'رصيد الهولد' : 'Hold Balance'}</span>
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-center bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-x border-emerald-200/50 dark:border-emerald-900/50">
+                    <div className="flex items-center justify-center gap-1">
+                      <CheckCircle2 size={13} className="text-emerald-600" />
+                      <span>{isRtl ? 'الرصيد المتاح' : 'Available Balance'}</span>
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-center bg-teal-500/15 text-teal-900 dark:text-teal-200 border-x border-teal-200/50 dark:border-teal-800/50">
+                    <div className="flex items-center justify-center gap-1">
+                      <Layers size={13} className="text-teal-600" />
+                      <span>{isRtl ? 'إجمالي الرصيد' : 'Total Balance'}</span>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {balanceSummaryData.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="text-center py-20 text-zinc-400 font-bold">
+                    <td colSpan={14} className="text-center py-20 text-zinc-400 font-bold">
                       {isRtl ? 'لا توجد أصناف مطابقة للبحث المحدد' : 'No matching items found'}
                     </td>
                   </tr>
                 ) : (
                   balanceSummaryData.map((item, idx) => {
-                    const cb = item.currentBalance;
-                    let badgeColor = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
-                    if (cb < 0) {
-                      badgeColor = 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 animate-pulse';
-                    } else if (cb === 0) {
-                      badgeColor = 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+                    const av = item.availableBalance;
+                    const hb = item.holdBalance;
+                    const tb = item.totalBalance;
+
+                    let avBadgeColor = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+                    if (av < 0) {
+                      avBadgeColor = 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 animate-pulse';
+                    } else if (av === 0) {
+                      avBadgeColor = 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700';
                     }
 
                     return (
@@ -1422,9 +1639,30 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
                         <td className="py-3 px-4 text-center font-bold text-red-600 dark:text-red-400">{item.dispatch.toLocaleString()}</td>
                         <td className="py-3 px-4 text-center font-bold text-amber-600 dark:text-amber-400">{item.ret.toLocaleString()}</td>
                         <td className="py-3 px-4 text-center font-bold text-purple-600 dark:text-purple-400">{item.adjustment.toLocaleString()}</td>
-                        <td className="py-3 px-4 text-center font-black">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-xl border text-xs font-black shadow-xs ${badgeColor}`}>
-                            {cb.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        
+                        {/* Hold Balance */}
+                        <td className="py-3 px-4 text-center font-bold bg-amber-50/40 dark:bg-amber-950/20">
+                          {hb > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg border text-xs font-black bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 shadow-2xs">
+                              <Lock size={11} className="text-amber-600" />
+                              {hb.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </span>
+                          ) : (
+                            <span className="text-zinc-400 font-mono text-xs">0</span>
+                          )}
+                        </td>
+
+                        {/* Available Balance */}
+                        <td className="py-3 px-4 text-center font-black bg-emerald-50/40 dark:bg-emerald-950/20">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-xl border text-xs font-black shadow-xs ${avBadgeColor}`}>
+                            {av.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
+
+                        {/* Total Balance */}
+                        <td className="py-3 px-4 text-center font-black bg-teal-50/40 dark:bg-teal-950/20">
+                          <span className="inline-flex items-center px-3 py-1 rounded-xl border text-xs font-black shadow-xs bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-200 border-teal-300 dark:border-teal-700">
+                            {tb.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                           </span>
                         </td>
                       </tr>
@@ -1480,19 +1718,37 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
             </div>
 
             <div className="p-6 overflow-y-auto space-y-4">
-              {/* Highlight Current Balance Box */}
-              <div className="p-4 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded-2xl flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-teal-800 dark:text-teal-300">
-                    {isRtl ? 'الرصيد المحسوب للسجل' : 'Calculated Balance for Record'}
+              {/* Highlight Balances Boxes */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                    <ShieldAlert size={12} className="text-amber-600" />
+                    {isRtl ? 'رصيد الهولد' : 'Hold Balance'}
                   </span>
-                  <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5">
-                    {isRtl ? 'حسب حركة أو صافي رصيد الصنف' : 'Based on net movement or sheet balance'}
-                  </p>
+                  <span className="text-base sm:text-lg font-black text-amber-700 dark:text-amber-300 mt-1">
+                    {(selectedRow._hold || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </span>
                 </div>
-                <span className="text-xl font-black px-4 py-1.5 bg-white dark:bg-zinc-900 rounded-xl border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 shadow-sm">
-                  {selectedRow._currentBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </span>
+
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 size={12} className="text-emerald-600" />
+                    {isRtl ? 'الرصيد المتاح' : 'Available Balance'}
+                  </span>
+                  <span className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-300 mt-1">
+                    {selectedRow._availableBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/80 rounded-2xl flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-teal-800 dark:text-teal-300 flex items-center gap-1">
+                    <Layers size={12} className="text-teal-600" />
+                    {isRtl ? 'إجمالي الرصيد' : 'Total Balance'}
+                  </span>
+                  <span className="text-base sm:text-lg font-black text-teal-700 dark:text-teal-300 mt-1">
+                    {selectedRow._totalBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </span>
+                </div>
               </div>
 
               {/* Grid of all attributes */}

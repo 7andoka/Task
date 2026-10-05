@@ -4113,20 +4113,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                   {isRtl ? 'توريد الفريش (الخام الطازج)' : 'Fresh Produce Supply'}
                 </h1>
               </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 flex items-center gap-2">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                 <span>{isRtl ? 'إدارة ومتابعة استلامات الخضروات والفواكه الطازجة' : 'Manage and track fresh produce intake records'}</span>
-                {lastSynced && (
-                  <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
-                    {isRtl ? `آخر مزامنة: ${lastSynced}` : `Last sync: ${lastSynced}`}
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-300/70 dark:border-emerald-800 shadow-xs">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span>{isRtl ? 'تزامن لحظي مباشر' : 'Live Sync Active'}</span>
-                </span>
               </p>
             </div>
           </div>
@@ -4190,17 +4178,6 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
                 </button>
               </>
             )}
-
-            {/* Direct Google Sheet Link */}
-            <a
-              href="https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded-xl border border-zinc-200 dark:border-zinc-700 transition-all cursor-pointer"
-              title={isRtl ? 'رابط ملف جوجل شيت المباشر' : 'Direct Sheet Link'}
-            >
-              <ExternalLink className="w-4 h-4" />
-            </a>
 
           </div>
 
