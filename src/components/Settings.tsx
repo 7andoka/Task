@@ -10,6 +10,7 @@ import { translations } from '../i18n';
 import { Language, UserProfile, NotificationPreferences } from '../types';
 import { storageService } from '../services/storageService';
 import { useTheme } from '../contexts/ThemeContext';
+import DisplayScaleWidget from './DisplayScaleWidget';
 
 interface SettingsProps {
   lang: Language;
@@ -266,6 +267,25 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
             </div>
           </button>
         </div>
+      </div>
+
+      {/* App Display Dimensions & Zoom Scale */}
+      <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 md:p-8 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+            <Palette size={24} />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">
+              {lang === 'ar' ? 'أبعاد ومساحة عرض التطبيق والتكبير' : 'Display Dimensions & Zoom Scale'}
+            </h2>
+            <p className="text-sm text-zinc-500">
+              {lang === 'ar' ? 'تخصيص عرض المحتوى (100%، فائق، قياسي، مدمج) ونسبة التكبير والتصغير' : 'Customize content width (Full 100%, Ultra, Standard, Compact) and UI zoom scale'}
+            </p>
+          </div>
+        </div>
+
+        <DisplayScaleWidget isRtl={lang === 'ar'} inline={true} />
       </div>
 
       <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 md:p-8 border border-zinc-200 dark:border-zinc-800 shadow-sm">

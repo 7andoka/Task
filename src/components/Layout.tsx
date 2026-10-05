@@ -35,6 +35,8 @@ import { Language, UserProfile } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import ConnectionStatus from './ConnectionStatus';
+import DisplayScaleWidget from './DisplayScaleWidget';
+import { useDisplay } from '../contexts/DisplayContext';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -63,6 +65,7 @@ export default function Layout({
   setActiveTab,
   onLogout
 }: LayoutProps) {
+  const { widthMode } = useDisplay();
   const [isDesktopMode, setIsDesktopMode] = React.useState(true);
   const [showInstallModal, setShowInstallModal] = React.useState(false);
   const [deferredPrompt, setDeferredPrompt] = React.useState<any>(null);
@@ -193,6 +196,9 @@ export default function Layout({
 
         {/* Right Side Controls (Theme Toggle / Mobile Mode / Logout) */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 z-10">
+          {/* Display Dimensions & Zoom Scale Controls */}
+          <DisplayScaleWidget isRtl={isRtl} />
+
           {/* Theme Toggle Button */}
           <button
             onClick={() => setIsDark(!isDark)}
@@ -274,11 +280,14 @@ export default function Layout({
 
       {/* Main Content */}
       <main className={cn(
-        "flex-1 min-h-screen w-full",
+        "flex-1 min-h-screen w-full transition-all duration-200",
         activeTab === 'kpis' ? "pt-0" : "pt-14",
         activeTab !== 'kpis' && "pb-16"
       )}>
         <div className={cn(
+          widthMode === 'ultra' ? "max-w-[1850px] mx-auto w-full" :
+          widthMode === 'standard' ? "max-w-[1440px] mx-auto w-full" :
+          widthMode === 'compact' ? "max-w-[1100px] mx-auto w-full" :
           "w-full",
           activeTab === 'kpis' ? "p-0" : "p-4 md:p-6"
         )}>
