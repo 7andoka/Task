@@ -49,7 +49,13 @@ import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
-import { normalizeArabicSearch, matchesArabicSearch, equalsArabicNormalized } from '../utils/arabic';
+import { 
+  normalizeArabicSearch, 
+  matchesArabicSearch, 
+  equalsArabicNormalized,
+  normalizeSupplierKey,
+  resolveCanonicalSupplierName
+} from '../utils/arabic';
 
 interface PurchaseOrdersProps {
   lang: Language;
@@ -67,7 +73,6 @@ const COMMON_SUPPLIERS = [
   'تنبت (محمود عطية)',
   'سعيد ابو النجا',
   'جمال سالم - الروقا',
-  'الروضة - شبانة - عبدالعليم',
   'محمود عبدالرحمن',
   'سعيد ابو ليله',
   'ابراهيم كامل علي',
@@ -78,8 +83,7 @@ const COMMON_SUPPLIERS = [
   'اكسيد هب',
   'اجرونيل',
   'شركة جرين لايت',
-  'الروضة',
-  'اوليف لاند'
+  'الروضة'
 ];
 
 const COMMON_REGIONS = [
@@ -229,8 +233,17 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
 
   // Calculate unique lists for filters
   const uniqueSuppliers = useMemo(() => {
-    const list = Array.from(new Set([...COMMON_SUPPLIERS, ...orders.map(o => o.supplierName).filter(Boolean)]));
-    return list.sort((a, b) => a.localeCompare(b, 'ar'));
+    const rawList = Array.from(new Set([...COMMON_SUPPLIERS, ...orders.map(o => o.supplierName).filter(Boolean)]));
+    const unifiedMap = new Map<string, string>();
+    rawList.forEach(name => {
+      const canonical = resolveCanonicalSupplierName(name, name);
+      const key = normalizeSupplierKey(canonical);
+      if (!key) return;
+      if (!unifiedMap.has(key)) {
+        unifiedMap.set(key, canonical);
+      }
+    });
+    return Array.from(unifiedMap.values()).sort((a, b) => a.localeCompare(b, 'ar'));
   }, [orders]);
 
   const uniqueRegions = useMemo(() => {

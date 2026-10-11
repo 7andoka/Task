@@ -109,8 +109,17 @@ import { DateRangeFilter, DateFilterValue, getPresetDates } from './DateRangeFil
 import { Language, UserProfile } from '../types';
 import { translations } from '../i18n';
 import { toast } from 'sonner';
-import { normalizeArabicSearch, matchesArabicSearch, equalsArabicNormalized } from '../utils/arabic';
+import { 
+  normalizeArabicSearch, 
+  matchesArabicSearch, 
+  equalsArabicNormalized,
+  normalizeSupplierKey,
+  KNOWN_CANONICAL_SUPPLIERS,
+  resolveCanonicalSupplierName
+} from '../utils/arabic';
 import { soundFx } from '../utils/sound';
+
+export { normalizeSupplierKey, KNOWN_CANONICAL_SUPPLIERS, resolveCanonicalSupplierName };
 
 const FRESH_GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv";
 const STORAGE_CACHE_KEY = "fresh_supply_data_cache";
@@ -330,70 +339,24 @@ export const formatCleanSupplierName = (rawName: string): string => {
 };
 
 /**
- * Normalizes supplier name for group matching (ignores word order, parentheses, slashes, punctuation, and Arabic letter variances).
- * e.g., "الروقا جمال سالم", "جمال سالم الروقا", "جمال سالم ( الروقا )", "جمال سالم / الروقا" => all map to the exact same normalized key!
- * Overcomes letter & spacing variations such as:
- * - "وائل عبد النبى" vs "وائل عبدالنبي"
- * - "مزرعه اوليف لاند" vs "مزرعة اوليف لاند"
- */
-export const normalizeSupplierKey = (rawName: string): string => {
-  if (!rawName) return '';
-  
-  // 1. Remove diacritics / tashkeel and tatweel
-  let text = String(rawName)
-    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
-    .toLowerCase();
-
-  // 2. Replace parentheses, brackets, slashes, dashes, quotes, and punctuation with spaces
-  text = text.replace(/[\(\)\[\]\{\}<>\/\\_\-.,:;؛،+&*~'"`«»!?=^#@%$|]/g, ' ');
-
-  // 3. Normalize common Arabic prefixes / compound connectors without ASCII word boundary:
-  // e.g. "عبد النبي" <-> "عبدالنبي", "ابو الخير" <-> "ابوالخير"
-  let prev = '';
-  while (prev !== text) {
-    prev = text;
-    text = text.replace(/(^|\s)(عبد|ابو|أبو|ام|أم|ابن|بن)\s+/g, '$1$2');
-  }
-
-  // 4. Normalize Arabic letters (Alef variants, Taa Marbouta / Haa, Yaa / Alef Maqsura, Hamza)
-  text = text
-    .replace(/[أإآٱ]/g, 'ا')
-    .replace(/[ة]/g, 'ه')
-    .replace(/[ىي]/g, 'ي')
-    .replace(/[ؤئ]/g, 'ء');
-
-  // 5. Split into words, trim, filter out noise
-  const words = text
-    .split(/\s+/)
-    .map(w => w.trim())
-    .filter(w => w.length > 0)
-    .map(w => {
-      // Normalize leading 'ال' if word length >= 4 so 'الروقا' and 'روقا' match identically
-      if (w.startsWith('ال') && w.length >= 4) {
-        return w.slice(2);
-      }
-      return w;
-    });
-
-  if (words.length === 0) return '';
-
-  // 6. Sort words alphabetically so word order does not matter!
-  words.sort((a, b) => a.localeCompare(b, 'ar'));
-
-  return words.join(' ');
-};
-
-/**
  * Select the optimal clean display name among different spelling variants of the same supplier.
- * Gives weight to occurrence frequency in the dataset, while awarding quality points for proper Arabic
+ * Gives weight to explicit canonical mappings (e.g. 'روضه' => 'الروضة', 'اوليف لاند' => 'مزرعة اوليف لاند'),
+ * and occurrence frequency in the dataset, while awarding quality points for proper Arabic
  * orthography (e.g. ة over ه for words like مزرعة/شركة, dots on ي, clean spacing in "عبد النبي").
  */
-export const pickBestSupplierDisplayName = (variants: Map<string, number>): string => {
+export const pickBestSupplierDisplayName = (variants: Map<string, number>, supplierKey?: string): string => {
+  if (supplierKey && KNOWN_CANONICAL_SUPPLIERS[supplierKey]) {
+    return KNOWN_CANONICAL_SUPPLIERS[supplierKey];
+  }
+
   let bestName = '';
   let bestScore = -1;
 
   const evaluateQuality = (name: string): number => {
     let q = 0;
+    // Known canonical display overrides take highest priority
+    const k = normalizeSupplierKey(name);
+    if (k && KNOWN_CANONICAL_SUPPLIERS[k] && name === KNOWN_CANONICAL_SUPPLIERS[k]) q += 1000;
     // Proper Taa Marbouta in common Arabic words
     if (/ة(?:$|\s)/.test(name)) q += 5;
     // Dotted Yaa at word end
@@ -1704,7 +1667,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
     const canonicalSupplierCodes = new Map<string, string>();
 
     supplierVariantsMap.forEach((variants, key) => {
-      const canonicalName = pickBestSupplierDisplayName(variants);
+      const canonicalName = pickBestSupplierDisplayName(variants, key);
       canonicalSuppliers.set(key, canonicalName);
 
       const codes = supplierCodesMap.get(key);
@@ -1740,10 +1703,12 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       const rawOldCode = String(row['كود قديم'] || row['الكود القديم'] || '').trim();
       const rawItemName = String(row['اسم الصنف'] || row['الصنف'] || row['Item Name'] || row['الوصف'] || '').trim();
 
-      // Resolve supplier identity with intelligent Arabic normalization (unifying letter & spacing variations)
+      // Resolve supplier identity with intelligent Arabic normalization (unifying letter & spacing variations, and specific merges)
       const cleanedCostCenter = formatCleanSupplierName(rawCostCenter) || rawCostCenter;
       const supplierKey = normalizeSupplierKey(cleanedCostCenter);
-      const finalCostCenter = (supplierKey && canonicalSuppliers.get(supplierKey)) || cleanedCostCenter;
+      const finalCostCenter = (supplierKey && canonicalSuppliers.get(supplierKey)) || 
+                             (supplierKey && KNOWN_CANONICAL_SUPPLIERS[supplierKey]) || 
+                             cleanedCostCenter;
       const finalCostCenterCode = (supplierKey && canonicalSupplierCodes.get(supplierKey)) || rawCostCenterCode;
 
       // Resolve unified item identity by code
@@ -3005,6 +2970,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       barrelKg: number;
       barrelTons: number;
       dates: Set<string>;
+      originalNames: Set<string>;
     }>();
 
     filteredData.forEach(r => {
@@ -3025,7 +2991,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           tankTons: 0,
           barrelKg: 0,
           barrelTons: 0,
-          dates: new Set()
+          dates: new Set(),
+          originalNames: new Set()
         });
       }
       const sup = map.get(key)!;
@@ -3033,6 +3000,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       sup.totalTons += r.quantityTons;
       sup.count += 1;
       if (r.costCenterCode && !sup.costCenterCode) sup.costCenterCode = r.costCenterCode;
+      if (r.originalCostCenter) sup.originalNames.add(r.originalCostCenter);
       if (r.itemName) {
         sup.items.add(r.itemName);
         sup.itemsMap.set(r.itemName, (sup.itemsMap.get(r.itemName) || 0) + r.quantityKg);
@@ -3266,6 +3234,7 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
         matchesArabicSearch(sup.costCenter, q) ||
         matchesArabicSearch(sup.costCenterCode, q) ||
         matchesArabicSearch(sup.topItem, q) ||
+        (sup.originalNames && Array.from(sup.originalNames).some(orig => matchesArabicSearch(orig, q))) ||
         sup.costCenter.toLowerCase().includes(raw)
       );
     }

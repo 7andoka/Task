@@ -50,6 +50,7 @@ export interface FreshSupplierSummaryData {
   barrelTons: number;
   dates: Set<string>;
   avgShipmentTons: number;
+  originalNames?: Set<string>;
 }
 
 interface FreshSuppliersDashboardProps {
@@ -92,6 +93,7 @@ export const FreshSuppliersDashboard: React.FC<FreshSuppliersDashboardProps> = (
         matchesArabicSearch(sup.costCenter, q) ||
         matchesArabicSearch(sup.costCenterCode, q) ||
         matchesArabicSearch(sup.topItem, q) ||
+        (sup.originalNames && Array.from(sup.originalNames).some(orig => matchesArabicSearch(orig, q))) ||
         sup.costCenter.toLowerCase().includes(raw)
       );
     }
