@@ -11,7 +11,7 @@
 
 export const normalizeArabicSearch = (text: any): string => {
   if (text === undefined || text === null) return '';
-  return String(text)
+  let s = String(text)
     .toLowerCase()
     .replace(/[\u064B-\u065F\u0670\u0640]/g, '') // Tashkeel & Tatweel
     .replace(/[أإآٱ]/g, 'ا')
@@ -21,6 +21,16 @@ export const normalizeArabicSearch = (text: any): string => {
     .replace(/[\(\)\[\]\{\}<>\/\\_\-.,:;؛،+&*~'"`«»!?=^#@%$|]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  // Normalize common Arabic prefixes / compound connectors without ASCII word boundary:
+  // e.g. "عبد النبي" <-> "عبدالنبي", "ابو الخير" <-> "ابوالخير", "ابن رشد" <-> "ابنرشد"
+  let prev = '';
+  while (prev !== s) {
+    prev = s;
+    s = s.replace(/(^|\s)(عبد|ابو|أبو|ام|أم|ابن|بن)\s+/g, '$1$2');
+  }
+
+  return s;
 };
 
 export const matchesArabicSearch = (target: any, search: any): boolean => {
