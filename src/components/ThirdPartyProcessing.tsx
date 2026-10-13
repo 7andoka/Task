@@ -72,17 +72,19 @@ interface ThirdPartyProcessingProps {
 }
 
 // Representative items categories based on provided labels
-const CATEGORIES = {
+// Representative items categories based on provided labels
+export const CATEGORIES = {
   process: [
-    { id: 'SLC', labelAr: 'شرائح', labelEn: 'SLC', aliases: ['slice', 'slices', 'سلايس', 'شرايح'] },
-    { id: 'Pre', labelAr: 'خام', labelEn: 'Pre', aliases: ['raw', 'preparation', 'تجهيز', 'خامات', 'خام'] },
-    { id: 'Grd', labelAr: 'مدرج', labelEn: 'Graded', aliases: ['grd', 'graded', 'فرز', 'تدريج'] },
-    { id: 'PTD', labelAr: 'مخلي', labelEn: 'Pitted', aliases: ['ptd', 'pitted', 'مخلي', 'مخلي من النوي'] },
-    { id: 'FARZA', labelAr: 'فرزه', labelEn: 'Farza', aliases: ['reject', 'bi products', 'فرزة', 'فرزة زيت', 'فرزه زيت'] },
+    { id: 'Grd', labelAr: 'مدرج', labelEn: 'Grd', aliases: ['grd', 'graded', 'مدرج', 'تدريج', 'فرز'] },
+    { id: 'PTD', labelAr: 'مخلي', labelEn: 'PTD', aliases: ['ptd', 'pitted', 'مخلي', 'مخلى', 'مخلي من النوي'] },
+    { id: 'SLC', labelAr: 'شرائح', labelEn: 'SLC', aliases: ['slc', 'slice', 'slices', 'شرائح', 'شرايح', 'سلايس', 'شريحة'] },
+    { id: 'Pre', labelAr: 'خام', labelEn: 'Pre', aliases: ['pre', 'raw', 'preparation', 'خام', 'تجهيز', 'خامات'] },
+    { id: 'Oil', labelAr: 'زيت', labelEn: 'Oil', aliases: ['oil', 'زيت', 'زيوت', 'عصر'] },
+    { id: 'FARZA', labelAr: 'فرزه', labelEn: 'Farza', aliases: ['reject', 'bi products', 'فرزة', 'فرزة زيت', 'فرزه زيت', 'farza'] },
   ],
   direction: [
-    { id: 'Green', labelAr: 'مطبوخ', labelEn: 'Green', aliases: ['gree', 'olive', 'green', 'green olive', 'cooked', 'اخضر'] },
-    { id: 'Black', labelAr: 'مياه وملح', labelEn: 'Black', aliases: ['brine', 'black', 'water and salt', 'م م', 'مياه ملح', 'اسود'] },
+    { id: 'Black', labelAr: 'مياه وملح', labelEn: 'Black', aliases: ['black', 'brine', 'water and salt', 'م م', 'م/م', 'مياه وملح', 'مياه و ملح', 'ماء وملح', 'ماء و ملح', 'مياه ملح', 'اسود', 'أسود'] },
+    { id: 'Green', labelAr: 'مطبوخ', labelEn: 'Green', aliases: ['green', 'gree', 'cooked', 'مطبوخ', 'طبيخ', 'طبخ', 'اخضر', 'أخضر', 'olive', 'green olive'] },
   ],
   type: [
     { id: 'Picual', labelAr: 'بيكوال', labelEn: 'Picual', aliases: ['pic', 'picual', 'بيكوال'] },
@@ -118,116 +120,219 @@ const CATEGORIES = {
   ]
 };
 
-// Comprehensive list from user provided data
-const PROCESS_ITEMS_LIST: ProcessItem[] = [
-  // SLC
-  { code: '12000008', name: 'SLC OLV Picual Black M', type: 'Picual', process: 'SLC', direction: 'Black', size: 'M' },
-  { code: '12000043', name: 'SLC OLV Azizi Green L', type: 'Azizi', process: 'SLC', direction: 'Green', size: 'L' },
-  { code: '12000050', name: 'SLC OLV Picual Green M', type: 'Picual', process: 'SLC', direction: 'Green', size: 'M' },
-  { code: '12000057', name: 'SLC OLV Azizi Green M', type: 'Azizi', process: 'SLC', direction: 'Green', size: 'M' },
-  { code: '12000058', name: 'SLC OLV Akas Green M', type: 'Akas', process: 'SLC', direction: 'Green', size: 'M' },
-  { code: '12000062', name: 'SLC OLV Manzanilla Green M', type: 'Manzanilla', process: 'SLC', direction: 'Green', size: 'M' },
-  { code: '12000064', name: 'SLC OLV Picual Green S', type: 'Picual', process: 'SLC', direction: 'Green', size: 'S' },
-  { code: '12000071', name: 'SLC OLV Azizi Green S', type: 'Azizi', process: 'SLC', direction: 'Green', size: 'S' },
-  { code: '12000072', name: 'SLC OLV Akas Green S', type: 'Akas', process: 'SLC', direction: 'Green', size: 'S' },
-  { code: '12000076', name: 'SLC OLV Manzanilla Green S', type: 'Manzanilla', process: 'SLC', direction: 'Green', size: 'S' },
+// Helper to auto-detect process type from item name
+export const detectProcessFromName = (name: string): string => {
+  if (!name) return 'Gen';
+  const norm = name.toLowerCase().trim();
+  const clean = norm
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/ئ/g, 'ي')
+    .replace(/[._\-/\\]/g, ' ');
+  const words = clean.split(/\s+/).filter(Boolean);
 
-  // Pre
-  { code: '12000106', name: 'Pre OLV Picual Green', type: 'Picual', process: 'Pre', direction: 'Green', size: 'Pre' },
-  { code: '12000107', name: 'Pre OLV Tofahi Green', type: 'Tofahi', process: 'Pre', direction: 'Green', size: 'Pre' },
-  { code: '12000113', name: 'Pre OLV Azizi Green', type: 'Azizi', process: 'Pre', direction: 'Green', size: 'Pre' },
-  { code: '12000114', name: 'Pre OLV Akas Green', type: 'Akas', process: 'Pre', direction: 'Green', size: 'Pre' },
-  { code: '12000115', name: 'Pre OLV Kobrosi Green', type: 'Kobrosi', process: 'Pre', direction: 'Green', size: 'Pre' },
-  { code: '12000116', name: 'Pre OLV Karotina Green', type: 'Karotina', process: 'Pre', direction: 'Green', size: 'Pre' },
-  { code: '12000118', name: 'Pre OLV Manzanilla Green', type: 'Manzanilla', process: 'Pre', direction: 'Green', size: 'Pre' },
-  { code: '12000119', name: 'Pre OLV Nour Sabah Green', type: 'Nour Sabah', process: 'Pre', direction: 'Green', size: 'Pre' },
-  { code: '12000120', name: 'Pre OLV Picual Black', type: 'Picual', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000121', name: 'Pre OLV Tofahi Black', type: 'Tofahi', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000122', name: 'Pre OLV Hamed Black', type: 'Hamed', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000123', name: 'Pre OLV Dolsy Black', type: 'Dolsy', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000124', name: 'Pre OLV Baldiat Black', type: 'Baldiat', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000125', name: 'Pre OLV Senara Black', type: 'Senara', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000126', name: 'Pre OLV Sers Cola Black', type: 'Sers Cola', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000127', name: 'Pre OLV Azizi Black', type: 'Azizi', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000128', name: 'Pre OLV Akas Black', type: 'Akas', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000129', name: 'Pre OLV Kobrosi Black', type: 'Kobrosi', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000130', name: 'Pre OLV Karotina Black', type: 'Karotina', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000131', name: 'Pre OLV Kalamata Black', type: 'Kalamata', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000132', name: 'Pre OLV Manzanilla Black', type: 'Manzanilla', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12000133', name: 'Pre OLV Nour Sabah Black', type: 'Nour Sabah', process: 'Pre', direction: 'Black', size: 'Pre' },
-  { code: '12002038', name: 'Pre OLV Karotina Mesh. Black', type: 'Karotina', process: 'Pre', direction: 'Black', size: 'Mesh.' },
+  // 1. Grd -> مدرج
+  if (
+    words.includes('grd') ||
+    clean.includes('grd') ||
+    words.includes('graded') ||
+    clean.includes('مدرج') ||
+    clean.includes('تدريج') ||
+    clean.includes('فرز')
+  ) {
+    return 'Grd';
+  }
 
-  // Grd
-  { code: '12000134', name: 'Grd OLV Picual Green L', type: 'Picual', process: 'Grd', direction: 'Green', size: 'L' },
-  { code: '12000141', name: 'Grd OLV Azizi Green L', type: 'Azizi', process: 'Grd', direction: 'Green', size: 'L' },
-  { code: '12000142', name: 'Grd OLV Akas Green L', type: 'Akas', process: 'Grd', direction: 'Green', size: 'L' },
-  { code: '12000146', name: 'Grd OLV Manzanilla Green L', type: 'Manzanilla', process: 'Grd', direction: 'Green', size: 'L' },
-  { code: '12000148', name: 'Grd OLV Picual Green M', type: 'Picual', process: 'Grd', direction: 'Green', size: 'M' },
-  { code: '12000155', name: 'Grd OLV Azizi Green M', type: 'Azizi', process: 'Grd', direction: 'Green', size: 'M' },
-  { code: '12000156', name: 'Grd OLV Akas Green M', type: 'Akas', process: 'Grd', direction: 'Green', size: 'M' },
-  { code: '12000158', name: 'Grd OLV Karotina Green M', type: 'Karotina', process: 'Grd', direction: 'Green', size: 'M' },
-  { code: '12000160', name: 'Grd OLV Manzanilla Green M', type: 'Manzanilla', process: 'Grd', direction: 'Green', size: 'M' },
-  { code: '12000163', name: 'Grd OLV Picual Green S', type: 'Picual', process: 'Grd', direction: 'Green', size: 'S' },
-  { code: '12000169', name: 'Grd OLV Azizi Green S', type: 'Azizi', process: 'Grd', direction: 'Green', size: 'S' },
-  { code: '12000170', name: 'Grd OLV Akas Green S', type: 'Akas', process: 'Grd', direction: 'Green', size: 'S' },
-  { code: '12000172', name: 'Grd OLV Karotina Green S', type: 'Karotina', process: 'Grd', direction: 'Green', size: 'S' },
-  { code: '12000174', name: 'Grd OLV Manzanilla Green S', type: 'Manzanilla', process: 'Grd', direction: 'Green', size: 'S' },
-  { code: '12000175', name: 'Grd OLV Nour Sabah Green S', type: 'Nour Sabah', process: 'Grd', direction: 'Green', size: 'S' },
-  { code: '12000176', name: 'Grd OLV Picual Black L', type: 'Picual', process: 'Grd', direction: 'Black', size: 'L' },
-  { code: '12000177', name: 'Grd OLV Tofahi Black L', type: 'Tofahi', process: 'Grd', direction: 'Black', size: 'L' },
-  { code: '12000180', name: 'Grd OLV Baldiat Black L', type: 'Baldiat', process: 'Grd', direction: 'Black', size: 'L' },
-  { code: '12000184', name: 'Grd OLV Akas Black L', type: 'Akas', process: 'Grd', direction: 'Black', size: 'L' },
-  { code: '12000185', name: 'Grd OLV Kobrosi Black L', type: 'Kobrosi', process: 'Grd', direction: 'Black', size: 'L' },
-  { code: '12000187', name: 'Grd OLV Kalamata Black L', type: 'Kalamata', process: 'Grd', direction: 'Black', size: 'L' },
-  { code: '12000188', name: 'Grd OLV Manzanilla Black L', type: 'Manzanilla', process: 'Grd', direction: 'Black', size: 'L' },
-  { code: '12000190', name: 'Grd OLV Picual Black M', type: 'Picual', process: 'Grd', direction: 'Black', size: 'M' },
-  { code: '12000194', name: 'Grd OLV Baldiat Black M', type: 'Baldiat', process: 'Grd', direction: 'Black', size: 'M' },
-  { code: '12000197', name: 'Grd OLV Azizi Black M', type: 'Azizi', process: 'Grd', direction: 'Black', size: 'M' },
-  { code: '12000198', name: 'Grd OLV Akas Black M', type: 'Akas', process: 'Grd', direction: 'Black', size: 'M' },
-  { code: '12000199', name: 'Grd OLV Kobrosi Black M', type: 'Kobrosi', process: 'Grd', direction: 'Black', size: 'M' },
-  { code: '12000201', name: 'Grd OLV Kalamata Black M', type: 'Kalamata', process: 'Grd', direction: 'Black', size: 'M' },
-  { code: '12000202', name: 'Grd OLV Manzanilla Black M', type: 'Manzanilla', process: 'Grd', direction: 'Black', size: 'M' },
-  { code: '12000204', name: 'Grd OLV Picual Black S', type: 'Picual', process: 'Grd', direction: 'Black', size: 'S' },
-  { code: '12000208', name: 'Grd OLV Baldiat Black S', type: 'Baldiat', process: 'Grd', direction: 'Black', size: 'S' },
-  { code: '12000211', name: 'Grd OLV Azizi Black S', type: 'Azizi', process: 'Grd', direction: 'Black', size: 'S' },
-  { code: '12000212', name: 'Grd OLV Akas Black S', type: 'Akas', process: 'Grd', direction: 'Black', size: 'S' },
-  { code: '12000213', name: 'Grd OLV Kobrosi Black S', type: 'Kobrosi', process: 'Grd', direction: 'Black', size: 'S' },
-  { code: '12000215', name: 'Grd OLV Kalamata Black S', type: 'Kalamata', process: 'Grd', direction: 'Black', size: 'S' },
-  { code: '12000216', name: 'Grd OLV Manzanilla Black S', type: 'Manzanilla', process: 'Grd', direction: 'Black', size: 'S' },
-  { code: '12002009', name: 'Grd OLV Picual Black XXXS', type: 'Picual', process: 'Grd', direction: 'Black', size: 'XXXS' },
-  { code: '12002010', name: 'Grd OLV Picual Green XXXS', type: 'Picual', process: 'Grd', direction: 'Green', size: 'XXXS' },
-  { code: '12002011', name: 'Grd OLV Azizi Black XXXS', type: 'Azizi', process: 'Grd', direction: 'Black', size: 'XXXS' },
-  { code: '12002012', name: 'Grd OLV Azizi Green XXXS', type: 'Azizi', process: 'Grd', direction: 'Green', size: 'XXXS' },
-  { code: '12002013', name: 'Grd OLV Akas Black XXXS', type: 'Akas', process: 'Grd', direction: 'Black', size: 'XXXS' },
-  { code: '12002014', name: 'Grd OLV Akas Green XXXS', type: 'Akas', process: 'Grd', direction: 'Green', size: 'XXXS' },
-  { code: '12002015', name: 'Grd OLV Kobrosi Black XXXS', type: 'Kobrosi', process: 'Grd', direction: 'Black', size: 'XXXS' },
-  { code: '12002017', name: 'Grd OLV Manzanilla Black XXXS', type: 'Manzanilla', process: 'Grd', direction: 'Black', size: 'XXXS' },
-  { code: '12002018', name: 'Grd OLV Manzanilla Green XXXS', type: 'Manzanilla', process: 'Grd', direction: 'Green', size: 'XXXS' },
-  { code: '12002025', name: 'Grd OLV Kalamata Black XXXS', type: 'Kalamata', process: 'Grd', direction: 'Black', size: 'XXXS' },
+  // 2. PTD -> مخلي
+  if (
+    words.includes('ptd') ||
+    clean.includes('ptd') ||
+    words.includes('pitted') ||
+    clean.includes('مخلي') ||
+    clean.includes('مخلى')
+  ) {
+    return 'PTD';
+  }
 
-  // PTD
-  { code: '12000270', name: 'PTD OLV Azizi Black L', type: 'Azizi', process: 'PTD', direction: 'Black', size: 'L' },
-  { code: '12000288', name: 'PTD OLV Kalamata Black M', type: 'Kalamata', process: 'PTD', direction: 'Black', size: 'M' },
-  { code: '12000289', name: 'PTD OLV Manzanilla Black M', type: 'Manzanilla', process: 'PTD', direction: 'Black', size: 'M' },
-  { code: '12000305', name: 'PTD OLV Picual Green L', type: 'Picual', process: 'PTD', direction: 'Green', size: 'L' },
-  { code: '12000312', name: 'PTD OLV Azizi Green L', type: 'Azizi', process: 'PTD', direction: 'Green', size: 'L' },
-  { code: '12000313', name: 'PTD OLV Akas Green L', type: 'Akas', process: 'PTD', direction: 'Green', size: 'L' },
-  { code: '12000319', name: 'PTD OLV Picual Green M', type: 'Picual', process: 'PTD', direction: 'Green', size: 'M' },
-  { code: '12000326', name: 'PTD OLV Azizi Green M', type: 'Azizi', process: 'PTD', direction: 'Green', size: 'M' },
-  { code: '12000327', name: 'PTD OLV Akas Green M', type: 'Akas', process: 'PTD', direction: 'Green', size: 'M' },
-  { code: '12000331', name: 'PTD OLV Manzanilla Green M', type: 'Manzanilla', process: 'PTD', direction: 'Green', size: 'M' },
-  { code: '12000332', name: 'PTD OLV Nour Sabah Green M', type: 'Nour Sabah', process: 'PTD', direction: 'Green', size: 'M' },
-  { code: '12000341', name: 'PTD OLV Akas Green S', type: 'Akas', process: 'PTD', direction: 'Green', size: 'S' },
+  // 3. SLC -> شرائح
+  if (
+    words.includes('slc') ||
+    clean.includes('slc') ||
+    words.includes('slice') ||
+    words.includes('slices') ||
+    clean.includes('شرائح') ||
+    clean.includes('شرايح') ||
+    clean.includes('شريحة') ||
+    clean.includes('سلايس')
+  ) {
+    return 'SLC';
+  }
 
-  // FARZA / Bi Products
-  { code: '13000001', name: 'Bi Products Pepper', type: 'Pepper', process: 'FARZA', direction: 'Any', size: 'N/A' },
-  { code: '13000021', name: 'Bi Products OLV FARZA', type: 'Other', process: 'FARZA', direction: 'Any', size: 'N/A' },
-  { code: '13000101', name: 'Bi Product OLV bits', type: 'Other', process: 'FARZA', direction: 'Any', size: 'N/A' },
-  { code: '13000102', name: 'Bi Products OLV XXS', type: 'Other', process: 'FARZA', direction: 'Any', size: 'XXS' },
-  { code: '13000120', name: 'Bi Product OLV PTD', type: 'Other', process: 'FARZA', direction: 'Any', size: 'N/A' },
-  { code: '13000121', name: 'Bi Product OLV SLC', type: 'Other', process: 'FARZA', direction: 'Any', size: 'N/A' },
-  { code: '13000122', name: 'Bi Products Cauliflower', type: 'Cauliflower', process: 'FARZA', direction: 'Any', size: 'N/A' },
-];
+  // 4. Pre -> خام
+  if (
+    words.includes('pre') ||
+    clean.startsWith('pre ') ||
+    clean.includes(' pre ') ||
+    clean.endsWith(' pre') ||
+    words.includes('raw') ||
+    clean.includes('خام') ||
+    clean.includes('تجهيز') ||
+    clean.includes('خامات')
+  ) {
+    return 'Pre';
+  }
+
+  // 5. Oil -> زيت
+  if (
+    words.includes('oil') ||
+    clean.includes('oil') ||
+    clean.includes('زيت') ||
+    clean.includes('زيوت') ||
+    clean.includes('عصر')
+  ) {
+    return 'Oil';
+  }
+
+  // 6. FARZA -> فرزة
+  if (
+    words.includes('farza') ||
+    clean.includes('farza') ||
+    clean.includes('فرزة') ||
+    clean.includes('فرزه') ||
+    clean.includes('bi product')
+  ) {
+    return 'FARZA';
+  }
+
+  return 'Gen';
+};
+
+// Helper to auto-detect direction from item name
+export const detectDirectionFromName = (name: string): string => {
+  if (!name) return 'Any';
+  const norm = name.toLowerCase().trim();
+  const clean = norm
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/ئ/g, 'ي')
+    .replace(/[._\-/\\]/g, ' ');
+  const words = clean.split(/\s+/).filter(Boolean);
+
+  // 1. Black -> مياه وملح
+  if (
+    words.includes('black') ||
+    clean.includes('black') ||
+    clean.includes('مياه وملح') ||
+    clean.includes('مياه و ملح') ||
+    clean.includes('ماء وملح') ||
+    clean.includes('ماء و ملح') ||
+    clean.includes('مياه ملح') ||
+    clean.includes('برين') ||
+    words.includes('brine') ||
+    clean.includes('brine') ||
+    words.includes('م م') ||
+    clean.includes('م م') ||
+    clean.includes('م/م') ||
+    words.includes('اسود') ||
+    clean.includes('اسود')
+  ) {
+    return 'Black';
+  }
+
+  // 2. Green -> مطبوخ
+  if (
+    words.includes('green') ||
+    clean.includes('green') ||
+    clean.includes('مطبوخ') ||
+    clean.includes('طبيخ') ||
+    clean.includes('طبخ') ||
+    words.includes('اخضر') ||
+    clean.includes('اخضر') ||
+    words.includes('cooked') ||
+    clean.includes('cooked')
+  ) {
+    return 'Green';
+  }
+
+  return 'Any';
+};
+
+// Helper to auto-detect size from item name or size code
+export const detectSizeFromName = (name: string): string => {
+  if (!name) return '';
+  const norm = name.toLowerCase().replace(/[._\-/\\]/g, ' ');
+  const words = norm.split(/\s+/).filter(Boolean);
+
+  // Check custom sizes first (longer identifiers)
+  if (norm.includes('طبيعي اسود') || norm.includes('طبيعي أسود') || norm.includes('natural black')) return 'Natural Black';
+  if (norm.includes('شبك') || norm.includes('مش') || norm.includes('mesh')) return 'Mesh';
+  if (norm.includes('خام') || norm.includes('raw')) return 'Raw';
+
+  // Standard size codes: XXXS / 3XS, XXS / 2XS, XS, S, M, L, XL, XXL, etc.
+  if (words.includes('xxxs') || words.includes('3xs') || norm.includes('xxxs') || norm.includes('3xs')) return 'XXXS';
+  if (words.includes('xxs') || words.includes('2xs') || norm.includes('xxs') || norm.includes('2xs')) return 'XXS';
+  if (words.includes('xxl') || words.includes('2xl') || norm.includes('xxl') || norm.includes('2xl')) return 'XXL';
+  if (words.includes('xl') || words.includes('1xl')) return 'XL';
+  if (words.includes('xs')) return 'XS';
+
+  // Numeric count ranges like 200/220, 240/260, etc.
+  const sizeRangeMatch = name.match(/\b\d{2,4}\s*[\/-]\s*\d{2,4}\b/);
+  if (sizeRangeMatch) return sizeRangeMatch[0];
+
+  // Large / Medium / Small
+  if (words.includes('large') || words.includes('لارج') || words.includes('كبير')) return 'L';
+  if (words.includes('medium') || words.includes('ميديم') || words.includes('وسط')) return 'M';
+  if (words.includes('small') || words.includes('سمول') || words.includes('صغير')) return 'S';
+
+  // Standalone single letters L, M, S as distinct words
+  if (words.includes('l')) return 'L';
+  if (words.includes('m')) return 'M';
+  if (words.includes('s')) return 'S';
+
+  return '';
+};
+
+// Format item name with size for display in outputs without affecting item code
+export const formatItemWithSize = (
+  itemName: string, 
+  itemCode: string, 
+  dynamicItemsList: ProcessItem[], 
+  fallbackSize?: string
+): string => {
+  if (!itemName && !itemCode) return '';
+  const baseName = itemName || itemCode;
+
+  // 1. Try to find the item in dynamic items to get its explicit size property
+  const matchedItem = dynamicItemsList.find(i => i.code === itemCode);
+  let size = matchedItem?.size && matchedItem.size !== 'Gen' ? matchedItem.size : '';
+
+  // 2. If no size property from item, check fallbackSize
+  if (!size && fallbackSize && fallbackSize !== 'Gen') {
+    size = fallbackSize;
+  }
+
+  // 3. If still no size, try detecting from item name or item code
+  if (!size) {
+    size = detectSizeFromName(baseName) || detectSizeFromName(itemCode);
+  }
+
+  if (!size) return baseName;
+
+  // If size is already clearly present in the item name, avoid duplicate display
+  const normBase = baseName.toLowerCase();
+  const normSize = size.toLowerCase();
+  if (normBase.includes(`[${normSize}]`) || normBase.includes(`(${normSize})`)) {
+    return baseName;
+  }
+
+  return `${baseName} [${size}]`;
+};
+
+// Items list initialized as empty per user requirement; items and codes can be added or imported dynamically.
+const PROCESS_ITEMS_LIST: ProcessItem[] = [];
+
 
 
 const ShortcutSelector = ({ 
@@ -312,7 +417,11 @@ const ShortcutSelector = ({
             className="w-full px-2 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
           >
             <option value="">{isRtl ? '-- التشغيل --' : '-- Process --'}</option>
-            {CATEGORIES.process.map(c => <option key={c.id} value={c.id}>{isRtl ? c.labelAr : c.labelEn}</option>)}
+            {CATEGORIES.process.map(c => (
+              <option key={c.id} value={c.id}>
+                {isRtl ? `${c.labelAr} (${c.id})` : `${c.id} - ${c.labelAr}`}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -327,7 +436,11 @@ const ShortcutSelector = ({
             className="w-full px-2 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-emerald-500 outline-none"
           >
             <option value="">{isRtl ? '-- التوجيه --' : '-- Direction --'}</option>
-            {CATEGORIES.direction.map(c => <option key={c.id} value={c.id}>{isRtl ? c.labelAr : c.labelEn}</option>)}
+            {CATEGORIES.direction.map(c => (
+              <option key={c.id} value={c.id}>
+                {isRtl ? `${c.labelAr} (${c.id})` : `${c.id} - ${c.labelAr}`}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -406,10 +519,21 @@ const ShortcutSelector = ({
                   <option key={item.code} value={item.code}>{item.code} - {item.name}</option>
                 ))}
               </select>
-              {availableItems.length === 0 && (filters.process || filters.direction || filters.type || filters.size || searchTerm) && (
-                <p className="text-[10px] text-red-500 mt-1 italic font-medium">
-                  {isRtl ? 'لا يوجد صنف يطابق هذه المعايير' : 'No item matches these criteria'}
-                </p>
+              {availableItems.length === 0 && (
+                <div className="pt-1.5 space-y-1">
+                  <input
+                    type="text"
+                    placeholder={isRtl ? 'أو اكتب كود الصنف مباشرة هنا...' : 'Or enter item code directly here...'}
+                    value={selectedCode}
+                    onChange={(e) => setSelectedCode(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:ring-1 focus:ring-emerald-500 outline-none font-mono"
+                  />
+                  {(filters.process || filters.direction || filters.type || filters.size || searchTerm) ? (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 italic font-medium">
+                      {isRtl ? 'لا يوجد صنف مسبق يطابق هذه المعايير (يمكنك كتابة الكود يدوياً أعلاه)' : 'No matching item found (you can enter code directly above)'}
+                    </p>
+                  ) : null}
+                </div>
               )}
           </div>
       </div>
@@ -749,6 +873,135 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       const genericTerms = ['any', 'gen', 'general', 'other', 'others', 'na', 'all', 'الكل', 'اي', 'اخري', 'اخرى'];
       if (genericTerms.includes(normalize(filtInfo.id))) return true;
 
+      // EXPLICIT MATCHING FOR PROCESS FILTER AS REQUESTED:
+      // Grd -> مدرج, PTD -> مخلي, SLC -> شرائح, Pre -> خام, Oil -> زيت, FARZA -> فرزة
+      if (categoryKey === 'process') {
+        const detectedProc = detectProcessFromName(itemName);
+        const effectiveProc = (itemValue && !genericTerms.includes(normalize(itemValue))) 
+          ? itemValue 
+          : (detectedProc !== 'Gen' ? detectedProc : '');
+
+        const normName = normalize(itemName);
+        const nameWords = normName.split(/\s+/).filter(Boolean);
+
+        const checkGrd = () => (
+          effectiveProc === 'Grd' ||
+          nameWords.includes('grd') ||
+          normName.includes('grd') ||
+          nameWords.includes('graded') ||
+          normName.includes('مدرج') ||
+          normName.includes('تدريج') ||
+          normName.includes('فرز')
+        );
+
+        const checkPtd = () => (
+          effectiveProc === 'PTD' ||
+          nameWords.includes('ptd') ||
+          normName.includes('ptd') ||
+          nameWords.includes('pitted') ||
+          normName.includes('مخلي') ||
+          normName.includes('مخلى')
+        );
+
+        const checkSlc = () => (
+          effectiveProc === 'SLC' ||
+          nameWords.includes('slc') ||
+          normName.includes('slc') ||
+          nameWords.includes('slice') ||
+          nameWords.includes('slices') ||
+          normName.includes('شرائح') ||
+          normName.includes('شرايح') ||
+          normName.includes('شريحة') ||
+          normName.includes('سلايس')
+        );
+
+        const checkPre = () => (
+          effectiveProc === 'Pre' ||
+          nameWords.includes('pre') ||
+          normName.startsWith('pre ') ||
+          normName.includes(' pre ') ||
+          normName.endsWith(' pre') ||
+          nameWords.includes('raw') ||
+          normName.includes('خام') ||
+          normName.includes('تجهيز') ||
+          normName.includes('خامات')
+        );
+
+        const checkOil = () => (
+          effectiveProc === 'Oil' ||
+          nameWords.includes('oil') ||
+          normName.includes('oil') ||
+          normName.includes('زيت') ||
+          normName.includes('زيوت') ||
+          normName.includes('عصر')
+        );
+
+        const checkFarza = () => (
+          effectiveProc === 'FARZA' ||
+          nameWords.includes('farza') ||
+          normName.includes('farza') ||
+          normName.includes('فرزة') ||
+          normName.includes('فرزه') ||
+          normName.includes('bi product')
+        );
+
+        if (filtInfo.id === 'Grd') return checkGrd();
+        if (filtInfo.id === 'PTD') return checkPtd();
+        if (filtInfo.id === 'SLC') return checkSlc();
+        if (filtInfo.id === 'Pre') return checkPre();
+        if (filtInfo.id === 'Oil') return checkOil();
+        if (filtInfo.id === 'FARZA') return checkFarza();
+      }
+
+      // EXPLICIT MATCHING FOR DIRECTION FILTER AS REQUESTED:
+      // Black -> مياه وملح, Green -> مطبوخ
+      if (categoryKey === 'direction') {
+        const detectedDir = detectDirectionFromName(itemName);
+        const effectiveDir = (itemValue && !genericTerms.includes(normalize(itemValue))) 
+          ? itemValue 
+          : (detectedDir !== 'Any' ? detectedDir : '');
+
+        const normName = normalize(itemName);
+        const nameWords = normName.split(/\s+/).filter(Boolean);
+
+        const checkBlack = () => (
+          effectiveDir === 'Black' ||
+          nameWords.includes('black') ||
+          normName.includes('black') ||
+          normName.includes('مياه وملح') ||
+          normName.includes('مياه و ملح') ||
+          normName.includes('ماء وملح') ||
+          normName.includes('ماء و ملح') ||
+          normName.includes('مياه ملح') ||
+          normName.includes('برين') ||
+          nameWords.includes('brine') ||
+          normName.includes('brine') ||
+          nameWords.includes('م م') ||
+          normName.includes('م م') ||
+          normName.includes('م/م') ||
+          nameWords.includes('اسود') ||
+          normName.includes('اسود') ||
+          normName.includes('أسود')
+        );
+
+        const checkGreen = () => (
+          effectiveDir === 'Green' ||
+          nameWords.includes('green') ||
+          normName.includes('green') ||
+          normName.includes('مطبوخ') ||
+          normName.includes('طبيخ') ||
+          normName.includes('طبخ') ||
+          nameWords.includes('اخضر') ||
+          normName.includes('اخضر') ||
+          normName.includes('أخضر') ||
+          nameWords.includes('cooked') ||
+          normName.includes('cooked')
+        );
+
+        if (filtInfo.id === 'Black') return checkBlack();
+        if (filtInfo.id === 'Green') return checkGreen();
+      }
+
       const itemInfo = itemValue ? getTargetInfo(itemValue, categoryKey) : null;
 
       // 1. STRICT CATEGORY CHECK
@@ -804,8 +1057,12 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
             return info?.terms.has(word);
           };
 
-          if (checkWordInProperty(item.process, 'process')) return true;
-          if (checkWordInProperty(item.direction, 'direction')) return true;
+          const detectedProc = detectProcessFromName(item.name);
+          const effectiveProc = item.process || detectedProc;
+          const detectedDir = detectDirectionFromName(item.name);
+          const effectiveDir = (item.direction && item.direction !== 'Any') ? item.direction : detectedDir;
+          if (checkWordInProperty(effectiveProc, 'process')) return true;
+          if (checkWordInProperty(effectiveDir, 'direction')) return true;
           if (checkWordInProperty(item.type, 'type')) return true;
           if (checkWordInProperty(item.size, 'size')) return true;
           
@@ -907,27 +1164,35 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       }
     });
 
-    // Load Dynamic Items
+    // Load Dynamic Items directly from DB
     const unsubItems = onSnapshot(collection(db, COLLECTIONS.PROCESS_ITEMS), (snap) => {
-      if (!snap.empty) {
-        const dbItems = snap.docs.map(d => d.data() as ProcessItem);
-        const mergedMap = new Map<string, ProcessItem>();
-        
-        // Load defaults first to ensure they are always present
-        PROCESS_ITEMS_LIST.forEach(item => {
-          mergedMap.set(item.code, item);
-        });
-        
-        // Override with DB items (DB items take precedence)
-        dbItems.forEach(item => {
-          mergedMap.set(item.code, item);
-        });
-        
-        setDynamicItems(Array.from(mergedMap.values()));
-      } else {
-        setDynamicItems(PROCESS_ITEMS_LIST);
-      }
+      const dbItems = snap.docs.map(d => d.data() as ProcessItem);
+      setDynamicItems(dbItems);
     });
+
+    // Auto-purge old initial items & codes once as requested by the user, while keeping created jobs safe
+    const wipeInitialItemsIfNeeded = async () => {
+      const purgeKey = 'tp_purge_process_items_done_v2';
+      if (localStorage.getItem(purgeKey)) return;
+      try {
+        const snap = await getDocs(collection(db, COLLECTIONS.PROCESS_ITEMS));
+        if (!snap.empty) {
+          const docs = snap.docs;
+          const chunkSize = 400;
+          for (let i = 0; i < docs.length; i += chunkSize) {
+            const chunk = docs.slice(i, i + chunkSize);
+            const batch = writeBatch(db);
+            chunk.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+        }
+        localStorage.setItem(purgeKey, 'true');
+        setDynamicItems([]);
+      } catch (e) {
+        console.error('Initial auto-purge of process_items error:', e);
+      }
+    };
+    wipeInitialItemsIfNeeded();
     
     return () => {
       unsub();
@@ -945,7 +1210,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     const item = dynamicItems.find(i => i.code === currentInput.itemCode);
     setNewJob({
       ...newJob,
-      inputs: [...newJob.inputs, { ...currentInput, itemName: item?.name || '' }]
+      inputs: [...newJob.inputs, { ...currentInput, itemName: item?.name || currentInput.itemCode }]
     });
     setCurrentInput({ itemCode: '', quantity: 0, unit: 'kg' });
   };
@@ -956,9 +1221,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       return;
     }
     const item = dynamicItems.find(i => i.code === currentOutput.itemCode);
+    const rawName = item?.name || currentOutput.itemCode;
+    const formattedName = formatItemWithSize(rawName, currentOutput.itemCode, dynamicItems, outputFilters.size);
     setNewJob({
       ...newJob,
-      outputs: [...newJob.outputs, { ...currentOutput, itemName: item?.name || '' }]
+      outputs: [...newJob.outputs, { ...currentOutput, itemName: formattedName }]
     });
     setCurrentOutput({ itemCode: '', quantity: 0, unit: 'kg' });
   };
@@ -1105,13 +1372,21 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           
           if (!code || !name) return null;
 
+          const trimmedName = String(name).trim();
+          const detectedProc = detectProcessFromName(trimmedName);
+          const rawProc = row.process || row['العملية'];
+          const detectedDir = detectDirectionFromName(trimmedName);
+          const rawDir = row.direction || row['الاتجاه'] || row['التوجيه'];
+          const rawSize = row.size || row['المقاس'] || row['الحجم'];
+          const detectedSize = detectSizeFromName(trimmedName) || detectSizeFromName(String(code));
+
           return {
             code: String(code),
-            name: String(name).trim(),
+            name: trimmedName,
             type: row.type || row['النوع'] || '',
-            process: row.process || row['العملية'] || 'Gen',
-            direction: row.direction || row['الاتجاه'] || 'Any',
-            size: row.size || row['المقاس'] || 'Gen'
+            process: (rawProc && String(rawProc).trim()) || (detectedProc !== 'Gen' ? detectedProc : 'Gen'),
+            direction: (rawDir && String(rawDir).trim()) || (detectedDir !== 'Any' ? detectedDir : 'Any'),
+            size: (rawSize && String(rawSize).trim()) || (detectedSize ? detectedSize : 'Gen')
           };
         }).filter(Boolean) as ProcessItem[];
 
@@ -1214,9 +1489,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   unit: unitVal
                 });
               } else {
+                const formattedName = formatItemWithSize(nameVal, codeVal, dynamicItems);
                 parsedOutputs.push({
                   itemCode: codeVal,
-                  itemName: nameVal,
+                  itemName: formattedName,
                   quantity: qtyVal,
                   unit: unitVal
                 });
@@ -1321,9 +1597,10 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   unit: rowUnit
                 });
               } else if (currentSection === 'outputs') {
+                const formattedName = formatItemWithSize(rowName, rowCode, dynamicItems);
                 parsedOutputs.push({
                   itemCode: rowCode,
-                  itemName: rowName,
+                  itemName: formattedName,
                   quantity: rowQty,
                   unit: rowUnit
                 });
@@ -1451,6 +1728,37 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       setShowManualAddItem(false);
     } catch (e) {
       toast.error(lang === 'ar' ? 'فشل إضافة الصنف' : 'Failed to add item');
+    }
+  };
+
+  const handleClearAllItems = async () => {
+    const confirmMsg = lang === 'ar'
+      ? 'هل أنت متأكد من مسح جميع الأصناف والأكواد نهائياً؟\n\nتأكيد: سيتم مسح قائمة الأصناف والأكواد بالكامل مع الإبقاء التام على كافة التشغيلات المسجلة وحمايتها.'
+      : 'Are you sure you want to delete all items and codes permanently?\n\nConfirm: This will clear all items and codes while keeping all created jobs intact and safe.';
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const snap = await getDocs(collection(db, COLLECTIONS.PROCESS_ITEMS));
+      if (!snap.empty) {
+        const docs = snap.docs;
+        const chunkSize = 400;
+        for (let i = 0; i < docs.length; i += chunkSize) {
+          const chunk = docs.slice(i, i + chunkSize);
+          const batch = writeBatch(db);
+          chunk.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+      setDynamicItems([]);
+      localStorage.setItem('tp_purge_process_items_done_v2', 'true');
+      toast.success(lang === 'ar' 
+        ? 'تم مسح جميع الأصناف والأكواد بنجاح، مع بقاء كافة التشغيلات محفوظة بالكامل' 
+        : 'All items and codes deleted successfully. All jobs are completely preserved.'
+      );
+    } catch (err) {
+      console.error('Error deleting all items:', err);
+      toast.error(lang === 'ar' ? 'فشل مسح الأصناف' : 'Failed to delete items');
     }
   };
 
@@ -2112,10 +2420,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
       for (let i = 0; i < rowsCount; i++) {
         const output = job.outputs[i];
+        const displayOutName = output ? formatItemWithSize(output.itemName, output.itemCode, dynamicItems) : "";
         outputsRowsList.push(new TableRow({
           children: [
             createCell(output ? output.itemCode : "", { bold: true }),
-            createCell(output ? output.itemName : "", { align: AlignmentType.RIGHT }),
+            createCell(displayOutName, { align: AlignmentType.RIGHT }),
             createCell(output ? output.quantity.toLocaleString() : "", { bg: output ? "FEF3C7" : undefined, bold: true }),
           ]
         }));
@@ -2704,7 +3013,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   ${job.outputs.map(output => `
                     <tr>
                       <td class="item-code">${output.itemCode}</td>
-                      <td>${output.itemName}</td>
+                      <td>${formatItemWithSize(output.itemName, output.itemCode, dynamicItems)}</td>
                       <td class="item-qty" style="color: #2563eb;">${output.quantity} ${output.unit}</td>
                     </tr>
                   `).join('')}
@@ -2826,7 +3135,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
       job.outputs.forEach(output => {
         outputRows.push({
           code: output.itemCode,
-          name: output.itemName,
+          name: formatItemWithSize(output.itemName, output.itemCode, dynamicItems),
           qty: output.quantity
         });
       });
@@ -3337,10 +3646,11 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
       for (let i = 0; i < rowsCount; i++) {
         const output = job.outputs[i];
+        const displayOutName = output ? formatItemWithSize(output.itemName, output.itemCode, dynamicItems) : "";
         outputsRowsList.push(new TableRow({
           children: [
             createCell(output ? output.itemCode : "", { bold: true }),
-            createCell(output ? output.itemName : "", { align: AlignmentType.RIGHT }),
+            createCell(displayOutName, { align: AlignmentType.RIGHT }),
             createCell(output ? output.quantity.toLocaleString() : "", { bg: output ? "FEF3C7" : undefined, bold: true }),
           ]
         }));
@@ -4126,6 +4436,21 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                       className="hidden"
                     />
                   </label>
+
+                  <button 
+                    type="button"
+                    onClick={handleClearAllItems}
+                    disabled={dynamicItems.length === 0}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                      dynamicItems.length === 0 
+                        ? 'bg-zinc-100 dark:bg-zinc-800/40 text-zinc-400 border-zinc-200 dark:border-zinc-800 cursor-not-allowed'
+                        : 'bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 shadow-sm'
+                    }`}
+                    title={lang === 'ar' ? 'مسح كافة الأصناف والأكواد مع الإبقاء على كافة التشغيلات' : 'Clear all items and codes while keeping jobs'}
+                  >
+                    <Trash2 size={14} />
+                    {lang === 'ar' ? 'مسح كل الأصناف والأكواد' : 'Delete All Items & Codes'}
+                  </button>
                 </div>
               </div>
 
@@ -4150,7 +4475,19 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                       <input 
                         type="text"
                         value={manualItemName}
-                        onChange={e => setManualItemName(e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setManualItemName(val);
+                          const detected = detectProcessFromName(val);
+                          const detectedDir = detectDirectionFromName(val);
+                          const detectedSize = detectSizeFromName(val);
+                          setManualItem(prev => ({
+                            ...prev,
+                            ...(detected && detected !== 'Gen' && (prev.process === 'Gen' || !prev.process) ? { process: detected } : {}),
+                            ...(detectedDir && detectedDir !== 'Any' && (prev.direction === 'Any' || !prev.direction) ? { direction: detectedDir } : {}),
+                            ...(detectedSize && (prev.size === 'Gen' || !prev.size) ? { size: detectedSize } : {})
+                          }));
+                        }}
                         placeholder={lang === 'ar' ? 'اسم الصنف بالكامل' : 'Full Item Name'}
                         className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 text-xs text-zinc-800 dark:text-zinc-200 font-medium"
                       />
@@ -4175,20 +4512,20 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                         className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 text-xs text-zinc-850 dark:text-zinc-200 font-medium"
                       >
                         {CATEGORIES.process.map(cat => (
-                          <option key={cat.id} value={cat.id}>{lang === 'ar' ? cat.labelAr : cat.labelEn}</option>
+                          <option key={cat.id} value={cat.id}>{lang === 'ar' ? `${cat.labelAr} (${cat.id})` : `${cat.id} - ${cat.labelAr}`}</option>
                         ))}
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-zinc-400 block pb-0.5">{lang === 'ar' ? 'الاتجاه' : 'Direction'}</label>
+                      <label className="text-[11px] font-bold text-zinc-400 block pb-0.5">{lang === 'ar' ? 'التوجيه' : 'Direction'}</label>
                       <select 
                         value={manualItem.direction}
                         onChange={e => setManualItem({ ...manualItem, direction: e.target.value })}
                         className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 text-xs text-zinc-850 dark:text-zinc-200 font-medium"
                       >
-                        <option value="Any">{lang === 'ar' ? 'أي اتجاه (Any)' : 'Any'}</option>
+                        <option value="Any">{lang === 'ar' ? 'أي توجيه (Any)' : 'Any'}</option>
                         {CATEGORIES.direction.map(cat => (
-                          <option key={cat.id} value={cat.id}>{lang === 'ar' ? cat.labelAr : cat.labelEn}</option>
+                          <option key={cat.id} value={cat.id}>{lang === 'ar' ? `${cat.labelAr} (${cat.id})` : `${cat.id} - ${cat.labelAr}`}</option>
                         ))}
                       </select>
                     </div>
@@ -4226,9 +4563,16 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
 
               <div className="max-h-[400px] overflow-y-auto pr-2 space-y-2">
                 {dynamicItems.length === 0 ? (
-                  <p className="text-center py-10 text-zinc-500 italic">
-                    {lang === 'ar' ? 'لا يوجد أصناف مضافة بعد' : 'No items added yet'}
-                  </p>
+                  <div className="text-center py-10 px-4 bg-zinc-50 dark:bg-zinc-800/30 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-700/60">
+                    <p className="font-bold text-zinc-700 dark:text-zinc-200 text-sm mb-1">
+                      {lang === 'ar' ? 'تم مسح كافة الأصناف والأكواد (قائمة الأصناف فارغة)' : 'All items and codes have been cleared'}
+                    </p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {lang === 'ar' 
+                        ? 'كافة التشغيلات التي تم إنشاؤها محفوظة ومحمية بالكامل. يمكنك إضافة أصناف جديدة يدوياً أو استيراد ملف إكسل في أي وقت.'
+                        : 'All previously created jobs are completely safe and preserved. You can add items manually or import an Excel sheet anytime.'}
+                    </p>
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {dynamicItems.length > 50 && (
@@ -4539,7 +4883,9 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                         <div key={idx} className="flex items-center justify-between p-3 bg-white dark:bg-zinc-800 rounded-2xl border border-blue-100/50 dark:border-blue-900/20 shadow-sm">
                           <div className="flex flex-col">
                             <span className="text-[10px] text-zinc-400 font-mono">{output.itemCode}</span>
-                            <span className="font-bold text-sm text-zinc-700 dark:text-zinc-200">{output.itemName}</span>
+                            <span className="font-bold text-sm text-zinc-700 dark:text-zinc-200">
+                              {formatItemWithSize(output.itemName, output.itemCode, dynamicItems)}
+                            </span>
                           </div>
                           <div className="flex items-center gap-4">
                             <span className="font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-lg text-sm">{output.quantity} {output.unit}</span>
@@ -5649,7 +5995,9 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                                 <div key={i} className="group/item flex items-center justify-between p-2 bg-zinc-50/50 dark:bg-zinc-800/30 rounded-xl border border-zinc-100/50 dark:border-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 hover:border-blue-200 dark:hover:border-blue-900/30 transition-all">
                                   <div className="flex flex-col">
                                     <span className="text-[8px] text-zinc-400 font-mono leading-none mb-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">{output.itemCode}</span>
-                                    <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">{output.itemName}</span>
+                                    <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-200">
+                                      {formatItemWithSize(output.itemName, output.itemCode, dynamicItems)}
+                                    </span>
                                   </div>
                                   <span className="text-[11px] font-black text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-lg">
                                     {output.quantity} {output.unit}
