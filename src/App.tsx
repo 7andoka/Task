@@ -19,6 +19,7 @@ import RawMaterialsInventory from './components/RawMaterialsInventory';
 import ScaleReports from './components/ScaleReports';
 import FreshSupply from './components/FreshSupply';
 import PurchaseOrders from './components/PurchaseOrders';
+import SalesOrders from './components/SalesOrders';
 import OfflineScreen from './components/OfflineScreen';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
@@ -49,6 +50,7 @@ export default function App() {
       { id: 'supplyTracking' },
       { id: 'freshSupply' },
       { id: 'purchaseOrders' },
+      { id: 'salesOrders' },
       { id: 'rawMaterialsInventory' },
       { id: 'coldStorage' },
       { id: 'rawMaterial' },
@@ -514,6 +516,8 @@ export default function App() {
         return <FreshSupply lang={lang} user={user} />;
       case 'purchaseOrders':
         return <PurchaseOrders lang={lang} user={user} />;
+      case 'salesOrders':
+        return <SalesOrders lang={lang} user={user} />;
       case 'rawMaterialsInventory':
         return <RawMaterialsInventory lang={lang} />;
       case 'coldStorage':

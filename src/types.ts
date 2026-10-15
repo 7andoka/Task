@@ -420,4 +420,36 @@ export interface PurchaseOrder {
   lastUpdatedAt: string;
 }
 
+export interface SalesOrderRecord {
+  id: string;
+  orderNo: string;           // رقم أمر البيع (Sales Order No / SO)
+  salesOrder?: string;       // رقم Sales Order (قابل للكتابة والتعديل المباشر)
+  delivery?: string;         // رقم التسليم / إذن الصرف والتوصيل (Delivery) (قابل للكتابة المباشرة)
+  postDocument?: string;     // رقم مستند الترحيل (POST DOCUMENT) (قابل للكتابة والتعديل المباشر)
+  date: string;              // التاريخ الموحد
+  originalDate?: string;     // التاريخ الأصلي
+  parsedDate?: Date | null;
+  customer: string;          // العميل / المشتري (Customer / Client)
+  customerCode?: string;     // كود العميل
+  itemCode: string;          // كود الصنف (سواء SAP أو كود قديم)
+  sapCode?: string;          // كود ساب
+  itemName: string;          // اسم الصنف
+  variety?: string;          // نوع الصنف (منزانيللا، بيكوال، كالاماتا...)
+  quantityKg: number;        // الكمية بالكيلو
+  quantityTons: number;      // الكمية بالطن
+  unitPrice?: number;        // سعر الوحدة / الكيلو (ج.م)
+  totalAmount?: number;      // الإجمالي (الكمية × السعر)
+  currency?: string;         // العملة (ج.م / $ / €)
+  store?: string;            // المخزن المنصرف منه
+  status?: string;           // حالة الأمر (معتمد / قيد التنفيذ / مكتمل / ملغي)
+  truckNo?: string;          // رقم السيارة
+  driver?: string;           // السائق
+  shippingDocNo?: string;    // رقم إذن الصرف / الشحن
+  notes?: string;            // ملاحظات
+  routing?: string;          // التوجيه (محلي / تصدير / مصنع ...)
+  updatedAt?: string;        // تاريخ آخر تعديل
+  updatedBy?: string;        // القائم بالتعديل
+  raw: Record<string, string>; // البيانات الأصلية الخام
+}
+
 

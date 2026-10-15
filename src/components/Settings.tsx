@@ -4,7 +4,7 @@ import {
   Bell, Save, CheckCircle2, Download, Moon, Sun, Palette, 
   LayoutGrid, Check, BarChart3, Scale, Truck, Sprout, FileText, 
   Layers, Snowflake, Package, ClipboardList, Database, Boxes, 
-  CheckSquare, Users, Settings as SettingsIcon, Shield 
+  CheckSquare, Users, Settings as SettingsIcon, Shield, ShoppingCart 
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile, NotificationPreferences } from '../types';
@@ -41,6 +41,7 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
     { id: 'freshSupply', label: t.freshSupply, icon: Sprout },
     { id: 'purchaseOrders', label: t.purchaseOrders, icon: FileText },
+    { id: 'salesOrders', label: t.salesOrders, icon: ShoppingCart },
     { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory, icon: Layers },
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },

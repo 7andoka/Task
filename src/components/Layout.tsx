@@ -28,7 +28,8 @@ import {
   Layers,
   Scale,
   FileText,
-  Boxes
+  Boxes,
+  ShoppingCart
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -124,6 +125,7 @@ export default function Layout({
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
     { id: 'freshSupply', label: t.freshSupply, icon: Sprout },
     { id: 'purchaseOrders', label: t.purchaseOrders, icon: FileText },
+    { id: 'salesOrders', label: t.salesOrders, icon: ShoppingCart },
     { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory, icon: Layers },
     { id: 'coldStorage', label: t.coldStorage, icon: Snowflake },
     { id: 'rawMaterial', label: t.rawMaterial, icon: Package },

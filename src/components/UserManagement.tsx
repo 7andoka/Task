@@ -79,6 +79,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     { id: 'supplyTracking', label: t.supplyTracking },
     { id: 'freshSupply', label: t.freshSupply },
     { id: 'purchaseOrders', label: t.purchaseOrders },
+    { id: 'salesOrders', label: t.salesOrders },
     { id: 'rawMaterialsInventory', label: t.rawMaterialsInventory },
     { id: 'coldStorage', label: t.coldStorage },
     { id: 'rawMaterial', label: t.rawMaterial },
