@@ -422,10 +422,11 @@ export interface PurchaseOrder {
 
 export interface SalesOrderRecord {
   id: string;
-  orderNo: string;           // رقم أمر البيع (Sales Order No / SO)
-  salesOrder?: string;       // رقم Sales Order (قابل للكتابة والتعديل المباشر)
-  delivery?: string;         // رقم التسليم / إذن الصرف والتوصيل (Delivery) (قابل للكتابة المباشرة)
-  postDocument?: string;     // رقم مستند الترحيل (POST DOCUMENT) (قابل للكتابة والتعديل المباشر)
+  movementNo: string;        // رقم الحركة الفعلي المستقل (Movement No)
+  orderNo: string;           // كود المعاملة أو المعرف
+  salesOrder?: string;       // رقم أمر البيع الفعلي (Sales Order / SO) - قابل للتعديل والكتابة
+  delivery?: string;         // رقم التسليم / إذن الصرف والتوصيل (Delivery) - قابل للكتابة المباشرة
+  postDocument?: string;     // رقم مستند الترحيل (POST DOCUMENT) - قابل للكتابة والتعديل المباشر
   date: string;              // التاريخ الموحد
   originalDate?: string;     // التاريخ الأصلي
   parsedDate?: Date | null;

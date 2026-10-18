@@ -258,13 +258,13 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
   const [sortField, setSortField] = useState<keyof SalesOrderRecord>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Quick Inline Edit State for Sales Order, Delivery, and POST DOCUMENT
-  const [editingCell, setEditingCell] = useState<{ id: string; field: 'salesOrder' | 'delivery' | 'postDocument' } | null>(null);
+  // Quick Inline Edit State for Movement No, Sales Order, Delivery, and POST DOCUMENT
+  const [editingCell, setEditingCell] = useState<{ id: string; field: 'movementNo' | 'salesOrder' | 'delivery' | 'postDocument' } | null>(null);
   const [cellValue, setCellValue] = useState('');
   const [savingCellId, setSavingCellId] = useState<string | null>(null);
 
-  // Fast inline update function for Sales Order, Delivery, and POST DOCUMENT
-  const handleInlineUpdate = async (record: SalesOrderRecord, field: 'salesOrder' | 'delivery' | 'postDocument', value: string) => {
+  // Fast inline update function for Movement No, Sales Order, Delivery, and POST DOCUMENT
+  const handleInlineUpdate = async (record: SalesOrderRecord, field: 'movementNo' | 'salesOrder' | 'delivery' | 'postDocument', value: string) => {
     const trimmedVal = value.trim();
     if (record[field] === trimmedVal) {
       setEditingCell(null);
@@ -276,7 +276,6 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       const docRef = doc(db, COLLECTIONS.SALES_ORDERS_OVERRIDES, record.id);
       await setDoc(docRef, {
         [field]: trimmedVal,
-        ...(field === 'salesOrder' ? { orderNo: trimmedVal } : {}),
         updatedAt: new Date().toISOString(),
         updatedBy: user?.displayName || user?.username || 'User'
       }, { merge: true });
@@ -284,7 +283,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       soundFx.playSuccess();
       toast.success(
         isRtl 
-          ? `تم تحديث ${field === 'salesOrder' ? 'أمر البيع' : field === 'delivery' ? 'التسليم (Delivery)' : 'مستند الترحيل (POST DOCUMENT)'} بنجاح`
+          ? `تم تحديث ${field === 'movementNo' ? 'رقم الحركة' : field === 'salesOrder' ? 'أمر البيع (Sales Order)' : field === 'delivery' ? 'التسليم (Delivery)' : 'مستند الترحيل (POST DOCUMENT)'} بنجاح`
           : `${field} updated successfully`
       );
     } catch (err) {
@@ -305,25 +304,34 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
     if (!Array.isArray(rawData)) return [];
 
     return rawData.map((row, idx) => {
-      // Order Number / SO
-      const orderNo = getRowValueFlexible(
+      // 1. Distinct Movement Number (رقم الحركة الفعلي المنفصل تماماً من الشيت)
+      const movementNo = getRowValueFlexible(
         row,
-        'رقم أمر البيع',
-        'أمر البيع',
-        'امر البيع',
-        'رقم الامر',
-        'رقم الأمر',
-        'كود البيع',
-        'Order No',
-        'Order Number',
-        'SO',
+        'رقم الحركة',
+        'الحركة',
+        'رقم حركة',
+        'Move No',
+        'Movement No',
+        'Movement Number',
+        'Movement'
+      ) || '';
+
+      // 2. Distinct Sales Order (أمر البيع الفعلي المستقل - غير رقم الحركة تماماً)
+      const rawSalesOrder = getRowValueFlexible(
+        row,
         'Sales Order',
         'Sales Order No',
+        'Sales Order #',
+        'SO',
         'SO Number',
-        'SO No',
-        'رقم الحركة',
-        'PO'
-      ) || `SO-${idx + 1}`;
+        'أمر البيع',
+        'امر البيع',
+        'رقم أمر البيع',
+        'رقم امر البيع'
+      );
+
+      // Distinct tracking identifier for transaction rows
+      const orderNo = rawSalesOrder || (movementNo ? `MOV-${movementNo}` : `SO-${idx + 1}`);
 
       // Date
       const rawDate = getRowValueFlexible(row, 'التاريخ', 'تاريخ البيع', 'تاريخ الامر', 'تاريخ الأمر', 'Date', 'Order Date');
@@ -378,21 +386,9 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       const stableId = `${baseId}_${idx}`;
 
       // Apply overrides if exists
-      const override = overridesMap[stableId] || overridesMap[orderNo] || {};
+      const override = overridesMap[stableId] || overridesMap[`so_${orderNo}_${itemCode}_${cleanKg}_${idx}`] || overridesMap[orderNo] || (movementNo ? overridesMap[`mov_${movementNo}`] : null) || {};
 
-      const rawSalesOrder = getRowValueFlexible(
-        row,
-        'Sales Order',
-        'Sales Order No',
-        'Sales Order #',
-        'SO',
-        'SO Number',
-        'أمر البيع',
-        'امر البيع',
-        'رقم أمر البيع',
-        'رقم امر البيع'
-      );
-      const salesOrder = override.salesOrder !== undefined ? String(override.salesOrder).trim() : (rawSalesOrder || orderNo);
+      const salesOrder = override.salesOrder !== undefined ? String(override.salesOrder).trim() : rawSalesOrder;
 
       const rawDelivery = getRowValueFlexible(
         row,
@@ -426,9 +422,12 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       );
       const postDocument = override.postDocument !== undefined ? String(override.postDocument).trim() : (rawPostDocument || shippingDocNo);
 
+      const finalMovementNo = override.movementNo !== undefined ? String(override.movementNo).trim() : movementNo;
+
       return {
         id: stableId,
-        orderNo: override.orderNo || orderNo,
+        movementNo: finalMovementNo,
+        orderNo: override.orderNo || salesOrder || (finalMovementNo ? `MOV-${finalMovementNo}` : `ROW-${idx + 1}`),
         salesOrder: salesOrder,
         delivery: delivery,
         postDocument: postDocument,
@@ -604,6 +603,10 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       if (searchQuery.trim()) {
         const q = normalizeArabicSearch(searchQuery);
         const match = 
+          matchesArabicSearch(record.movementNo || '', q) ||
+          matchesArabicSearch(record.salesOrder || '', q) ||
+          matchesArabicSearch(record.delivery || '', q) ||
+          matchesArabicSearch(record.postDocument || '', q) ||
           matchesArabicSearch(record.orderNo, q) ||
           matchesArabicSearch(record.customer, q) ||
           matchesArabicSearch(record.customerCode || '', q) ||
@@ -674,8 +677,9 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
     const totalKg = filteredData.reduce((acc, r) => acc + r.quantityKg, 0);
     const totalTons = totalKg / 1000;
     const totalRevenue = filteredData.reduce((acc, r) => acc + (r.totalAmount || 0), 0);
-    const orderCount = new Set(filteredData.map(r => r.orderNo).filter(Boolean)).size;
-    const movementCount = filteredData.length;
+    const orderCount = new Set(filteredData.map(r => r.salesOrder).filter(Boolean)).size;
+    const uniqueMovements = new Set(filteredData.map(r => r.movementNo).filter(Boolean)).size;
+    const movementCount = uniqueMovements || filteredData.length;
     const uniqueCustomers = new Set(filteredData.map(r => r.customer).filter(Boolean)).size;
     const uniqueItems = new Set(filteredData.map(r => r.itemName).filter(Boolean)).size;
 
@@ -761,8 +765,8 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
   const handleExportExcel = () => {
     try {
       const rows = sortedData.map(r => ({
-        [isRtl ? 'رقم أمر البيع' : 'Order No']: r.orderNo,
-        ['Sales Order']: r.salesOrder || r.orderNo,
+        [isRtl ? 'رقم الحركة' : 'Move No']: r.movementNo || '',
+        ['Sales Order']: r.salesOrder || '',
         ['Delivery']: r.delivery || '',
         ['POST DOCUMENT']: r.postDocument || '',
         [isRtl ? 'التاريخ' : 'Date']: r.date,
@@ -799,8 +803,9 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
     try {
       const docRef = doc(db, COLLECTIONS.SALES_ORDERS_OVERRIDES, editingRecord.id);
       await setDoc(docRef, {
+        movementNo: editingRecord.movementNo || '',
         orderNo: editingRecord.orderNo,
-        salesOrder: editingRecord.salesOrder || editingRecord.orderNo,
+        salesOrder: editingRecord.salesOrder || '',
         delivery: editingRecord.delivery || '',
         postDocument: editingRecord.postDocument || '',
         customer: editingRecord.customer,
@@ -1162,6 +1167,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                   <thead>
                     <tr className="bg-zinc-50 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 font-black">
                       <th className="p-3 text-center w-12">#</th>
+                      <th className="p-3 text-center">{isRtl ? 'رقم الحركة' : 'Move No'}</th>
                       <th className="p-3 text-right bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300">
                         <div className="flex items-center gap-1">
                           <Edit3 size={12} className="text-blue-500" />
@@ -1196,7 +1202,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
                     {paginatedData.length === 0 ? (
                       <tr>
-                        <td colSpan={16} className="p-12 text-center text-zinc-400">
+                        <td colSpan={17} className="p-12 text-center text-zinc-400">
                           {isRtl ? 'لا توجد بيانات مطابقة لمعايير البحث' : 'No records matching search criteria'}
                         </td>
                       </tr>
@@ -1210,7 +1216,59 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                           >
                             <td className="p-3 text-center text-zinc-400 font-mono text-[11px]">{serial}</td>
                             
-                            {/* 1. Editable Sales Order */}
+                            {/* Movement No (رقم الحركة الفعلي المنفصل تماماً) */}
+                            <td className="p-2.5 text-center whitespace-nowrap font-mono font-bold text-zinc-700 dark:text-zinc-300">
+                              {editingCell?.id === row.id && editingCell?.field === 'movementNo' ? (
+                                <div className="flex items-center justify-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={cellValue}
+                                    onChange={(e) => setCellValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleInlineUpdate(row, 'movementNo', cellValue);
+                                      if (e.key === 'Escape') setEditingCell(null);
+                                    }}
+                                    autoFocus
+                                    placeholder="Move No..."
+                                    className="px-2 py-1 bg-white dark:bg-zinc-800 border-2 border-zinc-500 rounded-lg text-xs font-mono font-bold text-zinc-900 dark:text-zinc-100 outline-none w-20 text-center shadow-sm"
+                                  />
+                                  <button
+                                    onClick={() => handleInlineUpdate(row, 'movementNo', cellValue)}
+                                    className="p-1 bg-zinc-700 text-white rounded-md hover:bg-zinc-800 cursor-pointer shadow-xs"
+                                    title={isRtl ? 'حفظ' : 'Save'}
+                                  >
+                                    <Check size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingCell(null)}
+                                    className="p-1 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                                    title={isRtl ? 'إلغاء' : 'Cancel'}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div
+                                  onClick={() => {
+                                    setEditingCell({ id: row.id, field: 'movementNo' });
+                                    setCellValue(row.movementNo || '');
+                                  }}
+                                  className="group/cell inline-flex items-center justify-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer transition-all border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
+                                  title={isRtl ? 'انقر لتعديل رقم الحركة' : 'Click to edit Move No'}
+                                >
+                                  {row.movementNo ? (
+                                    <span className="text-xs">
+                                      {row.movementNo}
+                                    </span>
+                                  ) : (
+                                    <span className="text-zinc-400 text-[11px]">-</span>
+                                  )}
+                                  <Edit3 size={10} className="text-zinc-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                                </div>
+                              )}
+                            </td>
+
+                            {/* 1. Editable Sales Order (مستقل تماماً عن رقم الحركة) */}
                             <td className="p-2.5 bg-blue-50/20 dark:bg-blue-950/10 whitespace-nowrap">
                               {editingCell?.id === row.id && editingCell?.field === 'salesOrder' ? (
                                 <div className="flex items-center gap-1">
@@ -1245,14 +1303,21 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                                 <div 
                                   onClick={() => {
                                     setEditingCell({ id: row.id, field: 'salesOrder' });
-                                    setCellValue(row.salesOrder || row.orderNo || '');
+                                    setCellValue(row.salesOrder || '');
                                   }}
                                   className="group/cell flex items-center justify-between gap-1.5 px-2 py-1 rounded-lg hover:bg-blue-100/60 dark:hover:bg-blue-900/40 cursor-pointer transition-all border border-transparent hover:border-blue-300 dark:hover:border-blue-700"
-                                  title={isRtl ? 'انقر للكتابة أو التعديل' : 'Click to edit Sales Order'}
+                                  title={isRtl ? 'انقر لكتابة أو تعديل رقم أمر البيع (Sales Order)' : 'Click to edit Sales Order'}
                                 >
-                                  <span className="font-mono font-bold text-blue-700 dark:text-blue-300 text-xs">
-                                    {row.salesOrder || row.orderNo || '-'}
-                                  </span>
+                                  {row.salesOrder ? (
+                                    <span className="font-mono font-bold text-blue-700 dark:text-blue-300 text-xs">
+                                      {row.salesOrder}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-zinc-400 italic flex items-center gap-1 group-hover/cell:text-blue-600">
+                                      <Plus size={11} />
+                                      <span>{isRtl ? 'أدخل أمر البيع' : 'Add SO'}</span>
+                                    </span>
+                                  )}
                                   <Edit3 size={11} className="text-blue-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
                                 </div>
                               )}
@@ -1753,8 +1818,13 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                 <div className="flex items-center gap-2">
                   <ShoppingCart className="text-blue-500" size={20} />
                   <div>
-                    <h3 className="font-black text-sm text-zinc-900 dark:text-white">
-                      {isRtl ? `تفاصيل أمر البيع: ${selectedRecord.orderNo}` : `Order Details: ${selectedRecord.orderNo}`}
+                    <h3 className="font-black text-sm text-zinc-900 dark:text-white flex items-center gap-2">
+                      <span>{isRtl ? 'تفاصيل الحركة وأمر البيع' : 'Movement & Order Details'}</span>
+                      {selectedRecord.movementNo && (
+                        <span className="px-2 py-0.5 rounded-md text-xs font-mono font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                          {isRtl ? `حركة: ${selectedRecord.movementNo}` : `Move: ${selectedRecord.movementNo}`}
+                        </span>
+                      )}
                     </h3>
                     <p className="text-[11px] text-zinc-400">{selectedRecord.date}</p>
                   </div>
@@ -1765,6 +1835,22 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl space-y-0.5">
+                  <span className="text-[10px] text-zinc-400 font-bold block">{isRtl ? 'رقم الحركة' : 'Movement No'}</span>
+                  <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{selectedRecord.movementNo || '-'}</span>
+                </div>
+                <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 rounded-xl space-y-0.5">
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold block">Sales Order</span>
+                  <span className="font-mono font-black text-blue-700 dark:text-blue-300">{selectedRecord.salesOrder || '-'}</span>
+                </div>
+                <div className="p-3 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl space-y-0.5">
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block">Delivery</span>
+                  <span className="font-mono font-black text-amber-700 dark:text-amber-300">{selectedRecord.delivery || '-'}</span>
+                </div>
+                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 rounded-xl space-y-0.5">
+                  <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold block">POST DOCUMENT</span>
+                  <span className="font-mono font-black text-indigo-700 dark:text-indigo-300">{selectedRecord.postDocument || '-'}</span>
+                </div>
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl space-y-0.5">
                   <span className="text-[10px] text-zinc-400 font-bold block">{isRtl ? 'العميل' : 'Customer'}</span>
                   <span className="font-bold text-zinc-900 dark:text-white">{selectedRecord.customer}</span>
@@ -1846,13 +1932,24 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
               </div>
 
               <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <label className="font-bold text-zinc-600 dark:text-zinc-400 block mb-1">{isRtl ? 'رقم الحركة' : 'Move No'}</label>
+                    <input
+                      type="text"
+                      value={editingRecord.movementNo || ''}
+                      onChange={(e) => setEditingRecord({ ...editingRecord, movementNo: e.target.value })}
+                      placeholder="Movement..."
+                      className="w-full p-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono text-xs font-bold"
+                    />
+                  </div>
                   <div>
                     <label className="font-bold text-blue-600 dark:text-blue-400 block mb-1">Sales Order</label>
                     <input
                       type="text"
-                      value={editingRecord.salesOrder || editingRecord.orderNo || ''}
-                      onChange={(e) => setEditingRecord({ ...editingRecord, salesOrder: e.target.value, orderNo: e.target.value })}
+                      value={editingRecord.salesOrder || ''}
+                      onChange={(e) => setEditingRecord({ ...editingRecord, salesOrder: e.target.value })}
+                      placeholder="Sales Order..."
                       className="w-full p-2 bg-blue-50/40 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl font-mono text-xs font-bold"
                     />
                   </div>
