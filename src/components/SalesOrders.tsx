@@ -202,6 +202,345 @@ const formatUnifiedDate = (d: Date): string => {
   return `${day}/${month}/${year}`;
 };
 
+interface SmartFilterOption {
+  id: string;
+  label: string;
+  count: number;
+  totalTons: number;
+}
+
+interface SmartMultiSelectProps {
+  label: string;
+  allLabel: string;
+  searchPlaceholder?: string;
+  options: SmartFilterOption[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+  icon: React.ReactNode;
+  isRtl: boolean;
+  colorTheme?: 'blue' | 'purple' | 'emerald' | 'amber';
+}
+
+function SmartMultiSelect({
+  label,
+  allLabel,
+  searchPlaceholder,
+  options,
+  selected,
+  onChange,
+  icon,
+  isRtl,
+  colorTheme = 'blue'
+}: SmartMultiSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleOption = (id: string) => {
+    if (selected.includes(id)) {
+      onChange(selected.filter(item => item !== id));
+    } else {
+      onChange([...selected, id]);
+    }
+  };
+
+  const selectOnlyOption = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    onChange([id]);
+    setQuery('');
+    setIsOpen(false);
+  };
+
+  const removeSingleSelected = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(selected.filter(item => item !== id));
+  };
+
+  const handleSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(options.map(o => o.id));
+  };
+
+  const handleClearAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange([]);
+    setQuery('');
+  };
+
+  const filteredOptions = useMemo(() => {
+    if (!query.trim()) return options;
+    const q = normalizeArabicSearch(query);
+    return options.filter(opt =>
+      matchesArabicSearch(opt.label, q) || opt.label.toLowerCase().includes(query.toLowerCase())
+    );
+  }, [options, query]);
+
+  const themeStyles = {
+    blue: {
+      activeBtn: 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20',
+      badge: 'bg-blue-600 text-white',
+      chip: 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300',
+      chkActive: 'bg-blue-600 border-blue-600 text-white',
+      chkBorderHover: 'hover:border-blue-500',
+      itemActive: 'bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-200 font-bold',
+      ring: 'focus:ring-blue-500'
+    },
+    purple: {
+      activeBtn: 'bg-purple-50 dark:bg-purple-950/40 border-purple-400 dark:border-purple-700 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500/20',
+      badge: 'bg-purple-600 text-white',
+      chip: 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300',
+      chkActive: 'bg-purple-600 border-purple-600 text-white',
+      chkBorderHover: 'hover:border-purple-500',
+      itemActive: 'bg-purple-50 dark:bg-purple-950/30 text-purple-800 dark:text-purple-200 font-bold',
+      ring: 'focus:ring-purple-500'
+    },
+    emerald: {
+      activeBtn: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20',
+      badge: 'bg-emerald-600 text-white',
+      chip: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300',
+      chkActive: 'bg-emerald-600 border-emerald-600 text-white',
+      chkBorderHover: 'hover:border-emerald-500',
+      itemActive: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-200 font-bold',
+      ring: 'focus:ring-emerald-500'
+    },
+    amber: {
+      activeBtn: 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 dark:border-amber-700 text-amber-700 dark:text-amber-300 ring-2 ring-amber-500/20',
+      badge: 'bg-amber-600 text-white',
+      chip: 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300',
+      chkActive: 'bg-amber-600 border-amber-600 text-white',
+      chkBorderHover: 'hover:border-amber-500',
+      itemActive: 'bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 font-bold',
+      ring: 'focus:ring-amber-500'
+    }
+  }[colorTheme];
+
+  const selectedOptNames = selected.map(id => {
+    const opt = options.find(o => o.id === id);
+    return opt ? opt.label : id;
+  });
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold whitespace-nowrap cursor-pointer h-10 select-none ${
+            selected.length > 0 
+              ? themeStyles.activeBtn 
+              : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          {icon}
+          {selected.length === 0 && <span>{allLabel}</span>}
+          {selected.length === 1 && (
+            <span className="truncate max-w-[130px]" title={selectedOptNames[0]}>
+              {selectedOptNames[0]}
+            </span>
+          )}
+          {selected.length > 1 && (
+            <span className="flex items-center gap-1.5">
+              <span>{label}</span>
+              <span className={`${themeStyles.badge} text-[10px] px-1.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-black`}>
+                {selected.length}
+              </span>
+            </span>
+          )}
+          <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {selected.length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange([]);
+            }}
+            title={isRtl ? 'إلغاء التحديد' : 'Clear filter'}
+            className="mr-1 p-1 text-zinc-400 hover:text-red-500 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className={`absolute top-full mt-2 w-80 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl z-50 p-3 overflow-hidden ${
+              isRtl ? 'right-0' : 'left-0'
+            }`}
+          >
+            {/* Header with Title and Quick Actions */}
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-100 dark:border-zinc-800 px-1">
+              <span className="text-[11px] font-black text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                {icon}
+                <span>{label}</span>
+                <span className="text-[10px] text-zinc-400 font-mono font-normal">
+                  ({options.length})
+                </span>
+              </span>
+              <div className="flex items-center gap-2">
+                {options.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold cursor-pointer"
+                  >
+                    {isRtl ? 'تحديد الكل' : 'Select All'}
+                  </button>
+                )}
+                {selected.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearAll}
+                    className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
+                  >
+                    {isRtl ? 'مسح' : 'Clear'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Selected chips bar */}
+            {selected.length > 0 && (
+              <div className="mb-2 p-1.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60">
+                <div className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                  <span>{isRtl ? 'المحدد حالياً:' : 'Selected:'}</span>
+                  <span className="font-mono text-[9px] px-1 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 font-black">
+                    {selected.length}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                  {selected.map(id => {
+                    const opt = options.find(o => o.id === id);
+                    return (
+                      <span
+                        key={id}
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[10px] font-bold ${themeStyles.chip} border shadow-2xs`}
+                      >
+                        <span className="truncate max-w-[140px]">{opt ? opt.label : id}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => removeSingleSelected(id, e)}
+                          className="hover:text-red-500 cursor-pointer p-0.5"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Search filter input */}
+            {options.length > 2 && (
+              <div className="mb-2 px-0.5">
+                <div className="relative">
+                  <Search size={13} className={`absolute top-2.5 text-zinc-400 ${isRtl ? 'right-2.5' : 'left-2.5'}`} />
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={searchPlaceholder || (isRtl ? 'بحث في القائمة...' : 'Search in list...')}
+                    className={`w-full text-xs py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 ${themeStyles.ring} ${
+                      isRtl ? 'pr-7 pl-6' : 'pl-7 pr-6'
+                    }`}
+                    autoFocus
+                  />
+                  {query && (
+                    <button
+                      type="button"
+                      onClick={() => setQuery('')}
+                      className={`absolute top-2 text-zinc-400 hover:text-zinc-600 cursor-pointer ${isRtl ? 'left-2' : 'right-2'}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Options list */}
+            <div className="max-h-60 overflow-y-auto space-y-0.5 pr-0.5">
+              {filteredOptions.length === 0 ? (
+                <div className="text-center py-6 text-xs text-zinc-400">
+                  {isRtl ? 'لا توجد نتائج مطابقة' : 'No matching results'}
+                </div>
+              ) : (
+                filteredOptions.map((option) => {
+                  const isChecked = selected.includes(option.id);
+                  return (
+                    <div
+                      key={option.id}
+                      className={`group w-full flex items-center justify-between px-2 py-1.5 rounded-xl text-xs transition-colors text-right cursor-pointer ${
+                        isChecked 
+                          ? themeStyles.itemActive 
+                          : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                      }`}
+                      onClick={() => selectOnlyOption(option.id)}
+                      title={isRtl ? `تصفية حسب (${option.label}) فقط` : `Filter by ${option.label}`}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {/* Checkbox toggles multi-select */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleOption(option.id);
+                          }}
+                          className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
+                            isChecked 
+                              ? themeStyles.chkActive 
+                              : `border-zinc-300 dark:border-zinc-600 ${themeStyles.chkBorderHover}`
+                          }`}
+                          title={isRtl ? 'تحديد متعدد' : 'Toggle multi-select'}
+                        >
+                          {isChecked && <Check size={10} strokeWidth={3} />}
+                        </button>
+                        <span className="truncate font-medium">{option.label}</span>
+                      </div>
+
+                      {/* Live stats badge (tons and count) */}
+                      <div className="flex items-center gap-1 shrink-0 mr-1.5">
+                        {option.totalTons > 0 && (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40">
+                            {option.totalTons.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} {isRtl ? 'طن' : 't'}
+                          </span>
+                        )}
+                        {option.count > 0 && (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                            {option.count} {isRtl ? 'حركة' : 'mv'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function SalesOrders({ lang, user }: SalesOrdersProps) {
   const isRtl = lang === 'ar';
   const t = translations[lang];
@@ -251,6 +590,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedVarieties, setSelectedVarieties] = useState<string[]>([]);
+  const [salesOrderFilter, setSalesOrderFilter] = useState<'ALL' | 'EXISTS' | 'EMPTY'>('ALL');
 
   // Pagination & Sorting
   const [currentPage, setCurrentPage] = useState(1);
@@ -596,6 +936,131 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
     return true;
   };
 
+  // Smart Cascading Filter Options (Customer, Item, Store)
+  const filterOptions = useMemo(() => {
+    const getDependentData = (excludeKey: 'customer' | 'item' | 'store') => {
+      return data.filter(record => {
+        // 1. Text Search Query
+        if (searchQuery.trim()) {
+          const q = normalizeArabicSearch(searchQuery);
+          const match = 
+            matchesArabicSearch(record.movementNo || '', q) ||
+            matchesArabicSearch(record.salesOrder || '', q) ||
+            matchesArabicSearch(record.delivery || '', q) ||
+            matchesArabicSearch(record.postDocument || '', q) ||
+            matchesArabicSearch(record.orderNo, q) ||
+            matchesArabicSearch(record.customer, q) ||
+            matchesArabicSearch(record.customerCode || '', q) ||
+            matchesArabicSearch(record.itemName, q) ||
+            matchesArabicSearch(record.itemCode, q) ||
+            matchesArabicSearch(record.sapCode || '', q) ||
+            matchesArabicSearch(record.store || '', q) ||
+            matchesArabicSearch(record.truckNo || '', q) ||
+            matchesArabicSearch(record.driver || '', q) ||
+            matchesArabicSearch(record.shippingDocNo || '', q) ||
+            matchesArabicSearch(record.notes || '', q);
+          if (!match) return false;
+        }
+
+        // 2. Date Filter
+        if (!checkDateMatch(record, dateFilter)) return false;
+
+        // 3. Customers Filter
+        if (excludeKey !== 'customer' && selectedCustomers.length > 0) {
+          const normSelected = selectedCustomers.map(c => normalizeArabicSearch(c).trim());
+          const normCust = normalizeArabicSearch(record.customer).trim();
+          const isMatch = selectedCustomers.includes(record.customer) ||
+            (normCust !== '' && normSelected.includes(normCust));
+          if (!isMatch) return false;
+        }
+
+        // 4. Items Filter
+        if (excludeKey !== 'item' && selectedItems.length > 0) {
+          const normSelected = selectedItems.map(i => normalizeArabicSearch(i).trim());
+          const normItem = normalizeArabicSearch(record.itemName).trim();
+          const isMatch = selectedItems.includes(record.itemName) ||
+            (normItem !== '' && normSelected.includes(normItem));
+          if (!isMatch) return false;
+        }
+
+        // 5. Stores Filter
+        if (excludeKey !== 'store' && selectedStores.length > 0) {
+          const st = (record.store || '').trim();
+          if (!st || !selectedStores.includes(st)) return false;
+        }
+
+        // 6. Sales Order Filter (يوجد / لا يوجد)
+        if (salesOrderFilter !== 'ALL') {
+          const soVal = (record.salesOrder || '').trim();
+          const hasSO = soVal !== '' && soVal !== '-' && soVal !== '--';
+          if (salesOrderFilter === 'EXISTS' && !hasSO) return false;
+          if (salesOrderFilter === 'EMPTY' && hasSO) return false;
+        }
+
+        return true;
+      });
+    };
+
+    // Calculate Customers stats
+    const customerMap = new Map<string, { count: number; totalKg: number }>();
+    getDependentData('customer').forEach(r => {
+      const c = (r.customer || '').trim() || 'عميل غير محدد';
+      const curr = customerMap.get(c) || { count: 0, totalKg: 0 };
+      curr.count += 1;
+      curr.totalKg += (r.quantityKg || 0);
+      customerMap.set(c, curr);
+    });
+
+    // Calculate Items stats
+    const itemMap = new Map<string, { count: number; totalKg: number }>();
+    getDependentData('item').forEach(r => {
+      const it = (r.itemName || '').trim() || 'صنف غير محدد';
+      const curr = itemMap.get(it) || { count: 0, totalKg: 0 };
+      curr.count += 1;
+      curr.totalKg += (r.quantityKg || 0);
+      itemMap.set(it, curr);
+    });
+
+    // Calculate Stores stats
+    const storeMap = new Map<string, { count: number; totalKg: number }>();
+    getDependentData('store').forEach(r => {
+      const st = (r.store || '').trim();
+      if (st) {
+        const curr = storeMap.get(st) || { count: 0, totalKg: 0 };
+        curr.count += 1;
+        curr.totalKg += (r.quantityKg || 0);
+        storeMap.set(st, curr);
+      }
+    });
+
+    return {
+      customers: Array.from(customerMap.entries())
+        .sort((a, b) => b[1].totalKg - a[1].totalKg || b[1].count - a[1].count)
+        .map(([id, val]) => ({
+          id,
+          label: id,
+          count: val.count,
+          totalTons: parseFloat((val.totalKg / 1000).toFixed(2))
+        })),
+      items: Array.from(itemMap.entries())
+        .sort((a, b) => b[1].totalKg - a[1].totalKg || b[1].count - a[1].count)
+        .map(([id, val]) => ({
+          id,
+          label: id,
+          count: val.count,
+          totalTons: parseFloat((val.totalKg / 1000).toFixed(2))
+        })),
+      stores: Array.from(storeMap.entries())
+        .sort((a, b) => b[1].totalKg - a[1].totalKg || b[1].count - a[1].count)
+        .map(([id, val]) => ({
+          id,
+          label: id,
+          count: val.count,
+          totalTons: parseFloat((val.totalKg / 1000).toFixed(2))
+        }))
+    };
+  }, [data, searchQuery, dateFilter, selectedCustomers, selectedItems, selectedStores, salesOrderFilter]);
+
   // Filtered dataset
   const filteredData = useMemo(() => {
     return data.filter(record => {
@@ -625,23 +1090,46 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       if (!checkDateMatch(record, dateFilter)) return false;
 
       // 3. Customers Filter
-      if (selectedCustomers.length > 0 && !selectedCustomers.includes(record.customer)) return false;
+      if (selectedCustomers.length > 0) {
+        const normSelected = selectedCustomers.map(c => normalizeArabicSearch(c).trim());
+        const normCust = normalizeArabicSearch(record.customer).trim();
+        const isMatch = selectedCustomers.includes(record.customer) ||
+          (normCust !== '' && normSelected.includes(normCust));
+        if (!isMatch) return false;
+      }
 
       // 4. Items Filter
-      if (selectedItems.length > 0 && !selectedItems.includes(record.itemName)) return false;
+      if (selectedItems.length > 0) {
+        const normSelected = selectedItems.map(i => normalizeArabicSearch(i).trim());
+        const normItem = normalizeArabicSearch(record.itemName).trim();
+        const isMatch = selectedItems.includes(record.itemName) ||
+          (normItem !== '' && normSelected.includes(normItem));
+        if (!isMatch) return false;
+      }
 
       // 5. Stores Filter
-      if (selectedStores.length > 0 && record.store && !selectedStores.includes(record.store)) return false;
+      if (selectedStores.length > 0) {
+        const st = (record.store || '').trim();
+        if (!st || !selectedStores.includes(st)) return false;
+      }
 
-      // 6. Statuses Filter
+      // 6. Sales Order Filter (يوجد / لا يوجد)
+      if (salesOrderFilter !== 'ALL') {
+        const soVal = (record.salesOrder || '').trim();
+        const hasSO = soVal !== '' && soVal !== '-' && soVal !== '--';
+        if (salesOrderFilter === 'EXISTS' && !hasSO) return false;
+        if (salesOrderFilter === 'EMPTY' && hasSO) return false;
+      }
+
+      // 7. Statuses Filter
       if (selectedStatuses.length > 0 && record.status && !selectedStatuses.includes(record.status)) return false;
 
-      // 7. Varieties Filter
+      // 8. Varieties Filter
       if (selectedVarieties.length > 0 && record.variety && !selectedVarieties.includes(record.variety)) return false;
 
       return true;
     });
-  }, [data, searchQuery, dateFilter, selectedCustomers, selectedItems, selectedStores, selectedStatuses, selectedVarieties]);
+  }, [data, searchQuery, dateFilter, selectedCustomers, selectedItems, selectedStores, selectedStatuses, selectedVarieties, salesOrderFilter]);
 
   // Sorted dataset
   const sortedData = useMemo(() => {
@@ -1054,12 +1542,14 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
         </div>
       </div>
 
-      {/* 3. Search & Filter Bar */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm space-y-3">
+      {/* 3. Search & Smart Filter Bar */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-4 shadow-sm space-y-3.5">
+        
+        {/* Row 1: Search Box + Date Filter + Clear All */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
           
           {/* Search Box */}
-          <div className="md:col-span-5 relative">
+          <div className="md:col-span-6 relative">
             <Search className={`absolute top-1/2 -translate-y-1/2 text-zinc-400 ${isRtl ? 'right-3.5' : 'left-3.5'}`} size={16} />
             <input
               type="text"
@@ -1068,13 +1558,14 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder={isRtl ? 'ابحث برقم أمر البيع، اسم العميل، الصنف، السائق، رقم الإذن...' : 'Search order no, customer, item, driver, doc no...'}
+              placeholder={isRtl ? 'ابحث برقم أمر البيع، رقم الحركة، اسم العميل، الصنف، المخزن، السائق...' : 'Search order no, move no, customer, item, store, driver...'}
               className={`w-full py-2.5 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
                 isRtl ? 'pr-10 pl-8' : 'pl-10 pr-8'
               }`}
             />
             {searchQuery && (
               <button
+                type="button"
                 onClick={() => setSearchQuery('')}
                 className={`absolute top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-1 cursor-pointer ${
                   isRtl ? 'left-2.5' : 'right-2.5'
@@ -1099,9 +1590,10 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
           </div>
 
           {/* Quick Filters Reset */}
-          <div className="md:col-span-3 flex items-center justify-end gap-2">
-            {(selectedCustomers.length > 0 || selectedItems.length > 0 || selectedStores.length > 0 || dateFilter.mode !== 'all' || searchQuery) && (
+          <div className="md:col-span-2 flex items-center justify-end">
+            {(selectedCustomers.length > 0 || selectedItems.length > 0 || selectedStores.length > 0 || salesOrderFilter !== 'ALL' || dateFilter.mode !== 'all' || searchQuery) && (
               <button
+                type="button"
                 onClick={() => {
                   setSearchQuery('');
                   setDateFilter({ mode: 'all' });
@@ -1110,17 +1602,229 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                   setSelectedStores([]);
                   setSelectedStatuses([]);
                   setSelectedVarieties([]);
+                  setSalesOrderFilter('ALL');
                   setCurrentPage(1);
                 }}
-                className="px-3 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer"
+                className="w-full justify-center px-3 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer border border-red-200/60 dark:border-red-900/40"
               >
                 <X size={13} />
-                <span>{isRtl ? 'مسح الفلاتر' : 'Clear Filters'}</span>
+                <span>{isRtl ? 'تصفير الكل' : 'Reset All'}</span>
               </button>
             )}
           </div>
 
         </div>
+
+        {/* Row 2: Smart Interconnected Filters (العميل - الصنف - المخزن - حالة أمر البيع) */}
+        <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            
+            {/* 1. Smart Customer Filter */}
+            <div className="shrink-0">
+              <SmartMultiSelect
+                label={isRtl ? 'العملاء' : 'Customers'}
+                allLabel={isRtl ? 'جميع العملاء' : 'All Customers'}
+                searchPlaceholder={isRtl ? 'بحث في أسماء العملاء...' : 'Search customers...'}
+                options={filterOptions.customers}
+                selected={selectedCustomers}
+                onChange={(newSel) => {
+                  setSelectedCustomers(newSel);
+                  setCurrentPage(1);
+                }}
+                icon={<Users size={14} className="text-purple-500" />}
+                isRtl={isRtl}
+                colorTheme="purple"
+              />
+            </div>
+
+            {/* 2. Smart Item Filter */}
+            <div className="shrink-0">
+              <SmartMultiSelect
+                label={isRtl ? 'الأصناف' : 'Items'}
+                allLabel={isRtl ? 'جميع الأصناف' : 'All Items'}
+                searchPlaceholder={isRtl ? 'بحث في أسماء الأصناف...' : 'Search items...'}
+                options={filterOptions.items}
+                selected={selectedItems}
+                onChange={(newSel) => {
+                  setSelectedItems(newSel);
+                  setCurrentPage(1);
+                }}
+                icon={<Boxes size={14} className="text-emerald-500" />}
+                isRtl={isRtl}
+                colorTheme="emerald"
+              />
+            </div>
+
+            {/* 3. Smart Store Filter */}
+            <div className="shrink-0">
+              <SmartMultiSelect
+                label={isRtl ? 'المخازن' : 'Stores'}
+                allLabel={isRtl ? 'جميع المخازن' : 'All Stores'}
+                searchPlaceholder={isRtl ? 'بحث في المخازن...' : 'Search stores...'}
+                options={filterOptions.stores}
+                selected={selectedStores}
+                onChange={(newSel) => {
+                  setSelectedStores(newSel);
+                  setCurrentPage(1);
+                }}
+                icon={<Building2 size={14} className="text-amber-500" />}
+                isRtl={isRtl}
+                colorTheme="amber"
+              />
+            </div>
+
+            {/* 4. Sales Order Exists / Empty Filter (يوجد / لا يوجد) */}
+            <div className="shrink-0">
+              <div className="relative">
+                <select
+                  value={salesOrderFilter}
+                  onChange={(e) => {
+                    setSalesOrderFilter(e.target.value as 'ALL' | 'EXISTS' | 'EMPTY');
+                    setCurrentPage(1);
+                  }}
+                  className={`h-10 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all focus:outline-none cursor-pointer select-none ${
+                    salesOrderFilter !== 'ALL'
+                      ? salesOrderFilter === 'EXISTS'
+                        ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20'
+                        : 'bg-rose-50 dark:bg-rose-950/40 border-rose-400 dark:border-rose-700 text-rose-700 dark:text-rose-300 ring-2 ring-rose-500/20'
+                      : 'bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  <option value="ALL">{isRtl ? '📑 أمر البيع (الكل)' : 'Sales Order (All)'}</option>
+                  <option value="EXISTS">{isRtl ? '✔️ يوجد أمر بيع (Sales Order)' : '✔️ Has Sales Order'}</option>
+                  <option value="EMPTY">{isRtl ? '❌ بدون أمر بيع (لا يوجد)' : '❌ No Sales Order'}</option>
+                </select>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Live Filter Matching Counter */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 px-2.5 py-1.5 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{isRtl ? `مطابق: ${filteredData.length} حركة` : `${filteredData.length} matches`}</span>
+              <span className="text-zinc-300 dark:text-zinc-600">|</span>
+              <span className="font-mono text-emerald-600 dark:text-emerald-400 font-black">
+                {stats.totalTons.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} {isRtl ? 'طن' : 't'}
+              </span>
+            </span>
+          </div>
+
+        </div>
+
+        {/* Row 3: Active Filter Chips Bar */}
+        {(selectedCustomers.length > 0 || selectedItems.length > 0 || selectedStores.length > 0 || salesOrderFilter !== 'ALL') && (
+          <div className="flex items-center gap-1.5 flex-wrap pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
+            <span className="text-[11px] font-bold text-zinc-400 ml-1 flex items-center gap-1">
+              <Filter size={12} />
+              <span>{isRtl ? 'الفلاتر النشطة:' : 'Active filters:'}</span>
+            </span>
+
+            {/* Sales Order Status Chip */}
+            {salesOrderFilter !== 'ALL' && (
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border shadow-2xs ${
+                  salesOrderFilter === 'EXISTS'
+                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800/60'
+                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800/60'
+                }`}
+              >
+                <ShoppingCart size={12} className={salesOrderFilter === 'EXISTS' ? 'text-blue-500' : 'text-rose-500'} />
+                <span className="font-semibold text-[10px] text-zinc-400">{isRtl ? 'أمر البيع:' : 'SO:'}</span>
+                <span>{salesOrderFilter === 'EXISTS' ? (isRtl ? 'يوجد أمر بيع' : 'Has SO') : (isRtl ? 'بدون أمر بيع (لا يوجد)' : 'No SO')}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSalesOrderFilter('ALL');
+                    setCurrentPage(1);
+                  }}
+                  className="p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+                  title={isRtl ? 'إزالة الفلتر' : 'Remove filter'}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            )}
+
+            {/* Selected Customers Chips */}
+            {selectedCustomers.map(cust => (
+              <span
+                key={`cust-${cust}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shadow-2xs"
+              >
+                <Users size={12} className="text-purple-500" />
+                <span className="font-semibold text-[10px] text-purple-500/80">{isRtl ? 'العميل:' : 'Customer:'}</span>
+                <span>{cust}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomers(prev => prev.filter(c => c !== cust))}
+                  className="p-0.5 hover:bg-purple-200 dark:hover:bg-purple-800 rounded-full transition-colors cursor-pointer"
+                  title={isRtl ? 'إزالة الفلتر' : 'Remove filter'}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+
+            {/* Selected Items Chips */}
+            {selectedItems.map(item => (
+              <span
+                key={`item-${item}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 shadow-2xs"
+              >
+                <Boxes size={12} className="text-emerald-500" />
+                <span className="font-semibold text-[10px] text-emerald-500/80">{isRtl ? 'الصنف:' : 'Item:'}</span>
+                <span>{item}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedItems(prev => prev.filter(i => i !== item))}
+                  className="p-0.5 hover:bg-emerald-200 dark:hover:bg-emerald-800 rounded-full transition-colors cursor-pointer"
+                  title={isRtl ? 'إزالة الفلتر' : 'Remove filter'}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+
+            {/* Selected Stores Chips */}
+            {selectedStores.map(store => (
+              <span
+                key={`store-${store}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 shadow-2xs"
+              >
+                <Building2 size={12} className="text-amber-500" />
+                <span className="font-semibold text-[10px] text-amber-500/80">{isRtl ? 'المخزن:' : 'Store:'}</span>
+                <span>{store}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStores(prev => prev.filter(s => s !== store))}
+                  className="p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800 rounded-full transition-colors cursor-pointer"
+                  title={isRtl ? 'إزالة الفلتر' : 'Remove filter'}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+
+            {/* Clear All button */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCustomers([]);
+                setSelectedItems([]);
+                setSelectedStores([]);
+                setSalesOrderFilter('ALL');
+                setCurrentPage(1);
+              }}
+              className="text-[11px] font-bold text-red-500 hover:text-red-700 hover:underline mr-1 cursor-pointer flex items-center gap-1"
+            >
+              <Trash2 size={11} />
+              <span>{isRtl ? 'مسح الفلاتر المختارة' : 'Clear Selected'}</span>
+            </button>
+          </div>
+        )}
+
       </div>
 
       {/* 4. Active View Content */}
