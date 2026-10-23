@@ -81,6 +81,7 @@ const CATEGORIES_REF = {
     { id: 'L', labelAr: 'L', labelEn: 'L', aliases: ['كبير', 'لارج', 'large'] },
     { id: 'M', labelAr: 'M', labelEn: 'M', aliases: ['وسط', 'ميديم', 'medium'] },
     { id: 'S', labelAr: 'S', labelEn: 'S', aliases: ['صغير', 'سمول', 'small'] },
+    { id: 'XS', labelAr: 'صغير جداً (XS)', labelEn: 'Extra Small (XS)', aliases: ['xs', 'x'] },
     { id: 'XXXS', labelAr: 'XXXS', labelEn: 'XXXS', aliases: ['3xs', 'xxxs'] },
     { id: 'XXS', labelAr: 'XXS', labelEn: 'XXS', aliases: ['2xs', 'xxs'] },
   ]
@@ -89,6 +90,7 @@ const CATEGORIES_REF = {
 const ANALYSIS_CATEGORIES = [
   { id: 'Not free', labelAr: 'مبيدات (Pesticides)', labelEn: 'Pesticides' },
   { id: 'free', labelAr: 'خالي مبيدات (Pesticide-free)', labelEn: 'Pesticide-free' },
+  { id: 'within limits', labelAr: 'ضمن الحدود (Within limits)', labelEn: 'Within limits' },
   { id: 'none', labelAr: 'بدون تحليل (No Analysis)', labelEn: 'No Analysis' }
 ];
 
@@ -347,6 +349,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   const getAnalysisLabel = (id: string) => {
     if (id === 'Not free') return isRtl ? 'مبيدات' : 'Pesticides';
     if (id === 'free') return isRtl ? 'خالي مبيدات' : 'Pesticide-free';
+    if (id === 'within limits') return isRtl ? 'ضمن الحدود (Within limits)' : 'Within limits';
     return isRtl ? 'بدون تحليل' : 'No Analysis';
   };
 
@@ -356,6 +359,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     }
     if (id === 'free') {
       return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-400 dark:border-emerald-500/10';
+    }
+    if (id === 'within limits') {
+      return 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/5 dark:text-blue-400 dark:border-blue-500/10';
     }
     return 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20 dark:bg-zinc-500/5 dark:text-zinc-400 dark:border-zinc-500/10';
   };
@@ -373,6 +379,18 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     }
 
     return 'unspecified';
+  };
+
+  // Helper to detect size from batch second letter: S=Small, L=Large, X=Extra Small (XS), M=Medium
+  const detectSizeFromBatch = (batchVal: string, descr: string): string => {
+    if (batchVal && batchVal.length >= 2) {
+      const secondChar = batchVal.charAt(1).toUpperCase();
+      if (secondChar === 'S') return 'S';
+      if (secondChar === 'X') return 'XS';
+      if (secondChar === 'L') return 'L';
+      if (secondChar === 'M') return 'M';
+    }
+    return detectAttribute(descr, 'size');
   };
 
   const getSeasonLabel = (id: string) => {
@@ -709,9 +727,13 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         rowAnalysis = 'Not free';
       } else if (normalizedBatch.startsWith('F')) {
         rowAnalysis = 'free';
+      } else if (normalizedBatch.startsWith('W')) {
+        rowAnalysis = 'within limits';
       }
 
       const rowSeason = detectSeason(batchVal);
+
+      const rowSize = detectSizeFromBatch(batchVal, descr);
 
       if (!pivotMap.has(code)) {
         pivotMap.set(code, {
@@ -719,7 +741,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           description: descr,
           totalQuantity: 0,
           variety: detectVariety(descr),
-          size: detectAttribute(descr, 'size'),
+          size: rowSize,
           treatment: detectAttribute(descr, 'direction'),
           processType: detectAttribute(descr, 'process'),
           locationQuantities: {},
@@ -727,6 +749,11 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           seasons: [],
           rawRows: []
         });
+      } else {
+        const entry = pivotMap.get(code)!;
+        if (!entry.size && rowSize) {
+          entry.size = rowSize;
+        }
       }
 
       const entry = pivotMap.get(code)!;
@@ -1020,13 +1047,14 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     const analysisBreakdown: Record<string, number> = {
       'Not free': 0,
       'free': 0,
+      'within limits': 0,
       'none': 0
     };
 
     filteredDataset.forEach(row => {
       row.rawRows.forEach(raw => {
         const analysis = raw.analysis || 'none';
-        if (analysis === 'Not free' || analysis === 'free' || analysis === 'none') {
+        if (analysisBreakdown[analysis] !== undefined) {
           analysisBreakdown[analysis] += raw.quantity;
         } else {
           analysisBreakdown['none'] += raw.quantity;
@@ -1086,7 +1114,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         name: getAnalysisLabel(id),
         value: qty,
         percentage: stats.totalQty > 0 ? (qty / stats.totalQty) * 100 : 0,
-        color: id === 'Not free' ? '#f43f5e' : id === 'free' ? '#10b981' : '#71717a'
+        color: id === 'Not free' ? '#f43f5e' : id === 'free' ? '#10b981' : id === 'within limits' ? '#3b82f6' : '#71717a'
       }))
       .filter(item => item.value > 0)
       .sort((a, b) => b.value - a.value);

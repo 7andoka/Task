@@ -1844,32 +1844,15 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
               {/* Table Header Info */}
               <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
                 <span className="text-xs font-bold text-zinc-500">
-                  {isRtl ? `عرض ${paginatedData.length} من أصل ${filteredData.length} حركة` : `Showing ${paginatedData.length} of ${filteredData.length} records`}
+                  {isRtl ? `إجمالي الحركات المعروضة: ${sortedData.length}` : `Total displayed records: ${sortedData.length}`}
                 </span>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-400">{isRtl ? 'الصفوف في الصفحة:' : 'Rows:'}</span>
-                  <select
-                    value={rowsPerPage}
-                    onChange={(e) => {
-                      setRowsPerPage(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="px-2 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-bold"
-                  >
-                    <option value={15}>15</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </div>
               </div>
 
-              {/* Table Element */}
-              <div className="overflow-x-auto">
+              {/* Table Element with Vertical Scroll */}
+              <div className="max-h-[680px] overflow-y-auto overflow-x-auto">
                 <table className="w-full text-right border-collapse text-xs">
                   <thead>
-                    <tr className="bg-zinc-50 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 font-black">
+                    <tr className="bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 font-black sticky top-0 z-20 shadow-xs">
                       <th className="p-3 text-center w-12">#</th>
                       <th className="p-3 text-center">{isRtl ? 'رقم الحركة' : 'Move No'}</th>
                       <th className="p-3 text-right bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300">
@@ -1904,15 +1887,15 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-                    {paginatedData.length === 0 ? (
+                    {sortedData.length === 0 ? (
                       <tr>
                         <td colSpan={17} className="p-12 text-center text-zinc-400">
                           {isRtl ? 'لا توجد بيانات مطابقة لمعايير البحث' : 'No records matching search criteria'}
                         </td>
                       </tr>
                     ) : (
-                      paginatedData.map((row, idx) => {
-                        const serial = (currentPage - 1) * rowsPerPage + idx + 1;
+                      sortedData.map((row, idx) => {
+                        const serial = idx + 1;
                         return (
                           <tr 
                             key={row.id} 
@@ -2228,31 +2211,6 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                   </tbody>
                 </table>
               </div>
-
-              {/* Table Pagination */}
-              {totalPages > 1 && (
-                <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-                  <span className="text-xs text-zinc-400">
-                    {isRtl ? `الصفحة ${currentPage} من ${totalPages}` : `Page ${currentPage} of ${totalPages}`}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-bold disabled:opacity-30 cursor-pointer"
-                    >
-                      {isRtl ? 'السابق' : 'Previous'}
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-bold disabled:opacity-30 cursor-pointer"
-                    >
-                      {isRtl ? 'التالي' : 'Next'}
-                    </button>
-                  </div>
-                </div>
-              )}
 
             </div>
           )}
