@@ -118,11 +118,18 @@ import {
   resolveCanonicalSupplierName
 } from '../utils/arabic';
 import { soundFx } from '../utils/sound';
+import { 
+  subscribeToSharedSheetUrl, 
+  saveSharedSheetUrl, 
+  convertToCsvUrl, 
+  SheetMetadata 
+} from '../utils/sharedSheetConfig';
 
 export { normalizeSupplierKey, KNOWN_CANONICAL_SUPPLIERS, resolveCanonicalSupplierName };
 
-const FRESH_GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv";
+export const FRESH_GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQN1nH0TPk6-NpHHIWN6xQ1RKnjut-nzUgga3-zzB1ydF9f2L3--JPiwu6qJHnCcFymfsZj3gTzKiIo/pub?output=csv";
 const STORAGE_CACHE_KEY = "fresh_supply_data_cache";
+const STORAGE_URL_KEY = "fresh_supply_sheet_url";
 const STORAGE_TIME_KEY = "fresh_supply_last_synced";
 
 export interface FreshSupplyRecord {
@@ -840,6 +847,19 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
   const [lastSynced, setLastSynced] = useState<string | null>(() => {
     return localStorage.getItem(STORAGE_TIME_KEY);
   });
+
+  // Google Sheet URL State (synced for all users via Cloud Firestore)
+  const [sheetUrl, setSheetUrl] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_URL_KEY) || FRESH_GOOGLE_SHEET_CSV_URL;
+    } catch {
+      return FRESH_GOOGLE_SHEET_CSV_URL;
+    }
+  });
+  const [sheetMeta, setSheetMeta] = useState<SheetMetadata | null>(null);
+  const [showSheetModal, setShowSheetModal] = useState(false);
+  const [inputSheetUrl, setInputSheetUrl] = useState(sheetUrl);
+
   const [activeView, setActiveView] = useState<'table' | 'analytics'>('table');
   const [activeReportTab, setActiveReportTab] = useState<'oliveStockStyle' | 'matrix' | 'logistics' | 'packaging' | 'daily' | 'poRecon'>('oliveStockStyle');
   const [matrixUnit, setMatrixUnit] = useState<'tons' | 'kg'>('tons');
@@ -1986,7 +2006,8 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       }
 
       // Live fetch with timestamp to prevent browser caching
-      const fetchUrl = `${FRESH_GOOGLE_SHEET_CSV_URL}&_t=${Date.now()}`;
+      const activeSheetUrl = convertToCsvUrl(sheetUrl || FRESH_GOOGLE_SHEET_CSV_URL);
+      const fetchUrl = `${activeSheetUrl}${activeSheetUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
       const response = await fetch(fetchUrl, { cache: 'no-cache' });
       if (!response.ok) {
         throw new Error(`HTTP Error: ${response.status}`);
@@ -2042,6 +2063,40 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
       );
       setLoading(false);
       setIsSyncing(false);
+    }
+  };
+
+  // Listen in real-time to the Admin's configured Google Sheet link in Firestore
+  useEffect(() => {
+    const unsubSheet = subscribeToSharedSheetUrl(
+      'fresh_supply_sheet_url',
+      FRESH_GOOGLE_SHEET_CSV_URL,
+      STORAGE_URL_KEY,
+      (newUrl, meta) => {
+        setSheetUrl(newUrl);
+        if (meta) setSheetMeta(meta);
+      }
+    );
+    return () => unsubSheet();
+  }, []);
+
+  // Save modified Sheet URL to Firestore (pinned across all users)
+  const handleSaveSheetUrl = async () => {
+    if (!inputSheetUrl.trim()) {
+      toast.error(isRtl ? 'يرجى إدخال الرابط' : 'Please enter URL');
+      return;
+    }
+    const clean = convertToCsvUrl(inputSheetUrl.trim());
+    try {
+      await saveSharedSheetUrl('fresh_supply_sheet_url', clean, STORAGE_URL_KEY, user);
+      setSheetUrl(clean);
+      setShowSheetModal(false);
+      soundFx.playSuccess();
+      toast.success(isRtl ? 'تم تثبيت رابط جوجل شيت لتوريد الفريش لجميع المستخدمين بنجاح وجاري المزامنة' : 'Fresh supply sheet URL pinned for all users, syncing data...');
+      fetchData(true);
+    } catch (err: any) {
+      console.error("Save Sheet URL Error:", err);
+      toast.error(isRtl ? 'حدث خطأ أثناء حفظ الرابط في السحابة' : 'Failed to save sheet URL to cloud');
     }
   };
 
@@ -4216,6 +4271,21 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
               <span>{isRtl ? 'مزامنة وتحديث' : 'Sync Sheet'}</span>
             </button>
+
+            {/* Google Sheet URL Config (Admin & Managers) */}
+            {canAccessSupplyActions && (
+              <button
+                onClick={() => {
+                  setInputSheetUrl(sheetUrl);
+                  setShowSheetModal(true);
+                }}
+                className="px-3.5 py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title={isRtl ? 'تعديل أو تثبيت رابط شيت التوريد لجميع المستخدمين' : 'Configure Google Sheet Link'}
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>{isRtl ? 'رابط الشيت' : 'Sheet URL'}</span>
+              </button>
+            )}
 
             {/* Export Excel - Opened for everyone (without prices if not authorized) */}
             <button
@@ -7579,6 +7649,107 @@ export default function FreshSupply({ lang, user }: FreshSupplyProps) {
           </div>
         </div>
       )}
+
+      {/* Google Sheet URL Setup Modal (Pinned for all users via Firestore) */}
+      <AnimatePresence>
+        {showSheetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600">
+                    <FileSpreadsheet size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-zinc-900 dark:text-white">
+                      {isRtl ? 'إعداد وتثبيت رابط Google Sheet لتوريد الفريش' : 'Fresh Supply Google Sheet Setup'}
+                    </h3>
+                    <p className="text-[11px] text-zinc-500">
+                      {isRtl ? 'الرابط يثبت لجميع المستخدمين في السحابة فوراً' : 'URL will be pinned for all users in Firestore'}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowSheetModal(false)} 
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded-lg cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 block mb-1">
+                    {isRtl ? 'رابط ملف جوجل شيت (رابط المشاركة أو النشر CSV):' : 'Google Sheet URL (Share Link or Published CSV):'}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={inputSheetUrl}
+                    onChange={(e) => setInputSheetUrl(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0"
+                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-1">
+                  <p className="text-[11px] text-emerald-800 dark:text-emerald-200 font-bold leading-relaxed">
+                    {isRtl 
+                      ? '✓ عندما يحفظ الأدمن هذا الرابط، يثبت تلقائياً عند جميع المستخدمين على كافة الأجهزة فوراً.' 
+                      : '✓ When saved by Admin, this URL is automatically synchronized and pinned for all users.'}
+                  </p>
+                  {sheetMeta?.updatedBy && (
+                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">
+                      {isRtl ? 'مثبت حالياً بواسطة:' : 'Currently pinned by:'} <span className="font-bold">{sheetMeta.updatedBy}</span>
+                      {sheetMeta.updatedAt && (
+                        <span className="font-mono text-zinc-500 mr-2 ml-2">
+                          ({new Date(sheetMeta.updatedAt).toLocaleDateString(isRtl ? 'ar-EG' : 'en-US')})
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+
+                {/* Quick actions for sheet */}
+                {sheetUrl && (
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={sheetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <ExternalLink size={12} />
+                      <span>{isRtl ? 'فتح الشيت في نافذة جديدة' : 'Open Sheet in New Tab'}</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSheetModal(false)}
+                  className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveSheetUrl}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                >
+                  {isRtl ? 'حفظ وتثبيت للجميع' : 'Save & Pin for All'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

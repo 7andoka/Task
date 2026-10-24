@@ -80,6 +80,11 @@ import { toast } from 'sonner';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
+import { 
+  subscribeToSharedSheetUrl, 
+  saveSharedSheetUrl, 
+  SheetMetadata 
+} from '../utils/sharedSheetConfig';
 
 const STORAGE_CACHE_KEY = "sales_orders_data_cache";
 const STORAGE_TIME_KEY = "sales_orders_last_synced";
@@ -559,6 +564,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       return DEFAULT_SALES_ORDERS_SHEET_URL;
     }
   });
+  const [sheetMeta, setSheetMeta] = useState<SheetMetadata | null>(null);
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [inputUrl, setInputUrl] = useState(sheetUrl);
 
@@ -870,6 +876,20 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
     }
   };
 
+  // Listen in real-time to the Admin's configured Google Sheet link in Firestore
+  useEffect(() => {
+    const unsubSheet = subscribeToSharedSheetUrl(
+      'sales_orders_sheet_url',
+      DEFAULT_SALES_ORDERS_SHEET_URL,
+      STORAGE_URL_KEY,
+      (newUrl, meta) => {
+        setSheetUrl(newUrl);
+        if (meta) setSheetMeta(meta);
+      }
+    );
+    return () => unsubSheet();
+  }, []);
+
   // Initial load and real-time listener for overrides in Firestore
   useEffect(() => {
     fetchData(false);
@@ -889,18 +909,24 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
     return () => unsub();
   }, [sheetUrl]);
 
-  // Save modified Sheet URL
-  const handleSaveSheetUrl = () => {
+  // Save modified Sheet URL to Firestore (pinned across all users)
+  const handleSaveSheetUrl = async () => {
     if (!inputUrl.trim()) {
       toast.error(isRtl ? 'يرجى إدخال الرابط' : 'Please enter URL');
       return;
     }
-    const clean = inputUrl.trim();
-    setSheetUrl(clean);
-    localStorage.setItem(STORAGE_URL_KEY, clean);
-    setShowUrlModal(false);
-    toast.success(isRtl ? 'تم حفظ رابط جوجل شيت وجاري سحب البيانات' : 'Sheet URL saved, syncing data...');
-    fetchData(true);
+    const clean = convertToCsvUrl(inputUrl.trim());
+    try {
+      await saveSharedSheetUrl('sales_orders_sheet_url', clean, STORAGE_URL_KEY, user);
+      setSheetUrl(clean);
+      setShowUrlModal(false);
+      soundFx.playSuccess();
+      toast.success(isRtl ? 'تم تثبيت رابط جوجل شيت لأوامر البيع لجميع المستخدمين بنجاح وجاري المزامنة' : 'Sheet URL pinned for all users, syncing data...');
+      fetchData(true);
+    } catch (err: any) {
+      console.error("Save Sheet URL Error:", err);
+      toast.error(isRtl ? 'حدث خطأ أثناء حفظ الرابط في السحابة' : 'Failed to save sheet URL to cloud');
+    }
   };
 
   // Check if record matches date filter
@@ -2442,9 +2468,19 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                 />
                 <p className="text-[11px] text-zinc-500 leading-relaxed">
                   {isRtl 
-                    ? '💡 يمكنك لصق رابط شيت أوامر البيع وسيقوم النظام تلقائياً بسحب وقراءة البيانات الحية منه.' 
-                    : '💡 Paste your Google Sheet URL. The app automatically fetches live data.'}
+                    ? '💡 عند حفظ الرابط كمسؤول (Admin)، سيتم تثبيته تلقائياً في السحابة لجميع المستخدمين على جميع الأجهزة دون الحاجة لإدخاله مجدداً.' 
+                    : '💡 When saved by Admin, this URL is automatically pinned across all users and devices via Cloud Firestore.'}
                 </p>
+                {sheetMeta?.updatedBy && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-between">
+                    <span>{isRtl ? 'مثبت حالياً للجميع بواسطة:' : 'Currently pinned by:'} {sheetMeta.updatedBy}</span>
+                    {sheetMeta.updatedAt && (
+                      <span className="text-[10px] text-zinc-400 font-mono font-normal">
+                        {new Date(sheetMeta.updatedAt).toLocaleDateString(isRtl ? 'ar-EG' : 'en-US')}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
@@ -2458,7 +2494,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                   onClick={handleSaveSheetUrl}
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-md shadow-blue-500/20"
                 >
-                  {isRtl ? 'حفظ وتحديث البيانات' : 'Save & Sync'}
+                  {isRtl ? 'حفظ وتثبيت للجميع' : 'Save & Pin for All'}
                 </button>
               </div>
             </motion.div>

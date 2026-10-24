@@ -49,6 +49,14 @@ import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { COLLECTIONS } from '../constants';
 import { toast } from 'sonner';
+import Papa from 'papaparse';
+import { 
+  subscribeToSharedSheetUrl, 
+  saveSharedSheetUrl, 
+  convertToCsvUrl, 
+  SheetMetadata 
+} from '../utils/sharedSheetConfig';
+import { soundFx } from '../utils/sound';
 import { 
   normalizeArabicSearch, 
   matchesArabicSearch, 
@@ -204,7 +212,165 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
   const [receivingNotesInput, setReceivingNotesInput] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Google Sheet Link State (synced across all users via Cloud Firestore)
+  const [sheetUrl, setSheetUrl] = useState<string>(() => {
+    try {
+      return localStorage.getItem('purchase_orders_sheet_url') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [sheetMeta, setSheetMeta] = useState<SheetMetadata | null>(null);
+  const [showSheetModal, setShowSheetModal] = useState(false);
+  const [inputSheetUrl, setInputSheetUrl] = useState('');
+  const [isSyncingSheet, setIsSyncingSheet] = useState(false);
+
   const printRef = useRef<HTMLDivElement>(null);
+
+  // Subscribe to Admin-configured Google Sheet link in Firestore
+  useEffect(() => {
+    const unsubSheet = subscribeToSharedSheetUrl(
+      'purchase_orders_sheet_url',
+      '',
+      'purchase_orders_sheet_url',
+      (newUrl, meta) => {
+        setSheetUrl(newUrl);
+        if (meta) setSheetMeta(meta);
+      }
+    );
+    return () => unsubSheet();
+  }, []);
+
+  // Save modified Sheet URL to Firestore (pinned across all users)
+  const handleSaveSheetUrl = async () => {
+    if (!inputSheetUrl.trim()) {
+      toast.error(isRtl ? 'يرجى إدخال الرابط' : 'Please enter URL');
+      return;
+    }
+    const clean = convertToCsvUrl(inputSheetUrl.trim());
+    try {
+      await saveSharedSheetUrl('purchase_orders_sheet_url', clean, 'purchase_orders_sheet_url', user);
+      setSheetUrl(clean);
+      setShowSheetModal(false);
+      soundFx.playSuccess();
+      toast.success(isRtl ? 'تم تثبيت رابط جوجل شيت لأوامر التوريد لجميع المستخدمين بنجاح' : 'Purchase Orders Google Sheet URL pinned for all users');
+      handleSyncOrdersFromSheet(clean);
+    } catch (err: any) {
+      console.error("Save Sheet URL Error:", err);
+      toast.error(isRtl ? 'فشل حفظ الرابط في السحابة' : 'Failed to save URL to cloud');
+    }
+  };
+
+  // Sync purchase orders from Google Sheet
+  const handleSyncOrdersFromSheet = async (urlOverride?: string) => {
+    const activeUrl = urlOverride || sheetUrl;
+    if (!activeUrl || !activeUrl.trim()) {
+      toast.error(isRtl ? 'يرجى إعداد رابط جوجل شيت أولاً' : 'Please configure Google Sheet link first');
+      return;
+    }
+
+    setIsSyncingSheet(true);
+    soundFx.playClick();
+    try {
+      const csvUrl = convertToCsvUrl(activeUrl);
+      const fetchUrl = `${csvUrl}${csvUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+      const res = await fetch(fetchUrl, { cache: 'no-cache' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const csvText = await res.text();
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          if (!results.data || results.data.length === 0) {
+            toast.info(isRtl ? 'لم يتم العثور على أوامر في الشيت' : 'No orders found in sheet');
+            setIsSyncingSheet(false);
+            return;
+          }
+
+          let savedCount = 0;
+          for (let i = 0; i < results.data.length; i++) {
+            const row: any = results.data[i];
+            if (!row || Object.values(row).every(v => !v || String(v).trim() === '')) continue;
+
+            const rawOrderNo = row['رقم الطلب'] || row['رقم أمر التوريد'] || row['رقم امر التوريد'] || row['Order No'] || row['Order Number'] || row['REQ'] || '';
+            const rawPo = row['PO'] || row['PO Number'] || row['رقم أمر الشراء'] || row['رقم امر الشراء'] || row['رقم أمر التوريد'] || row['رقم امر التوريد'] || row['أمر التوريد'] || '';
+            const rawSupplier = row['المورد'] || row['اسم المورد'] || row['مركز التكلفة'] || row['Supplier'] || row['Vendor'] || '';
+            const rawItem = row['الصنف'] || row['اسم الصنف'] || row['الوصف'] || row['Item'] || row['Item Name'] || '';
+            const rawQty = row['الكمية'] || row['الكمية كجم'] || row['الوزن'] || row['اضافة'] || row['Qty'] || row['Quantity'] || 0;
+            const cleanQty = parseFloat(String(rawQty).replace(/,/g, '')) || 0;
+
+            if (!rawSupplier && !rawItem && cleanQty === 0) continue;
+
+            const rawPrice = row['السعر'] || row['سعر الكيلو'] || row['سعر الوحدة'] || row['Price'] || row['Unit Price'] || 0;
+            const cleanPrice = parseFloat(String(rawPrice).replace(/,/g, '')) || 0;
+            const rawDiscount = row['الخصم'] || row['نسبة الخصم'] || row['Discount'] || 0;
+            const cleanDiscount = parseFloat(String(rawDiscount).replace(/,/g, '')) || 0;
+
+            const rawDate = row['التاريخ'] || row['تاريخ التوريد'] || row['تاريخ الطلب'] || row['Date'] || '';
+            const pricingDate = rawDate ? String(rawDate).trim() : new Date().toISOString().split('T')[0];
+
+            const orderSeq = String(i + 1).padStart(4, '0');
+            const orderNumber = rawOrderNo ? String(rawOrderNo).trim() : `REQ-${new Date().getFullYear()}-${orderSeq}`;
+            const id = `po_sheet_${orderNumber.replace(/[^a-zA-Z0-9_\-]/g, '_')}_${i}`;
+
+            const subtotalAmount = cleanQty * cleanPrice;
+            const discountAmount = cleanDiscount > 0 ? (subtotalAmount * cleanDiscount) / 100 : 0;
+            const totalAmount = subtotalAmount - discountAmount;
+
+            const newOrder: PurchaseOrder = {
+              id,
+              orderNumber,
+              poNumber: rawPo ? String(rawPo).trim() : undefined,
+              pricingDate,
+              region: String(row['المنطقة'] || row['المزرعة'] || row['الموقع'] || row['Region'] || 'عام').trim(),
+              supplierName: String(rawSupplier || 'مورد عام').trim(),
+              supplierCode: String(row['كود المورد'] || row['كود مركز التكلفة'] || row['Supplier Code'] || '').trim(),
+              itemType: String(rawItem || 'زيتون فريش').trim(),
+              itemCategory: String(row['التصنيف'] || row['فئة الصنف'] || 'زيتون فريش').trim(),
+              initialRouting: String(row['التوجيه'] || 'مياه وملح').trim(),
+              analysisType: String(row['التحليل'] || 'مبيدات').trim(),
+              paymentMethod: String(row['طريقة السداد'] || 'تحويل بنكي').trim(),
+              quantity: cleanQty,
+              unit: String(row['الوحدة'] || 'كجم').trim(),
+              price: cleanPrice,
+              discountPercentage: cleanDiscount > 0 ? cleanDiscount : undefined,
+              discountAmount: cleanDiscount > 0 ? discountAmount : undefined,
+              subtotalAmount,
+              totalAmount,
+              currency: 'ج.م',
+              notes: String(row['ملاحظات'] || row['Notes'] || '').trim(),
+              status: rawPo ? 'Completed' : 'Pending Approval',
+              createdBy: user?.uid || 'google-sheet-sync',
+              createdByName: user?.displayName || 'Google Sheet',
+              createdAt: new Date().toISOString(),
+              lastUpdatedAt: new Date().toISOString()
+            };
+
+            await storageService.savePurchaseOrder(newOrder);
+            savedCount++;
+          }
+
+          soundFx.playSuccess();
+          toast.success(
+            isRtl 
+              ? `تمت مزامنة وتحديث (${savedCount}) أمر توريد من Google Sheet بنجاح`
+              : `Synced (${savedCount}) purchase orders from Google Sheet`
+          );
+          setIsSyncingSheet(false);
+        },
+        error: (err) => {
+          console.error("Papa parse error:", err);
+          toast.error(isRtl ? 'حدث خطأ أثناء قراءة ملف الشيت' : 'Error parsing sheet CSV');
+          setIsSyncingSheet(false);
+        }
+      });
+    } catch (err: any) {
+      console.error("Sheet sync error:", err);
+      toast.error(isRtl ? 'تعذر الاتصال بملف Google Sheet' : 'Failed to connect to Google Sheet');
+      setIsSyncingSheet(false);
+    }
+  };
 
   // Real-time listener from Firestore
   useEffect(() => {
@@ -883,9 +1049,37 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
               </button>
             )}
 
+            {/* Admin Google Sheet Configuration */}
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  setInputSheetUrl(sheetUrl);
+                  setShowSheetModal(true);
+                }}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-semibold text-xs backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+                title={isRtl ? 'إعداد وتثبيت رابط شيت أوامر التوريد لجميع المستخدمين' : 'Configure Google Sheet URL for All Users'}
+              >
+                <FileSpreadsheet size={16} className="text-emerald-400" />
+                <span>{isRtl ? 'رابط Google Sheet' : 'Sheet Link'}</span>
+              </button>
+            )}
+
+            {/* Sync from Google Sheet (available to all users if link is configured) */}
+            {sheetUrl && (
+              <button
+                onClick={() => handleSyncOrdersFromSheet()}
+                disabled={isSyncingSheet}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                title={isRtl ? 'مزامنة أوامر التوريد من ملف جوجل شيت' : 'Sync Orders from Google Sheet'}
+              >
+                <RefreshCw size={14} className={isSyncingSheet ? 'animate-spin' : ''} />
+                <span>{isRtl ? 'مزامنة الشيت' : 'Sync Sheet'}</span>
+              </button>
+            )}
+
             <button
               onClick={handleExportCSV}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-semibold text-xs backdrop-blur-md transition-all active:scale-95"
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-semibold text-xs backdrop-blur-md transition-all active:scale-95 cursor-pointer"
               title={isRtl ? 'تصدير إكسل' : 'Export Excel'}
             >
               <FileSpreadsheet size={16} />
@@ -2833,6 +3027,106 @@ export default function PurchaseOrders({ lang, user }: PurchaseOrdersProps) {
           </motion.div>
         </div>
       )}
+
+      {/* Google Sheet URL Setup Modal (Pinned for all users via Firestore) */}
+      <AnimatePresence>
+        {showSheetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <FileSpreadsheet size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-zinc-900 dark:text-white">
+                      {isRtl ? 'إعداد وتثبيت رابط Google Sheet لأوامر التوريد' : 'Purchase Orders Google Sheet Setup'}
+                    </h3>
+                    <p className="text-[11px] text-zinc-500">
+                      {isRtl ? 'الرابط يثبت لجميع المستخدمين في السحابة فوراً' : 'URL will be pinned for all users in Firestore'}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowSheetModal(false)} 
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded-lg cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 block mb-1">
+                    {isRtl ? 'رابط ملف جوجل شيت (رابط المشاركة أو النشر CSV):' : 'Google Sheet URL (Share Link or Published CSV):'}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={inputSheetUrl}
+                    onChange={(e) => setInputSheetUrl(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/d/.../edit#gid=0"
+                    className="w-full p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-1">
+                  <p className="text-[11px] text-emerald-800 dark:text-emerald-200 font-bold leading-relaxed">
+                    {isRtl 
+                      ? '✓ عندما يضيف الأدمن الرابط، يتم تثبيته فوراً لجميع المستخدمين على جميع الأجهزة دون الحاجة لإدخاله مجدداً.' 
+                      : '✓ When added by Admin, this URL is automatically pinned across all users and devices.'}
+                  </p>
+                  {sheetMeta?.updatedBy && (
+                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">
+                      {isRtl ? 'مثبت حالياً بواسطة:' : 'Currently pinned by:'} <span className="font-bold">{sheetMeta.updatedBy}</span>
+                      {sheetMeta.updatedAt && (
+                        <span className="font-mono text-zinc-500 mr-2 ml-2">
+                          ({new Date(sheetMeta.updatedAt).toLocaleDateString(isRtl ? 'ar-EG' : 'en-US')})
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+
+                {sheetUrl && (
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <a
+                      href={sheetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <ArrowUpRight size={14} />
+                      <span>{isRtl ? 'فتح الشيت في Google Sheets' : 'Open in Google Sheets'}</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSheetModal(false)}
+                  className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveSheetUrl}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-md shadow-emerald-600/20 active:scale-95 transition-all"
+                >
+                  {isRtl ? 'حفظ وتثبيت للجميع' : 'Save & Pin for All'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

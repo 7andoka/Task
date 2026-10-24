@@ -39,6 +39,11 @@ import { DateRangeFilter, DateFilterValue } from './DateRangeFilter';
 import SapReconciliationModal from './SapReconciliationModal';
 import { Language, UserProfile } from '../types';
 import { toast } from 'sonner';
+import { 
+  subscribeToSharedSheetUrl, 
+  saveSharedSheetUrl, 
+  SheetMetadata 
+} from '../utils/sharedSheetConfig';
 
 interface FinishedSemiFinishedInventoryProps {
   lang: Language;
@@ -245,6 +250,21 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
       return DEFAULT_SHEET_URL;
     }
   });
+  const [sheetMeta, setSheetMeta] = useState<SheetMetadata | null>(null);
+
+  // Subscribe to real-time Google Sheet URL from Firestore settings
+  useEffect(() => {
+    const unsub = subscribeToSharedSheetUrl(
+      'finished_products_sheet_url',
+      DEFAULT_SHEET_URL,
+      STORAGE_KEY,
+      (newUrl, meta) => {
+        setSheetUrl(newUrl);
+        if (meta) setSheetMeta(meta);
+      }
+    );
+    return () => unsub();
+  }, []);
 
   // Modal State for Link Configuration
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -394,8 +414,8 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
     };
   }, [sheetUrl, refreshKey, isRtl]);
 
-  // Save new Google Sheet link
-  const handleSaveLink = () => {
+  // Save new Google Sheet link (pinned in Firestore for all users)
+  const handleSaveLink = async () => {
     const converted = convertToCsvExportUrl(inputUrl);
     if (!converted) {
       toast.error(isRtl ? 'يرجى إدخال رابط صالح' : 'Please enter a valid URL');
@@ -403,26 +423,26 @@ export default function FinishedSemiFinishedInventory({ lang, user }: FinishedSe
     }
 
     try {
-      localStorage.setItem(STORAGE_KEY, converted);
+      await saveSharedSheetUrl('finished_products_sheet_url', converted, STORAGE_KEY, user);
       setSheetUrl(converted);
       setShowLinkModal(false);
       setRefreshKey(prev => prev + 1);
-      toast.success(isRtl ? 'تم حفظ وتحديث رابط Google Sheet بنجاح' : 'Google Sheet link saved and updated successfully');
+      toast.success(isRtl ? 'تم تثبيت رابط Google Sheet لجميع المستخدمين بنجاح' : 'Google Sheet link pinned for all users');
     } catch (e) {
       console.error(e);
-      toast.error(isRtl ? 'حدث خطأ أثناء حفظ الرابط' : 'Error saving link');
+      toast.error(isRtl ? 'حدث خطأ أثناء حفظ الرابط في السحابة' : 'Error saving link to cloud');
     }
   };
 
   // Reset to default link
-  const handleResetLink = () => {
+  const handleResetLink = async () => {
     setInputUrl(DEFAULT_SHEET_URL);
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      await saveSharedSheetUrl('finished_products_sheet_url', DEFAULT_SHEET_URL, STORAGE_KEY, user);
       setSheetUrl(DEFAULT_SHEET_URL);
       setShowLinkModal(false);
       setRefreshKey(prev => prev + 1);
-      toast.success(isRtl ? 'تمت استعادة الرابط الافتراضي' : 'Reset to default link');
+      toast.success(isRtl ? 'تمت استعادة الرابط الافتراضي وتثبيته للجميع' : 'Reset to default link for all users');
     } catch (e) {
       console.error(e);
     }
