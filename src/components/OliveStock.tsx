@@ -105,6 +105,7 @@ interface MultiSelectProps {
 
 function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const isRtl = lang === 'ar';
 
@@ -126,20 +127,26 @@ function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSe
     }
   };
 
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) return options;
+    const q = search.toLowerCase().trim();
+    return options.filter(opt => opt.label.toLowerCase().includes(q) || opt.id.toLowerCase().includes(q));
+  }, [options, search]);
+
   return (
     <div className="relative" ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 px-3 py-2 rounded-2xl border transition-all text-xs font-bold whitespace-nowrap ${
+        className={`flex items-center gap-2 px-3 py-2 rounded-2xl border transition-all text-xs font-bold whitespace-nowrap cursor-pointer ${
           selected.length > 0 
             ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' 
-            : 'bg-zinc-50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-700/50 text-zinc-500 dark:text-zinc-400'
+            : 'bg-zinc-50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-700/50 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
         }`}
       >
         {icon}
         <span>{label}</span>
         {selected.length > 0 && (
-          <span className="bg-emerald-500 text-white text-[9px] px-1.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+          <span className="bg-emerald-500 text-white text-[9px] px-1.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-mono">
             {selected.length}
           </span>
         )}
@@ -152,46 +159,89 @@ function MultiSelect({ label, options, selected, onChange, icon, lang }: MultiSe
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className={`absolute z-50 mt-2 min-w-[200px] max-h-[300px] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-2 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 ${
+            className={`absolute z-50 mt-2 w-80 max-h-[380px] flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl p-2.5 overflow-hidden ${
               isRtl ? 'right-0' : 'left-0'
             }`}
           >
-            <div className="space-y-1">
-              {options.map(option => {
-                const isChecked = selected.includes(option.id);
-                return (
+            {/* Header with Title & Quick Select All / Clear */}
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-100 dark:border-zinc-800">
+              <span className="text-[11px] font-black text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                {icon}
+                <span>{label}</span>
+                <span className="text-[10px] text-zinc-400 font-mono">({options.length})</span>
+              </span>
+              <div className="flex items-center gap-2">
+                {options.length > 1 && (
                   <button
-                    key={option.id}
-                    onClick={() => toggleOption(option.id)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                      isChecked
-                        ? 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/40 text-zinc-600 dark:text-zinc-300'
-                    }`}
-                    dir={isRtl ? 'rtl' : 'ltr'}
+                    type="button"
+                    onClick={() => onChange(options.map(o => o.id))}
+                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold cursor-pointer"
                   >
-                    <div className={`w-4 h-4 rounded-[6px] border flex items-center justify-center transition-all shrink-0 ${
-                      isChecked 
-                        ? 'bg-emerald-500 border-emerald-500 text-white' 
-                        : 'border-zinc-350 dark:border-zinc-700 bg-white dark:bg-zinc-800'
-                    }`}>
-                      {isChecked && <Check size={10} strokeWidth={3} />}
-                    </div>
-                    <span className="truncate flex-1 text-right">{option.label}</span>
+                    {isRtl ? 'تحديد الكل' : 'Select All'}
                   </button>
-                );
-              })}
+                )}
+                {selected.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onChange([])}
+                    className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
+                  >
+                    {isRtl ? 'مسح' : 'Clear'}
+                  </button>
+                )}
+              </div>
             </div>
-            {selected.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-                <button
-                  onClick={() => onChange([])}
-                  className="w-full py-1.5 text-[10px] font-bold text-red-500 hover:text-red-600 transition-colors uppercase tracking-wider"
-                >
-                  {isRtl ? 'مسح الكل' : 'Clear All'}
-                </button>
+
+            {/* Quick search input */}
+            {options.length > 4 && (
+              <div className="relative mb-2">
+                <Search size={12} className={`absolute top-1/2 -translate-y-1/2 text-zinc-400 ${isRtl ? 'right-2.5' : 'left-2.5'}`} />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={isRtl ? 'بحث في القائمة...' : 'Search in list...'}
+                  className={`w-full py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                    isRtl ? 'pr-7 pl-2 text-right' : 'pl-7 pr-2 text-left'
+                  }`}
+                  dir={isRtl ? 'rtl' : 'ltr'}
+                />
               </div>
             )}
+
+            {/* Scrollable list */}
+            <div className="space-y-1 overflow-y-auto max-h-[240px] scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 pr-1">
+              {filteredOptions.length === 0 ? (
+                <div className="text-center py-4 text-xs text-zinc-400">
+                  {isRtl ? 'لا توجد نتائج مطابقة' : 'No matching results'}
+                </div>
+              ) : (
+                filteredOptions.map(option => {
+                  const isChecked = selected.includes(option.id);
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => toggleOption(option.id)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                        isChecked
+                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold'
+                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-zinc-600 dark:text-zinc-300'
+                      }`}
+                      dir={isRtl ? 'rtl' : 'ltr'}
+                    >
+                      <div className={`w-4 h-4 rounded-[5px] border flex items-center justify-center transition-all shrink-0 ${
+                        isChecked 
+                          ? 'bg-emerald-500 border-emerald-500 text-white' 
+                          : 'border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800'
+                      }`}>
+                        {isChecked && <Check size={10} strokeWidth={3} />}
+                      </div>
+                      <span className="truncate flex-1 text-right text-[11px]">{option.label}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -220,7 +270,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [selectedVarieties, setSelectedVarieties] = useState<string[]>([]);
+  const [selectedOliveVarieties, setSelectedOliveVarieties] = useState<string[]>([]);
+  const [selectedPepperVarieties, setSelectedPepperVarieties] = useState<string[]>([]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([]);
@@ -282,43 +333,82 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     return lines;
   };
 
-  // Classify olive variety dynamically from description
+  // Classify olive variety or pepper variety dynamically from description
   const detectVariety = (descr: string): string => {
-    let extracted = '';
-    // Look for text between OLV (case-insensitive) and Black/Green (case-insensitive)
+    const dLower = (descr || '').toLowerCase();
+    
+    // Pepper items
+    if (dLower.includes('jalapeno') || dLower.includes('jalapen')) return 'Jalapeno';
+    if (dLower.includes('banana')) return 'Banana';
+    if (dLower.includes('pepperoncini')) return 'Pepperoncini';
+    if (dLower.includes('lombardy')) return 'Lombardy';
+    if (dLower.includes('pepper') && !dLower.includes('olv')) return 'Pepper';
+
+    // Olive and raw materials
+    if (dLower.includes('manzanilla') || dLower.includes('manzanila') || dLower.includes('منزان') || dLower.includes('مانزنيلا')) return 'Manzanilla';
+    if (dLower.includes('picual') || dLower.includes('pical') || dLower.includes('بيكوال') || dLower.includes('بكوال') || dLower.includes('بيكول')) return 'Picual';
+    if (dLower.includes('akas') || dLower.includes('akass') || dLower.includes('akisi') || dLower.includes('aqezi') || dLower.includes('aks') || dLower.includes('عقص')) return 'Akas';
+    if (dLower.includes('azizi') || dLower.includes('عزيز') || dLower.includes('عجيز')) return 'Azizi';
+    if (dLower.includes('kobrosi') || dLower.includes('kobrosy') || dLower.includes('qobr') || dLower.includes('cyprus') || dLower.includes('قبرص')) return 'Kobrosi';
+    if (dLower.includes('kalamata') || dLower.includes('kalama') || dLower.includes('كالمات') || dLower.includes('كلامات')) return 'Kalamata';
+    if (dLower.includes('dolsy') || dLower.includes('dolcy') || dLower.includes('dolce') || dLower.includes('dolsi') || dLower.includes('دولس')) return 'Dolsy';
+    if ((dLower.includes('nour') && dLower.includes('sabah')) || dLower.includes('نور صباح') || dLower.includes('نور الصباح')) return 'Nour Sabah';
+    if (dLower.includes('baldiat') || dLower.includes('baladi') || dLower.includes('بلدي')) return 'Baldiat';
+    if (dLower.includes('karotina') || dLower.includes('carotina') || dLower.includes('كروتين')) return 'Karotina';
+    if (dLower.includes('tofahi') || dLower.includes('tofah') || dLower.includes('tofahe') || dLower.includes('تفاح')) return 'Tofahi';
+    if (dLower.includes('hamed') || dLower.includes('حامض') || dLower.includes('حامد')) return 'Hamed';
+    if (dLower.includes('senara') || dLower.includes('صنارة') || dLower.includes('سنارة')) return 'Senara';
+    if (dLower.includes('sers cola') || dLower.includes('sers') || dLower.includes('سرس')) return 'Sers Cola';
+    if (dLower.includes('nebal') || dLower.includes('nibal') || dLower.includes('نبال') || dLower.includes('نيبال')) return 'Nebal';
+    if (dLower.includes('farza') || dLower.includes('فرزة') || dLower.includes('فرزه') || dLower.includes('bi product')) return 'Farza';
+    if (dLower.includes('grape leaves') || dLower.includes('عنب')) return 'Grape Leaves';
+    if (dLower.includes('cucumber') || dLower.includes('خيار')) return 'Cucumber';
+    if (dLower.includes('cauliflower') || dLower.includes('قرنبيط')) return 'Cauliflower';
+    if (dLower.includes('old materials') || dLower.includes('قديم')) return 'Old Materials';
+
+    // Fallback extract between OLV and Black/Green
     const match = descr.match(/OLV\s+(.*?)\s+(Black|Green)/i);
     if (match && match[1]) {
-      extracted = match[1].trim();
-    } else {
-      extracted = descr;
+      const extracted = match[1].trim();
+      if (extracted) return extracted;
     }
 
-    const eLower = extracted.toLowerCase();
-    const dLower = descr.toLowerCase();
-    if (dLower.includes('pepper')) return 'Pepper';
-    if (eLower.includes('manzanilla') || eLower.includes('manzanila')) return 'Manzanilla';
-    if (eLower.includes('picual') || eLower.includes('pical')) return 'Picual';
-    if (eLower.includes('akas') || eLower.includes('akass') || eLower.includes('akisi') || eLower.includes('aqezi')) return 'Akas';
-    if (eLower.includes('azizi')) return 'Azizi';
-    if (eLower.includes('kobrosi') || eLower.includes('kobrosy') || eLower.includes('qobr') || eLower.includes('cyprus')) return 'Kobrosi';
-    if (eLower.includes('kalamata') || eLower.includes('kalama')) return 'Kalamata';
-    if (eLower.includes('dolsy') || eLower.includes('dolcy') || eLower.includes('dolce') || eLower.includes('dolsi')) return 'Dolsy';
-    if (eLower.includes('nour') && eLower.includes('sabah') || eLower.includes('نور صباح') || eLower.includes('نور الصباح')) return 'Nour Sabah';
-
-    return 'Other';
+    return (descr || '').trim() || 'صنف غير محدد';
   };
 
   const getVarietyName = (v: string) => {
-    if (v === 'Pepper') {
-      return isRtl ? 'الفلفل (Pepper)' : 'Pepper';
+    switch (v) {
+      // Olive varieties
+      case 'Manzanilla': return isRtl ? 'مانزانيلا (Manzanilla)' : 'Manzanilla';
+      case 'Picual': return isRtl ? 'بيكوال (Picual)' : 'Picual';
+      case 'Akas': return isRtl ? 'عقص (Akas)' : 'Akas';
+      case 'Azizi': return isRtl ? 'عزيزي (Azizi)' : 'Azizi';
+      case 'Kobrosi': return isRtl ? 'قبرصي (Kobrosi)' : 'Kobrosi';
+      case 'Kalamata': return isRtl ? 'كلاماتا (Kalamata)' : 'Kalamata';
+      case 'Dolsy': return isRtl ? 'دولسي (Dolsy)' : 'Dolsy';
+      case 'Nour Sabah': return isRtl ? 'نور الصباح (Nour Sabah)' : 'Nour Sabah';
+      case 'Baldiat': return isRtl ? 'بلديات (Baldiat)' : 'Baldiat';
+      case 'Karotina': return isRtl ? 'كروتينا (Karotina)' : 'Karotina';
+      case 'Tofahi': return isRtl ? 'تفاحي (Tofahi)' : 'Tofahi';
+      case 'Hamed': return isRtl ? 'حامض (Hamed)' : 'Hamed';
+      case 'Senara': return isRtl ? 'صنارة (Senara)' : 'Senara';
+      case 'Sers Cola': return isRtl ? 'سرس كولا (Sers Cola)' : 'Sers Cola';
+      case 'Nebal': return isRtl ? 'نبال (Nebal)' : 'Nebal';
+      case 'Farza': return isRtl ? 'فرزة / نواتج تشغيل (Farza)' : 'Farza / Bi Products';
+      case 'Grape Leaves': return isRtl ? 'ورق عنب (Grape Leaves)' : 'Grape Leaves';
+      case 'Cucumber': return isRtl ? 'خيار (Cucumber)' : 'Cucumber';
+      case 'Cauliflower': return isRtl ? 'قرنبيط (Cauliflower)' : 'Cauliflower';
+      case 'Old Materials': return isRtl ? 'خامات قديمة (Old Materials)' : 'Old Materials';
+
+      // Pepper varieties
+      case 'Jalapeno': return isRtl ? 'هالبينو (Jalapeno)' : 'Jalapeno';
+      case 'Banana': return isRtl ? 'بنانا (Banana)' : 'Banana Pepper';
+      case 'Pepperoncini': return isRtl ? 'ببرونسيني (Pepperoncini)' : 'Pepperoncini';
+      case 'Lombardy': return isRtl ? 'لومباردي (Lombardy)' : 'Lombardy Pepper';
+      case 'Pepper': return isRtl ? 'فلفل' : 'Pepper';
+
+      default: return v;
     }
-    if (v === 'Nour Sabah') {
-      return isRtl ? 'نور الصباح (Nour Sabah)' : 'Nour Sabah';
-    }
-    if (v === 'Other') {
-      return isRtl ? 'آخر / مشكل' : 'Other / mixed';
-    }
-    return v;
   };
 
   const getVarietyColor = (v: string) => {
@@ -339,6 +429,38 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50';
       case 'Nour Sabah':
         return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-900/50';
+      case 'Baldiat':
+        return 'bg-lime-50 text-lime-700 border-lime-200 dark:bg-lime-950/30 dark:text-lime-400 dark:border-lime-900/50';
+      case 'Karotina':
+        return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-900/50';
+      case 'Tofahi':
+        return 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50';
+      case 'Hamed':
+        return 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-400 dark:border-yellow-900/50';
+      case 'Senara':
+        return 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/30 dark:text-cyan-400 dark:border-cyan-900/50';
+      case 'Sers Cola':
+        return 'bg-stone-100 text-stone-700 border-stone-200 dark:bg-stone-800/30 dark:text-stone-300 dark:border-stone-700/50';
+      case 'Nebal':
+        return 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400 dark:border-violet-900/50';
+      case 'Farza':
+        return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50';
+      case 'Grape Leaves':
+        return 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-900/50';
+      case 'Cucumber':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50';
+      case 'Cauliflower':
+        return 'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-800/30 dark:text-zinc-400 dark:border-zinc-700/50';
+      case 'Old Materials':
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800/30 dark:text-slate-400 dark:border-slate-700/50';
+      case 'Jalapeno':
+        return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50';
+      case 'Banana':
+        return 'bg-yellow-50 text-yellow-800 border-yellow-200 dark:bg-yellow-950/30 dark:text-yellow-400 dark:border-yellow-900/50';
+      case 'Pepperoncini':
+        return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-900/50';
+      case 'Lombardy':
+        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50';
       case 'Pepper':
         return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50';
       default:
@@ -381,23 +503,6 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     return 'unspecified';
   };
 
-  // Helper to detect size from batch second letter: S=Small, L=Large, X=Extra Small (XS), M=Medium
-  const detectSizeFromBatch = (batchVal: string, descr: string): string => {
-    if (batchVal && batchVal.length >= 2) {
-      const secondChar = batchVal.charAt(1).toUpperCase();
-      if (secondChar === 'S') return 'S';
-      if (secondChar === 'X') return 'XS';
-      if (secondChar === 'L') return 'L';
-      if (secondChar === 'M') return 'M';
-    }
-    return detectAttribute(descr, 'size');
-  };
-
-  const getSeasonLabel = (id: string) => {
-    if (id === '2026') return isRtl ? 'موسم 2026' : 'Season 2026';
-    return isRtl ? 'غير محدد' : 'Unspecified';
-  };
-
   const detectAttribute = (descr: string, type: 'size' | 'process' | 'direction'): string => {
     const dLower = descr.toLowerCase().replace(/[._\-/\\]/g, ' ');
     const words = dLower.split(/\s+/);
@@ -425,6 +530,52 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       }
     }
     return '';
+  };
+
+  // Helper to detect if an item is Pre (raw / خام / قبل الفرز / غير مدرج)
+  const isPreItem = (descr: string, code?: string, processType?: string): boolean => {
+    if (processType === 'Pre') return true;
+    const detected = detectAttribute(descr || '', 'process');
+    if (detected === 'Pre') return true;
+
+    const d = (descr || '').toLowerCase().trim();
+    const c = (code || '').toLowerCase().trim();
+
+    // Arabic keywords for raw / pre / uncalibrated
+    if (d.includes('خام') || d.includes('خامات') || d.includes('تجهيز') || d.includes('قبل الفرز')) return true;
+    if (c.includes('خام') || c.includes('خامات') || c.includes('تجهيز')) return true;
+
+    // English keywords: pre, raw (as whole words, tokens or prefixes)
+    const preRegex = /(?:^|[\s._\-\/\\])pre(?:[\s._\-\/\\]|$)/i;
+    const rawRegex = /(?:^|[\s._\-\/\\])raw(?:[\s._\-\/\\]|$)/i;
+    if (preRegex.test(d) || preRegex.test(c)) return true;
+    if (rawRegex.test(d) || rawRegex.test(c)) return true;
+    if (c.startsWith('pre') || d.startsWith('pre')) return true;
+
+    return false;
+  };
+
+  // Helper to detect size from batch second letter: S=Small, L=Large, X=Extra Small (XS), M=Medium
+  const detectSizeFromBatch = (batchVal: string, descr: string, code?: string): string => {
+    // If the item is Pre (raw / خام), it must NEVER be classified into ANY size,
+    // even if the 2nd letter of the batch is 'L', 'S', 'M', or 'X'!
+    if (isPreItem(descr, code)) {
+      return '';
+    }
+
+    if (batchVal && batchVal.length >= 2) {
+      const secondChar = batchVal.charAt(1).toUpperCase();
+      if (secondChar === 'S') return 'S';
+      if (secondChar === 'X') return 'XS';
+      if (secondChar === 'L') return 'L';
+      if (secondChar === 'M') return 'M';
+    }
+    return detectAttribute(descr, 'size');
+  };
+
+  const getSeasonLabel = (id: string) => {
+    if (id === '2026') return isRtl ? 'موسم 2026' : 'Season 2026';
+    return isRtl ? 'غير محدد' : 'Unspecified';
   };
 
   const getAttributeLabel = (id: string, type: 'size' | 'process' | 'direction') => {
@@ -733,7 +884,11 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
       const rowSeason = detectSeason(batchVal);
 
-      const rowSize = detectSizeFromBatch(batchVal, descr);
+      const rowProcess = detectAttribute(descr, 'process');
+      const itemIsPre = isPreItem(descr, code, rowProcess);
+
+      // An item that is Pre (raw/خام) must NEVER be classified into any size, even if batch 2nd letter is L
+      const rowSize = itemIsPre ? '' : detectSizeFromBatch(batchVal, descr, code);
 
       if (!pivotMap.has(code)) {
         pivotMap.set(code, {
@@ -741,9 +896,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           description: descr,
           totalQuantity: 0,
           variety: detectVariety(descr),
-          size: rowSize,
+          size: itemIsPre ? '' : rowSize,
           treatment: detectAttribute(descr, 'direction'),
-          processType: detectAttribute(descr, 'process'),
+          processType: itemIsPre ? 'Pre' : rowProcess,
           locationQuantities: {},
           analyses: [],
           seasons: [],
@@ -751,7 +906,10 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         });
       } else {
         const entry = pivotMap.get(code)!;
-        if (!entry.size && rowSize) {
+        if (itemIsPre || entry.processType === 'Pre') {
+          entry.size = '';
+          entry.processType = 'Pre';
+        } else if (!entry.size && rowSize) {
           entry.size = rowSize;
         }
       }
@@ -777,7 +935,15 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       }
     }
 
-    return Array.from(pivotMap.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
+    const finalRows = Array.from(pivotMap.values()).map(entry => {
+      if (entry.processType === 'Pre' || isPreItem(entry.description, entry.materialCode)) {
+        entry.size = '';
+        entry.processType = 'Pre';
+      }
+      return entry;
+    });
+
+    return finalRows.sort((a, b) => b.totalQuantity - a.totalQuantity);
   }, [rawData, isRtl]);
 
   // Save initial baseline if not set yet (so user doesn't get a huge change list on first load)
@@ -885,9 +1051,104 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     return locs;
   }, [dataset]);
 
+  const isPepperRow = (row: PivotedStockRow) => {
+    const v = row.variety;
+    if (['Jalapeno', 'Banana', 'Pepperoncini', 'Lombardy'].includes(v)) return true;
+    const d = (row.description || '').toLowerCase();
+    return d.includes('pepper') || d.includes('pepperoncini') || d.includes('فلفل') || d.includes('شطة') || d.includes('jalapen') || d.includes('banana') || d.includes('lombardy');
+  };
+
+  const OLIVE_VARIETY_ORDER = [
+    'Picual',
+    'Akas',
+    'Kobrosi',
+    'Manzanilla',
+    'Azizi',
+    'Kalamata',
+    'Dolsy',
+    'Nour Sabah',
+    'Baldiat',
+    'Karotina',
+    'Tofahi',
+    'Hamed',
+    'Senara',
+    'Sers Cola',
+    'Nebal',
+    'Farza',
+    'Grape Leaves',
+    'Cucumber',
+    'Cauliflower',
+    'Old Materials'
+  ];
+
+  const PEPPER_VARIETY_ORDER = [
+    'Jalapeno',
+    'Banana',
+    'Pepperoncini',
+    'Lombardy'
+  ];
+
+  const oliveFilterOptions = useMemo(() => {
+    const varietySet = new Set<string>();
+
+    dataset.forEach(row => {
+      if (!isPepperRow(row)) {
+        if (row.variety && row.variety !== 'Other' && row.variety !== 'أخرى' && row.variety !== 'عام' && row.variety !== 'صنف غير محدد') {
+          varietySet.add(row.variety);
+        }
+      }
+    });
+
+    const sortedVarieties = Array.from(varietySet).sort((a, b) => {
+      const idxA = OLIVE_VARIETY_ORDER.indexOf(a);
+      const idxB = OLIVE_VARIETY_ORDER.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return getVarietyName(a).localeCompare(getVarietyName(b));
+    });
+
+    return sortedVarieties.map(v => ({
+      id: v,
+      label: getVarietyName(v)
+    }));
+  }, [dataset, isRtl]);
+
+  const pepperFilterOptions = useMemo(() => {
+    const varietySet = new Set<string>();
+
+    dataset.forEach(row => {
+      if (isPepperRow(row)) {
+        if (row.variety && row.variety !== 'Other' && row.variety !== 'Pepper' && row.variety !== 'أخرى' && row.variety !== 'عام' && row.variety !== 'صنف غير محدد') {
+          varietySet.add(row.variety);
+        }
+      }
+    });
+
+    const sortedVarieties = Array.from(varietySet).sort((a, b) => {
+      const idxA = PEPPER_VARIETY_ORDER.indexOf(a);
+      const idxB = PEPPER_VARIETY_ORDER.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return getVarietyName(a).localeCompare(getVarietyName(b));
+    });
+
+    return sortedVarieties.map(v => ({
+      id: v,
+      label: getVarietyName(v)
+    }));
+  }, [dataset, isRtl]);
+
   const varieties = useMemo(() => {
-    return ['Manzanilla', 'Picual', 'Akas', 'Azizi', 'Kobrosi', 'Kalamata', 'Dolsy', 'Nour Sabah', 'Pepper', 'Other'];
-  }, []);
+    const set = new Set<string>();
+    dataset.forEach(r => {
+      if (r.variety && r.variety !== 'Other' && r.variety !== 'عام') {
+        set.add(r.variety);
+      }
+    });
+    return Array.from(set);
+  }, [dataset]);
 
   const availableSeasons = useMemo(() => {
     return ['2026', 'unspecified'];
@@ -945,9 +1206,40 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           selectedLocations.length === 0 || 
           selectedLocations.some(loc => row.locationQuantities[loc] && row.locationQuantities[loc] > 0);
 
-        const matchesVariety = 
-          selectedVarieties.length === 0 || 
-          selectedVarieties.includes(row.variety);
+        const pepperItem = isPepperRow(row);
+
+        // Matching Olive filter
+        const matchesOlive = selectedOliveVarieties.length === 0 || 
+          selectedOliveVarieties.some(sel => {
+            if (sel.startsWith('variety:')) {
+              return row.variety === sel.replace('variety:', '');
+            }
+            if (sel.startsWith('item:')) {
+              return row.description.trim() === sel.replace('item:', '').trim();
+            }
+            return row.variety === sel || row.description === sel || row.materialCode === sel;
+          });
+
+        // Matching Pepper filter
+        const matchesPepper = selectedPepperVarieties.length === 0 || 
+          selectedPepperVarieties.some(sel => {
+            if (sel.startsWith('variety:')) {
+              return row.variety === sel.replace('variety:', '');
+            }
+            if (sel.startsWith('item:')) {
+              return row.description.trim() === sel.replace('item:', '').trim();
+            }
+            return row.variety === sel || row.description === sel || row.materialCode === sel;
+          });
+
+        let matchesProduce = true;
+        if (selectedOliveVarieties.length > 0 && selectedPepperVarieties.length > 0) {
+          matchesProduce = (!pepperItem && matchesOlive) || (pepperItem && matchesPepper);
+        } else if (selectedOliveVarieties.length > 0) {
+          matchesProduce = !pepperItem && matchesOlive;
+        } else if (selectedPepperVarieties.length > 0) {
+          matchesProduce = pepperItem && matchesPepper;
+        }
 
         const matchesSize = 
           selectedSizes.length === 0 || 
@@ -961,9 +1253,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           selectedProcesses.length === 0 || 
           selectedProcesses.includes(row.processType);
 
-        return matchesSearch && matchesLocation && matchesVariety && matchesSize && matchesTreatment && matchesProcess;
+        return matchesSearch && matchesLocation && matchesProduce && matchesSize && matchesTreatment && matchesProcess;
       });
-  }, [dataset, searchTerm, selectedLocations, selectedVarieties, selectedSizes, selectedTreatments, selectedProcesses, selectedAnalyses, selectedSeasons]);
+  }, [dataset, searchTerm, selectedLocations, selectedOliveVarieties, selectedPepperVarieties, selectedSizes, selectedTreatments, selectedProcesses, selectedAnalyses, selectedSeasons]);
 
   // Unmodified totals block, independent of filters
   const unmodifiedTotals = useMemo(() => {
@@ -1162,16 +1454,31 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   }, [drillDown, filteredDataset]);
 
   const VARIETY_COLORS: Record<string, string> = {
-    Manzanilla: '#f59e0b', // Amber
-    Picual: '#10b981',    // Emerald
-    Akas: '#8b5cf6',      // Violet
-    Azizi: '#06b6d4',     // Cyan
-    Kobrosi: '#3b82f6',   // Blue
-    Kalamata: '#6366f1',  // Indigo
-    Dolsy: '#f43f5e',     // Rose
-    'Nour Sabah': '#0d9488', // Teal
-    Pepper: '#ef4444',    // Red
-    Other: '#64748b'       // Slate
+    Manzanilla: '#f59e0b',
+    Picual: '#10b981',
+    Akas: '#8b5cf6',
+    Azizi: '#06b6d4',
+    Kobrosi: '#3b82f6',
+    Kalamata: '#6366f1',
+    Dolsy: '#f43f5e',
+    'Nour Sabah': '#0d9488',
+    Baldiat: '#84cc16',
+    Karotina: '#ea580c',
+    Tofahi: '#059669',
+    Hamed: '#eab308',
+    Senara: '#0284c7',
+    'Sers Cola': '#78716c',
+    Nebal: '#7c3aed',
+    Farza: '#b45309',
+    'Grape Leaves': '#16a34a',
+    Cucumber: '#15803d',
+    Cauliflower: '#a1a1aa',
+    'Old Materials': '#64748b',
+    Jalapeno: '#dc2626',
+    Banana: '#facc15',
+    Pepperoncini: '#f97316',
+    Lombardy: '#e11d48',
+    Pepper: '#ef4444'
   };
 
   const handleExportToExcel = () => {
@@ -1801,12 +2108,13 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 />
               </div>
 
-              {(searchTerm !== '' || selectedLocations.length > 0 || selectedVarieties.length > 0 || selectedSizes.length > 0 || selectedTreatments.length > 0 || selectedProcesses.length > 0 || selectedAnalyses.length > 0 || selectedSeasons.length > 0) && (
+              {(searchTerm !== '' || selectedLocations.length > 0 || selectedOliveVarieties.length > 0 || selectedPepperVarieties.length > 0 || selectedSizes.length > 0 || selectedTreatments.length > 0 || selectedProcesses.length > 0 || selectedAnalyses.length > 0 || selectedSeasons.length > 0) && (
                 <button
                   onClick={() => {
                     setSearchTerm('');
                     setSelectedLocations([]);
-                    setSelectedVarieties([]);
+                    setSelectedOliveVarieties([]);
+                    setSelectedPepperVarieties([]);
                     setSelectedSizes([]);
                     setSelectedTreatments([]);
                     setSelectedProcesses([]);
@@ -1832,14 +2140,24 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 onChange={setSelectedSeasons}
               />
 
-              {/* Variety Multi-Filter */}
+              {/* Olive Variety Multi-Filter (فلتر زيتون) */}
               <MultiSelect
                 lang={lang}
-                label={isRtl ? 'الأصناف' : 'Varieties'}
-                icon={<Filter size={12} />}
-                options={varieties.map(v => ({ id: v, label: getVarietyName(v) }))}
-                selected={selectedVarieties}
-                onChange={setSelectedVarieties}
+                label={isRtl ? 'فلتر الزيتون' : 'Olive Varieties'}
+                icon={<Filter size={12} className="text-emerald-500" />}
+                options={oliveFilterOptions}
+                selected={selectedOliveVarieties}
+                onChange={setSelectedOliveVarieties}
+              />
+
+              {/* Pepper Variety Multi-Filter (فلتر فلفل) */}
+              <MultiSelect
+                lang={lang}
+                label={isRtl ? 'فلتر الفلفل' : 'Pepper Varieties'}
+                icon={<Filter size={12} className="text-red-500" />}
+                options={pepperFilterOptions}
+                selected={selectedPepperVarieties}
+                onChange={setSelectedPepperVarieties}
               />
 
               {/* Size Multi-Filter */}

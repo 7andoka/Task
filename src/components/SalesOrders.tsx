@@ -592,7 +592,8 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilterValue>({ mode: 'all' });
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectedOliveItems, setSelectedOliveItems] = useState<string[]>([]);
+  const [selectedPepperItems, setSelectedPepperItems] = useState<string[]>([]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedVarieties, setSelectedVarieties] = useState<string[]>([]);
@@ -964,7 +965,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
 
   // Smart Cascading Filter Options (Customer, Item, Store)
   const filterOptions = useMemo(() => {
-    const getDependentData = (excludeKey: 'customer' | 'item' | 'store') => {
+    const getDependentData = (excludeKey: 'customer' | 'oliveItem' | 'pepperItem' | 'store') => {
       return data.filter(record => {
         // 1. Text Search Query
         if (searchQuery.trim()) {
@@ -1000,13 +1001,26 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
           if (!isMatch) return false;
         }
 
-        // 4. Items Filter
-        if (excludeKey !== 'item' && selectedItems.length > 0) {
-          const normSelected = selectedItems.map(i => normalizeArabicSearch(i).trim());
-          const normItem = normalizeArabicSearch(record.itemName).trim();
-          const isMatch = selectedItems.includes(record.itemName) ||
-            (normItem !== '' && normSelected.includes(normItem));
-          if (!isMatch) return false;
+        // 4. Olive & Pepper Items Filter
+        if (excludeKey !== 'oliveItem' && excludeKey !== 'pepperItem') {
+          if (selectedOliveItems.length > 0 && selectedPepperItems.length > 0) {
+            const normSelectedOlive = selectedOliveItems.map(i => normalizeArabicSearch(i).trim());
+            const normSelectedPepper = selectedPepperItems.map(i => normalizeArabicSearch(i).trim());
+            const normItem = normalizeArabicSearch(record.itemName).trim();
+            const matchesOlive = selectedOliveItems.includes(record.itemName) || (normItem !== '' && normSelectedOlive.includes(normItem));
+            const matchesPepper = selectedPepperItems.includes(record.itemName) || (normItem !== '' && normSelectedPepper.includes(normItem));
+            if (!matchesOlive && !matchesPepper) return false;
+          } else if (selectedOliveItems.length > 0) {
+            const normSelected = selectedOliveItems.map(i => normalizeArabicSearch(i).trim());
+            const normItem = normalizeArabicSearch(record.itemName).trim();
+            const isMatch = selectedOliveItems.includes(record.itemName) || (normItem !== '' && normSelected.includes(normItem));
+            if (!isMatch) return false;
+          } else if (selectedPepperItems.length > 0) {
+            const normSelected = selectedPepperItems.map(i => normalizeArabicSearch(i).trim());
+            const normItem = normalizeArabicSearch(record.itemName).trim();
+            const isMatch = selectedPepperItems.includes(record.itemName) || (normItem !== '' && normSelected.includes(normItem));
+            if (!isMatch) return false;
+          }
         }
 
         // 5. Stores Filter
@@ -1037,14 +1051,35 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       customerMap.set(c, curr);
     });
 
-    // Calculate Items stats
-    const itemMap = new Map<string, { count: number; totalKg: number }>();
-    getDependentData('item').forEach(r => {
+    // Helper to identify pepper items
+    const isPepperItem = (itemName: string, variety?: string) => {
+      if (variety === 'Pepper') return true;
+      const d = (itemName || '').toLowerCase();
+      return d.includes('pepper') || d.includes('فلفل') || d.includes('شطة') || d.includes('jalapen') || d.includes('banana') || d.includes('pepperoncini');
+    };
+
+    // Calculate Olive Items stats
+    const oliveItemMap = new Map<string, { count: number; totalKg: number }>();
+    getDependentData('oliveItem').forEach(r => {
       const it = (r.itemName || '').trim() || 'صنف غير محدد';
-      const curr = itemMap.get(it) || { count: 0, totalKg: 0 };
-      curr.count += 1;
-      curr.totalKg += (r.quantityKg || 0);
-      itemMap.set(it, curr);
+      if (!isPepperItem(it, r.variety)) {
+        const curr = oliveItemMap.get(it) || { count: 0, totalKg: 0 };
+        curr.count += 1;
+        curr.totalKg += (r.quantityKg || 0);
+        oliveItemMap.set(it, curr);
+      }
+    });
+
+    // Calculate Pepper Items stats
+    const pepperItemMap = new Map<string, { count: number; totalKg: number }>();
+    getDependentData('pepperItem').forEach(r => {
+      const it = (r.itemName || '').trim() || 'صنف غير محدد';
+      if (isPepperItem(it, r.variety)) {
+        const curr = pepperItemMap.get(it) || { count: 0, totalKg: 0 };
+        curr.count += 1;
+        curr.totalKg += (r.quantityKg || 0);
+        pepperItemMap.set(it, curr);
+      }
     });
 
     // Calculate Stores stats
@@ -1068,7 +1103,15 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
           count: val.count,
           totalTons: parseFloat((val.totalKg / 1000).toFixed(2))
         })),
-      items: Array.from(itemMap.entries())
+      oliveItems: Array.from(oliveItemMap.entries())
+        .sort((a, b) => b[1].totalKg - a[1].totalKg || b[1].count - a[1].count)
+        .map(([id, val]) => ({
+          id,
+          label: id,
+          count: val.count,
+          totalTons: parseFloat((val.totalKg / 1000).toFixed(2))
+        })),
+      pepperItems: Array.from(pepperItemMap.entries())
         .sort((a, b) => b[1].totalKg - a[1].totalKg || b[1].count - a[1].count)
         .map(([id, val]) => ({
           id,
@@ -1085,7 +1128,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
           totalTons: parseFloat((val.totalKg / 1000).toFixed(2))
         }))
     };
-  }, [data, searchQuery, dateFilter, selectedCustomers, selectedItems, selectedStores, salesOrderFilter]);
+  }, [data, searchQuery, dateFilter, selectedCustomers, selectedOliveItems, selectedPepperItems, selectedStores, salesOrderFilter]);
 
   // Filtered dataset
   const filteredData = useMemo(() => {
@@ -1124,12 +1167,23 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
         if (!isMatch) return false;
       }
 
-      // 4. Items Filter
-      if (selectedItems.length > 0) {
-        const normSelected = selectedItems.map(i => normalizeArabicSearch(i).trim());
+      // 4. Olive & Pepper Items Filter
+      if (selectedOliveItems.length > 0 && selectedPepperItems.length > 0) {
+        const normSelectedOlive = selectedOliveItems.map(i => normalizeArabicSearch(i).trim());
+        const normSelectedPepper = selectedPepperItems.map(i => normalizeArabicSearch(i).trim());
         const normItem = normalizeArabicSearch(record.itemName).trim();
-        const isMatch = selectedItems.includes(record.itemName) ||
-          (normItem !== '' && normSelected.includes(normItem));
+        const matchesOlive = selectedOliveItems.includes(record.itemName) || (normItem !== '' && normSelectedOlive.includes(normItem));
+        const matchesPepper = selectedPepperItems.includes(record.itemName) || (normItem !== '' && normSelectedPepper.includes(normItem));
+        if (!matchesOlive && !matchesPepper) return false;
+      } else if (selectedOliveItems.length > 0) {
+        const normSelected = selectedOliveItems.map(i => normalizeArabicSearch(i).trim());
+        const normItem = normalizeArabicSearch(record.itemName).trim();
+        const isMatch = selectedOliveItems.includes(record.itemName) || (normItem !== '' && normSelected.includes(normItem));
+        if (!isMatch) return false;
+      } else if (selectedPepperItems.length > 0) {
+        const normSelected = selectedPepperItems.map(i => normalizeArabicSearch(i).trim());
+        const normItem = normalizeArabicSearch(record.itemName).trim();
+        const isMatch = selectedPepperItems.includes(record.itemName) || (normItem !== '' && normSelected.includes(normItem));
         if (!isMatch) return false;
       }
 
@@ -1155,7 +1209,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
 
       return true;
     });
-  }, [data, searchQuery, dateFilter, selectedCustomers, selectedItems, selectedStores, selectedStatuses, selectedVarieties, salesOrderFilter]);
+  }, [data, searchQuery, dateFilter, selectedCustomers, selectedOliveItems, selectedPepperItems, selectedStores, selectedStatuses, selectedVarieties, salesOrderFilter]);
 
   // Sorted dataset
   const sortedData = useMemo(() => {
@@ -1617,14 +1671,15 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
 
           {/* Quick Filters Reset */}
           <div className="md:col-span-2 flex items-center justify-end">
-            {(selectedCustomers.length > 0 || selectedItems.length > 0 || selectedStores.length > 0 || salesOrderFilter !== 'ALL' || dateFilter.mode !== 'all' || searchQuery) && (
+            {(selectedCustomers.length > 0 || selectedOliveItems.length > 0 || selectedPepperItems.length > 0 || selectedStores.length > 0 || salesOrderFilter !== 'ALL' || dateFilter.mode !== 'all' || searchQuery) && (
               <button
                 type="button"
                 onClick={() => {
                   setSearchQuery('');
                   setDateFilter({ mode: 'all' });
                   setSelectedCustomers([]);
-                  setSelectedItems([]);
+                  setSelectedOliveItems([]);
+                  setSelectedPepperItems([]);
                   setSelectedStores([]);
                   setSelectedStatuses([]);
                   setSelectedVarieties([]);
@@ -1641,7 +1696,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
 
         </div>
 
-        {/* Row 2: Smart Interconnected Filters (العميل - الصنف - المخزن - حالة أمر البيع) */}
+        {/* Row 2: Smart Interconnected Filters (العميل - أصناف الزيتون - أصناف الفلفل - المخزن - حالة أمر البيع) */}
         <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 flex-wrap">
           <div className="flex items-center gap-2.5 flex-wrap">
             
@@ -1663,16 +1718,16 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
               />
             </div>
 
-            {/* 2. Smart Item Filter */}
+            {/* 2. Smart Olive Items Filter */}
             <div className="shrink-0">
               <SmartMultiSelect
-                label={isRtl ? 'الأصناف' : 'Items'}
-                allLabel={isRtl ? 'جميع الأصناف' : 'All Items'}
-                searchPlaceholder={isRtl ? 'بحث في أسماء الأصناف...' : 'Search items...'}
-                options={filterOptions.items}
-                selected={selectedItems}
+                label={isRtl ? 'أصناف الزيتون' : 'Olive Items'}
+                allLabel={isRtl ? 'جميع أصناف الزيتون' : 'All Olive Items'}
+                searchPlaceholder={isRtl ? 'بحث في أصناف الزيتون...' : 'Search olive items...'}
+                options={filterOptions.oliveItems}
+                selected={selectedOliveItems}
                 onChange={(newSel) => {
-                  setSelectedItems(newSel);
+                  setSelectedOliveItems(newSel);
                   setCurrentPage(1);
                 }}
                 icon={<Boxes size={14} className="text-emerald-500" />}
@@ -1681,7 +1736,25 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
               />
             </div>
 
-            {/* 3. Smart Store Filter */}
+            {/* 3. Smart Pepper Items Filter */}
+            <div className="shrink-0">
+              <SmartMultiSelect
+                label={isRtl ? 'أصناف الفلفل' : 'Pepper Items'}
+                allLabel={isRtl ? 'جميع أصناف الفلفل' : 'All Pepper Items'}
+                searchPlaceholder={isRtl ? 'بحث في أصناف الفلفل...' : 'Search pepper items...'}
+                options={filterOptions.pepperItems}
+                selected={selectedPepperItems}
+                onChange={(newSel) => {
+                  setSelectedPepperItems(newSel);
+                  setCurrentPage(1);
+                }}
+                icon={<Boxes size={14} className="text-amber-500" />}
+                isRtl={isRtl}
+                colorTheme="amber"
+              />
+            </div>
+
+            {/* 4. Smart Store Filter */}
             <div className="shrink-0">
               <SmartMultiSelect
                 label={isRtl ? 'المخازن' : 'Stores'}
@@ -1699,7 +1772,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
               />
             </div>
 
-            {/* 4. Sales Order Exists / Empty Filter (يوجد / لا يوجد) */}
+            {/* 5. Sales Order Exists / Empty Filter (يوجد / لا يوجد) */}
             <div className="shrink-0">
               <div className="relative">
                 <select
@@ -1740,7 +1813,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
         </div>
 
         {/* Row 3: Active Filter Chips Bar */}
-        {(selectedCustomers.length > 0 || selectedItems.length > 0 || selectedStores.length > 0 || salesOrderFilter !== 'ALL') && (
+        {(selectedCustomers.length > 0 || selectedOliveItems.length > 0 || selectedPepperItems.length > 0 || selectedStores.length > 0 || salesOrderFilter !== 'ALL') && (
           <div className="flex items-center gap-1.5 flex-wrap pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
             <span className="text-[11px] font-bold text-zinc-400 ml-1 flex items-center gap-1">
               <Filter size={12} />
@@ -1793,19 +1866,39 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
               </span>
             ))}
 
-            {/* Selected Items Chips */}
-            {selectedItems.map(item => (
+            {/* Selected Olive Items Chips */}
+            {selectedOliveItems.map(item => (
               <span
-                key={`item-${item}`}
+                key={`olive-item-${item}`}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 shadow-2xs"
               >
                 <Boxes size={12} className="text-emerald-500" />
-                <span className="font-semibold text-[10px] text-emerald-500/80">{isRtl ? 'الصنف:' : 'Item:'}</span>
+                <span className="font-semibold text-[10px] text-emerald-500/80">{isRtl ? 'زيتون:' : 'Olive:'}</span>
                 <span>{item}</span>
                 <button
                   type="button"
-                  onClick={() => setSelectedItems(prev => prev.filter(i => i !== item))}
+                  onClick={() => setSelectedOliveItems(prev => prev.filter(i => i !== item))}
                   className="p-0.5 hover:bg-emerald-200 dark:hover:bg-emerald-800 rounded-full transition-colors cursor-pointer"
+                  title={isRtl ? 'إزالة الفلتر' : 'Remove filter'}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+
+            {/* Selected Pepper Items Chips */}
+            {selectedPepperItems.map(item => (
+              <span
+                key={`pepper-item-${item}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/60 shadow-2xs"
+              >
+                <Boxes size={12} className="text-red-500" />
+                <span className="font-semibold text-[10px] text-red-500/80">{isRtl ? 'فلفل:' : 'Pepper:'}</span>
+                <span>{item}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPepperItems(prev => prev.filter(i => i !== item))}
+                  className="p-0.5 hover:bg-red-200 dark:hover:bg-red-800 rounded-full transition-colors cursor-pointer"
                   title={isRtl ? 'إزالة الفلتر' : 'Remove filter'}
                 >
                   <X size={11} />
@@ -1838,7 +1931,8 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
               type="button"
               onClick={() => {
                 setSelectedCustomers([]);
-                setSelectedItems([]);
+                setSelectedOliveItems([]);
+                setSelectedPepperItems([]);
                 setSelectedStores([]);
                 setSalesOrderFilter('ALL');
                 setCurrentPage(1);
