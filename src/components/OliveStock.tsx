@@ -1643,6 +1643,100 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         </div>
       ) : (
         <>
+          {/* Primary Inventory Balances (Independent of filters) */}
+          <div className="space-y-3 mb-2">
+            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest px-2 mb-1 flex items-center gap-1.5">
+              <Database size={13} className="text-emerald-500 animate-pulse" />
+              {isRtl ? 'إجمالي أرصدة المخزون الرئيسي (ثابت)' : 'Core Inventory Stock Totals (Fixed)'}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+              {/* Olive Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-emerald-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد الزيتون' : 'Total Olive Stock'}
+                  </span>
+                  <div className="p-1.5 bg-emerald-500/5 text-emerald-500 rounded-lg">
+                    <TrendingUp size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-emerald-600 dark:text-emerald-400">
+                    {formatNumber(unmodifiedTotals.totalOlive)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
+              </div>
+
+              {/* Pepper Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-red-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد الفلفل' : 'Total Pepper Stock'}
+                  </span>
+                  <div className="p-1.5 bg-red-500/5 text-red-500 rounded-lg">
+                    <Database size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-red-600 dark:text-red-400">
+                    {formatNumber(unmodifiedTotals.totalPepper)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
+              </div>
+
+              {/* Farza Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-purple-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد الفرزه' : 'Total Farza Stock'}
+                  </span>
+                  <div className="p-1.5 bg-purple-500/5 text-purple-500 rounded-lg">
+                    <Layers size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-purple-600 dark:text-purple-400">
+                    {formatNumber(unmodifiedTotals.totalFarza)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
+              </div>
+
+              {/* Size S Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-amber-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد مقاس S' : 'Total Size S Stock'}
+                  </span>
+                  <div className="p-1.5 bg-amber-500/5 text-amber-500 rounded-lg">
+                    <Percent size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-amber-600 dark:text-amber-400">
+                    {formatNumber(unmodifiedTotals.totalS)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
+              </div>
+
+              {/* Size XXXS Stock Card */}
+              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-blue-500/30 transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isRtl ? 'إجمالي رصيد مقاس XXXS' : 'Total Size XXXS Stock'}
+                  </span>
+                  <div className="p-1.5 bg-blue-500/5 text-blue-500 rounded-lg">
+                    <Layers size={16} />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black font-sans text-blue-600 dark:text-blue-400">
+                    {formatNumber(unmodifiedTotals.totalXxxs)} <span className="text-xs text-zinc-400 font-medium">kg</span>
+                  </h3>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Charts & Reports Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
             {/* Varieties Chart */}
@@ -1993,103 +2087,6 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Statistics summary */}
-          <div className="space-y-4 mt-4">
-            {/* Primary Inventory Balances (Independent of filters) */}
-            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest px-2 mb-1 flex items-center gap-1.5">
-              <Database size={13} className="text-emerald-500 animate-pulse" />
-              {isRtl ? 'إجمالي أرصدة المخزون الرئيسي (ثابت)' : 'Core Inventory Stock Totals (Fixed)'}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-              {/* Olive Stock Card */}
-              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-emerald-500/30 transition-all duration-300">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                    {isRtl ? 'إجمالي رصيد الزيتون' : 'Total Olive Stock'}
-                  </span>
-                  <div className="p-1.5 bg-emerald-500/5 text-emerald-500 rounded-lg">
-                    <TrendingUp size={16} />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-xl font-black font-sans text-emerald-600 dark:text-emerald-400">
-                    {formatNumber(unmodifiedTotals.totalOlive)} <span className="text-xs text-zinc-400 font-medium">kg</span>
-                  </h3>
-                </div>
-              </div>
-
-              {/* Pepper Stock Card */}
-              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-red-500/30 transition-all duration-300">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                    {isRtl ? 'إجمالي رصيد الفلفل' : 'Total Pepper Stock'}
-                  </span>
-                  <div className="p-1.5 bg-red-500/5 text-red-500 rounded-lg">
-                    <Database size={16} />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-xl font-black font-sans text-red-600 dark:text-red-400">
-                    {formatNumber(unmodifiedTotals.totalPepper)} <span className="text-xs text-zinc-400 font-medium">kg</span>
-                  </h3>
-                </div>
-              </div>
-
-              {/* Farza Stock Card */}
-              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-purple-500/30 transition-all duration-300">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                    {isRtl ? 'إجمالي رصيد الفرزه' : 'Total Farza Stock'}
-                  </span>
-                  <div className="p-1.5 bg-purple-500/5 text-purple-500 rounded-lg">
-                    <Layers size={16} />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-xl font-black font-sans text-purple-600 dark:text-purple-400">
-                    {formatNumber(unmodifiedTotals.totalFarza)} <span className="text-xs text-zinc-400 font-medium">kg</span>
-                  </h3>
-                </div>
-              </div>
-
-              {/* Size S Stock Card */}
-              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-amber-500/30 transition-all duration-300">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                    {isRtl ? 'إجمالي رصيد مقاس S' : 'Total Size S Stock'}
-                  </span>
-                  <div className="p-1.5 bg-amber-500/5 text-amber-500 rounded-lg">
-                    <Percent size={16} />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-xl font-black font-sans text-amber-600 dark:text-amber-400">
-                    {formatNumber(unmodifiedTotals.totalS)} <span className="text-xs text-zinc-400 font-medium">kg</span>
-                  </h3>
-                </div>
-              </div>
-
-              {/* Size XXXS Stock Card */}
-              <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm flex flex-col justify-between hover:border-blue-500/30 transition-all duration-300">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                    {isRtl ? 'إجمالي رصيد مقاس XXXS' : 'Total Size XXXS Stock'}
-                  </span>
-                  <div className="p-1.5 bg-blue-500/5 text-blue-500 rounded-lg">
-                    <Layers size={16} />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-xl font-black font-sans text-blue-600 dark:text-blue-400">
-                    {formatNumber(unmodifiedTotals.totalXxxs)} <span className="text-xs text-zinc-400 font-medium">kg</span>
-                  </h3>
-                </div>
-              </div>
-            </div>
-
-
-          </div>
 
           {/* Table Filters Search Bar */}
           <div className="bg-white dark:bg-zinc-900/60 p-4 rounded-3xl border border-zinc-200/60 dark:border-zinc-800/60 flex flex-col items-stretch gap-4">
