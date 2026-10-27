@@ -900,6 +900,36 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     toast.success(isRtl ? 'تم تصدير سجل حركات البراميل بنجاح' : 'Movements exported successfully');
   };
 
+  // Export Customer Statement to Excel
+  const handleExportCustomerStatement = () => {
+    if (!statementCustomer || customerStatementMovements.length === 0) {
+      toast.error(isRtl ? 'لا توجد بيانات لتصديرها' : 'No data to export');
+      return;
+    }
+
+    const rows = customerStatementMovements.map((m, i) => ({
+      [isRtl ? 'م' : 'No']: i + 1,
+      [isRtl ? 'التاريخ' : 'Date']: m.date,
+      [isRtl ? 'رقم الإذن' : 'Doc No']: m.docNumber,
+      [isRtl ? 'نوع الحركة' : 'Movement Type']: m.movementType,
+      [isRtl ? 'كمية الصرف' : 'Dispatched Qty']: m.dispatchedQty || '',
+      [isRtl ? 'كمية الإضافة' : 'Added Qty']: m.addedQty || '',
+      [isRtl ? 'نوع البرميل' : 'Barrel Type']: m.barrelType,
+      [isRtl ? 'ملاحظات' : 'Notes']: m.notes
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, isRtl ? 'كشف حساب العميل' : 'Customer Statement');
+    XLSX.writeFile(wb, `RichLand_Customer_Statement_${statementCustomer}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success(isRtl ? 'تم تصدير كشف حساب العميل بنجاح' : 'Customer statement exported successfully');
+  };
+
+  // Print Customer Statement
+  const handlePrintCustomerStatement = () => {
+    window.print();
+  };
+
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-US').format(num);
   };
@@ -1706,15 +1736,34 @@ export default function Barrels({ lang, user }: BarrelsProps) {
 
               {/* Modal Footer */}
               <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/30">
-                <span className="text-xs text-zinc-400 font-bold font-mono">
-                  {customerStatementMovements.length} {isRtl ? 'حركة مسجلة' : 'movements recorded'}
-                </span>
-                <button
-                  onClick={() => setStatementCustomer(null)}
-                  className="px-5 py-2 bg-zinc-800 hover:bg-zinc-900 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer"
-                >
-                  {isRtl ? 'إغلاق' : 'Close'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExportCustomerStatement}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+                  >
+                    <Download size={14} />
+                    <span>{isRtl ? 'تصدير إكسل' : 'Export Excel'}</span>
+                  </button>
+                  <button
+                    onClick={handlePrintCustomerStatement}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-2xl text-xs font-bold transition-all cursor-pointer border border-zinc-200 dark:border-zinc-700"
+                  >
+                    <FileText size={14} />
+                    <span>{isRtl ? 'طباعة الكشف' : 'Print Statement'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-zinc-400 font-bold font-mono">
+                    {customerStatementMovements.length} {isRtl ? 'حركة مسجلة' : 'movements recorded'}
+                  </span>
+                  <button
+                    onClick={() => setStatementCustomer(null)}
+                    className="px-5 py-2 bg-zinc-800 hover:bg-zinc-900 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer"
+                  >
+                    {isRtl ? 'إغلاق' : 'Close'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
