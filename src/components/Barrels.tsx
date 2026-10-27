@@ -1633,11 +1633,21 @@ export default function Barrels({ lang, user }: BarrelsProps) {
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl print-modal-container"
               dir={isRtl ? 'rtl' : 'ltr'}
             >
+              {/* Official Print Header */}
+              <div className="hidden print:block mb-4 text-center border-b-2 border-zinc-900 pb-4">
+                <h1 className="text-2xl font-black text-zinc-900 tracking-tight">ريش لاند لتصنيع وتصدير الحاصلات الزراعية</h1>
+                <p className="text-xs text-zinc-700 font-bold mt-1">إدارة الحسابات والمخازن - كشف حساب عهدة براميل رسمي</p>
+                <div className="flex items-center justify-between mt-4 text-xs font-bold text-zinc-900 px-2">
+                  <span>اسم العميل: <strong className="underline text-sm">{statementCustomer}</strong></span>
+                  <span>تاريخ الطباعة: {new Date().toLocaleDateString('ar-EG')}</span>
+                </div>
+              </div>
+
               {/* Modal Header */}
-              <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/30">
+              <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/30 print:hidden">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-amber-500/10 text-amber-600 rounded-2xl">
                     <User size={22} />
@@ -1661,8 +1671,8 @@ export default function Barrels({ lang, user }: BarrelsProps) {
               </div>
 
               {/* Customer Balance Summary Bar inside Modal */}
-              <div className="p-4 bg-amber-500/5 border-b border-amber-500/10 grid grid-cols-3 gap-3 text-center">
-                <div className="p-3 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60">
+              <div className="p-4 bg-amber-500/5 border-b border-amber-500/10 grid grid-cols-3 gap-3 text-center print:border-zinc-300 print:bg-zinc-50">
+                <div className="p-3 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60 print:border-zinc-300 print:bg-white">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">
                     {isRtl ? 'إجمالي الصرف' : 'Total Dispatched'}
                   </span>
@@ -1671,7 +1681,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                   </span>
                 </div>
 
-                <div className="p-3 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60">
+                <div className="p-3 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60 print:border-zinc-300 print:bg-white">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">
                     {isRtl ? 'إجمالي الإضافة (المرتجع)' : 'Total Returned / Added'}
                   </span>
@@ -1680,7 +1690,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                   </span>
                 </div>
 
-                <div className="p-3 bg-white dark:bg-zinc-800/80 rounded-2xl border border-amber-500/30">
+                <div className="p-3 bg-white dark:bg-zinc-800/80 rounded-2xl border border-amber-500/30 print:border-zinc-300 print:bg-white">
                   <span className="text-[10px] font-bold text-amber-600 uppercase block mb-1">
                     {isRtl ? 'صافي الرصيد المستحق طرفه' : 'Net Outstanding Balance'}
                   </span>
@@ -1691,51 +1701,67 @@ export default function Barrels({ lang, user }: BarrelsProps) {
               </div>
 
               {/* Statement Table */}
-              <div className="overflow-y-auto flex-1 p-4">
-                <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
+              <div className="overflow-y-auto flex-1 p-4 print:overflow-visible print:p-0">
+                <table className="w-full text-right text-xs print:border-collapse print:border print:border-zinc-800" dir={isRtl ? 'rtl' : 'ltr'}>
                   <thead>
-                    <tr className="bg-zinc-50 dark:bg-zinc-800/60 text-zinc-400 border-b border-zinc-200 dark:border-zinc-700 text-[10px] font-black uppercase">
-                      <th className="py-2.5 px-3 text-center">#</th>
-                      <th className="py-2.5 px-3 text-center">{isRtl ? 'التاريخ' : 'Date'}</th>
-                      <th className="py-2.5 px-3 text-center">{isRtl ? 'رقم الإذن' : 'Doc No'}</th>
-                      <th className="py-2.5 px-3 text-center">{isRtl ? 'نوع الحركة' : 'Type'}</th>
-                      <th className="py-2.5 px-3 text-center">{isRtl ? 'صرف' : 'Dispatch'}</th>
-                      <th className="py-2.5 px-3 text-center">{isRtl ? 'إضافة' : 'Add'}</th>
-                      <th className="py-2.5 px-3 text-center">{isRtl ? 'نوع البرميل' : 'Barrel'}</th>
-                      <th className="py-2.5 px-3">{isRtl ? 'البيان' : 'Notes'}</th>
+                    <tr className="bg-zinc-50 dark:bg-zinc-800/60 text-zinc-400 border-b border-zinc-200 dark:border-zinc-700 text-[10px] font-black uppercase print:bg-zinc-200 print:text-zinc-900 print:border-b-2 print:border-zinc-800">
+                      <th className="py-2.5 px-3 text-center print:border print:border-zinc-800">#</th>
+                      <th className="py-2.5 px-3 text-center print:border print:border-zinc-800">{isRtl ? 'التاريخ' : 'Date'}</th>
+                      <th className="py-2.5 px-3 text-center print:border print:border-zinc-800">{isRtl ? 'رقم الإذن' : 'Doc No'}</th>
+                      <th className="py-2.5 px-3 text-center print:border print:border-zinc-800">{isRtl ? 'نوع الحركة' : 'Type'}</th>
+                      <th className="py-2.5 px-3 text-center print:border print:border-zinc-800">{isRtl ? 'صرف' : 'Dispatch'}</th>
+                      <th className="py-2.5 px-3 text-center print:border print:border-zinc-800">{isRtl ? 'إضافة' : 'Add'}</th>
+                      <th className="py-2.5 px-3 text-center print:border print:border-zinc-800">{isRtl ? 'نوع البرميل' : 'Barrel'}</th>
+                      <th className="py-2.5 px-3 print:border print:border-zinc-800">{isRtl ? 'البيان' : 'Notes'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 print:divide-zinc-800">
                     {customerStatementMovements.map((m, i) => (
-                      <tr key={m.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30">
-                        <td className="py-2.5 px-3 text-center font-mono text-zinc-400">{i + 1}</td>
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-zinc-700 dark:text-zinc-300">{m.date}</td>
-                        <td className="py-2.5 px-3 text-center font-mono">{m.docNumber}</td>
-                        <td className="py-2.5 px-3 text-center">
+                      <tr key={m.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 print:border-b print:border-zinc-800">
+                        <td className="py-2.5 px-3 text-center font-mono text-zinc-400 print:text-zinc-900 print:border print:border-zinc-800">{i + 1}</td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-zinc-700 dark:text-zinc-300 print:text-zinc-900 print:border print:border-zinc-800">{m.date}</td>
+                        <td className="py-2.5 px-3 text-center font-mono print:border print:border-zinc-800">{m.docNumber}</td>
+                        <td className="py-2.5 px-3 text-center print:border print:border-zinc-800">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                             m.movementType === 'صرف'
-                              ? 'bg-red-500/10 text-red-600'
-                              : 'bg-emerald-500/10 text-emerald-600'
+                              ? 'bg-red-500/10 text-red-600 print:text-red-700 print:bg-transparent'
+                              : 'bg-emerald-500/10 text-emerald-600 print:text-emerald-700 print:bg-transparent'
                           }`}>
                             {m.movementType}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-red-600">
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-red-600 print:text-red-700 print:border print:border-zinc-800">
                           {m.dispatchedQty > 0 ? formatNumber(m.dispatchedQty) : '—'}
                         </td>
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-600">
+                        <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-600 print:text-emerald-700 print:border print:border-zinc-800">
                           {m.addedQty > 0 ? formatNumber(m.addedQty) : '—'}
                         </td>
-                        <td className="py-2.5 px-3 text-center text-zinc-500 text-[11px]">{m.barrelType}</td>
-                        <td className="py-2.5 px-3 text-zinc-500 text-[11px]">{m.notes || '—'}</td>
+                        <td className="py-2.5 px-3 text-center text-zinc-500 text-[11px] print:text-zinc-900 print:border print:border-zinc-800">{m.barrelType}</td>
+                        <td className="py-2.5 px-3 text-zinc-500 text-[11px] print:text-zinc-900 print:border print:border-zinc-800">{m.notes || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
+              {/* Official Print Signatures */}
+              <div className="hidden print:flex items-center justify-between mt-12 pt-8 border-t-2 border-zinc-900 text-xs font-bold text-zinc-900 page-break-inside-avoid">
+                <div className="text-center">
+                  <p className="mb-12 font-bold">إعداد ومراجعة (المحاسب)</p>
+                  <div className="w-44 border-b-2 border-dashed border-zinc-600 mx-auto"></div>
+                </div>
+                <div className="text-center">
+                  <p className="mb-12 font-bold">اعتماد الإدارة / خاتم الشركة</p>
+                  <div className="w-44 border-b-2 border-dashed border-zinc-600 mx-auto"></div>
+                </div>
+                <div className="text-center">
+                  <p className="mb-12 font-bold">استلام العميل (المقر / التوقيع)</p>
+                  <div className="w-44 border-b-2 border-dashed border-zinc-600 mx-auto"></div>
+                </div>
+              </div>
+
               {/* Modal Footer */}
-              <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/30">
+              <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/35 print:hidden">
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleExportCustomerStatement}

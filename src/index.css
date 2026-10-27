@@ -194,3 +194,27 @@
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-modal-container, .print-modal-container * {
+    visibility: visible;
+  }
+  .print-modal-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 15px;
+    background: white !important;
+    color: black !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
