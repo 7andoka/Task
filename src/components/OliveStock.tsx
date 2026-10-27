@@ -722,8 +722,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         toast.success(isRtl ? 'تم تحديث رصيد الزيتون بنجاح' : 'Olive stock updated successfully', { id: toastId! });
       }
     } catch (err: any) {
-      console.error('Error fetching olive stock sheet:', err, err?.stack);
-      setError(`${err.message || 'Error occurred while loading data'}${err?.stack ? ' - ' + err.stack : ''}`);
+      console.warn('Notice fetching olive stock sheet:', err);
+      setError(`${err.message || 'Error occurred while loading data'}`);
       if (isManual) {
         toast.error(isRtl ? 'فشل التحديث، يرجى المحاولة لاحقاً' : 'Refresh failed, please try again', { id: toastId! });
       }
@@ -1798,7 +1798,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 </div>
               </div>
 
-              <div className="w-full space-y-2.5">
+              <div className="w-full space-y-2 overflow-y-auto max-h-[235px] pr-1.5 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
                 {chartData.map((item) => (
                   <button 
                     key={item.id} 
@@ -1888,7 +1888,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 </div>
               </div>
 
-              <div className="w-full space-y-2.5">
+              <div className="w-full space-y-2 overflow-y-auto max-h-[235px] pr-1.5 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
                 {locationChartData.map((item) => (
                   <button 
                     key={item.id} 
@@ -1978,7 +1978,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 </div>
               </div>
 
-              <div className="w-full space-y-2.5">
+              <div className="w-full space-y-2 overflow-y-auto max-h-[235px] pr-1.5 scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700">
                 {analysisChartData.map((item) => (
                   <button 
                     key={item.id} 

@@ -29,7 +29,8 @@ import {
   Scale,
   FileText,
   Boxes,
-  ShoppingCart
+  ShoppingCart,
+  Cylinder
 } from 'lucide-react';
 import { translations } from '../i18n';
 import { Language, UserProfile } from '../types';
@@ -123,6 +124,7 @@ export default function Layout({
   const menuItems = [
     { id: 'scaleReports', label: t.scaleReports, icon: Scale },
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
+    { id: 'barrels', label: t.barrels, icon: Cylinder },
     { id: 'freshSupply', label: t.freshSupply, icon: Sprout },
     { id: 'purchaseOrders', label: t.purchaseOrders, icon: FileText },
     { id: 'salesOrders', label: t.salesOrders, icon: ShoppingCart },

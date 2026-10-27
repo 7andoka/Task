@@ -77,6 +77,7 @@ export default function UserManagement({ lang, users, setUsers }: UserManagement
     { id: 'kpis', label: lang === 'ar' ? 'لوحة المؤشرات والقيادة' : 'Executive KPIs Dashboard' },
     { id: 'scaleReports', label: t.scaleReports },
     { id: 'supplyTracking', label: t.supplyTracking },
+    { id: 'barrels', label: lang === 'ar' ? 'حسابات وحركات البراميل' : 'Barrels Management' },
     { id: 'freshSupply', label: t.freshSupply },
     { id: 'purchaseOrders', label: t.purchaseOrders },
     { id: 'salesOrders', label: t.salesOrders },

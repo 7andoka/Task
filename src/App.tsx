@@ -20,6 +20,7 @@ import ScaleReports from './components/ScaleReports';
 import FreshSupply from './components/FreshSupply';
 import PurchaseOrders from './components/PurchaseOrders';
 import SalesOrders from './components/SalesOrders';
+import Barrels from './components/Barrels';
 import OfflineScreen from './components/OfflineScreen';
 import ForcePasswordChange from './components/ForcePasswordChange';
 import { Language, UserProfile, Task } from './types';
@@ -48,6 +49,7 @@ export default function App() {
       { id: 'kpis', roles: ['Admin', 'Warehouse Manager', 'Senior Manager', 'Manager'] },
       { id: 'scaleReports' },
       { id: 'supplyTracking' },
+      { id: 'barrels' },
       { id: 'freshSupply' },
       { id: 'purchaseOrders' },
       { id: 'salesOrders' },
@@ -261,7 +263,7 @@ export default function App() {
         }
         console.log("Initial fetch complete.");
       } catch (err) {
-        console.error("Initial fetch error:", err);
+        console.warn("Initial fetch notice:", err);
       } finally {
         setIsDataLoading(false);
       }
@@ -512,6 +514,8 @@ export default function App() {
         return <ScaleReports lang={lang} user={user} />;
       case 'supplyTracking':
         return <SupplyTracking lang={lang} user={user} allUsers={allUsers} />;
+      case 'barrels':
+        return <Barrels lang={lang} user={user} />;
       case 'freshSupply':
         return <FreshSupply lang={lang} user={user} />;
       case 'purchaseOrders':

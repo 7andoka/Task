@@ -19,14 +19,29 @@ export function convertToCsvUrl(inputUrl: string): string {
   const trimmed = (inputUrl || '').trim();
   if (!trimmed) return '';
 
+  // Prevent corrupted legacy URLs
+  if (trimmed.includes('/spreadsheets/d/e/export') || trimmed.includes('/spreadsheets/d/e?')) {
+    return '';
+  }
+
   // Already a direct CSV link
   if (trimmed.includes('pub?output=csv') || trimmed.includes('export?format=csv')) {
     return trimmed;
   }
 
-  // Google Sheet ID extraction
+  // Published to web link (contains /spreadsheets/d/e/2PACX-...)
+  const pubMatch = trimmed.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
+  if (pubMatch && pubMatch[1]) {
+    const pubId = pubMatch[1];
+    const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
+    const gidPart = gidMatch ? `&gid=${gidMatch[1]}&single=true` : '';
+    return `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv${gidPart}`;
+  }
+
+  // Standard Google Sheet edit or sharing link (contains /spreadsheets/d/{SHEET_ID}/...)
+  // Exclude 'e' so it never corrupts published links
   const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (match && match[1]) {
+  if (match && match[1] && match[1] !== 'e') {
     const id = match[1];
     const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
     const gidPart = gidMatch ? `&gid=${gidMatch[1]}` : '';

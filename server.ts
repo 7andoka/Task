@@ -51,6 +51,56 @@ async function startServer() {
     }
   });
 
+  app.get("/api/proxy-sheet", async (req, res) => {
+    try {
+      const targetUrl = req.query.url as string;
+      if (!targetUrl || typeof targetUrl !== 'string') {
+        return res.status(400).json({ error: "Missing url parameter" });
+      }
+
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+
+      let fetchUrl = targetUrl.trim();
+      let response = await fetch(fetchUrl);
+      
+      // Fallback 1: if 400 and has &single=true, try without single=true
+      if (!response.ok && response.status === 400 && fetchUrl.includes('&single=true')) {
+        const altUrl = fetchUrl.replace('&single=true', '');
+        console.log(`[proxy-sheet] 400 on ${fetchUrl}, trying fallback without single=true: ${altUrl}`);
+        const altResponse = await fetch(altUrl);
+        if (altResponse.ok) {
+          response = altResponse;
+        }
+      }
+
+      // Fallback 2: if still 400 and has gid, try gid=0
+      if (!response.ok && response.status === 400 && fetchUrl.includes('gid=')) {
+        const zeroGidUrl = fetchUrl.replace(/gid=\d+/, 'gid=0');
+        console.log(`[proxy-sheet] 400 on gid, trying fallback gid=0: ${zeroGidUrl}`);
+        const zeroResponse = await fetch(zeroGidUrl);
+        if (zeroResponse.ok) {
+          response = zeroResponse;
+        }
+      }
+
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: `Google Sheet fetch failed: HTTP ${response.status} ${response.statusText}`,
+          status: response.status
+        });
+      }
+
+      const text = await response.text();
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.send(text);
+    } catch (err: any) {
+      console.error('Error in /api/proxy-sheet:', err);
+      res.status(500).json({ error: err.message || 'Internal proxy error' });
+    }
+  });
+
   app.post("/api/sync-google-sheet", async (req, res) => {
     try {
       const { webhookUrl, updates, action } = req.body;

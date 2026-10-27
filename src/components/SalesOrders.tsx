@@ -143,11 +143,21 @@ const VARIETY_NAMES_AR: Record<string, string> = {
 function convertToCsvUrl(inputUrl: string): string {
   const trimmed = inputUrl.trim();
   if (!trimmed) return '';
+  if (trimmed.includes('/spreadsheets/d/e/export') || trimmed.includes('/spreadsheets/d/e?')) {
+    return '';
+  }
   if (trimmed.includes('output=csv') || trimmed.includes('format=csv')) {
     return trimmed;
   }
+  const pubMatch = trimmed.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
+  if (pubMatch && pubMatch[1]) {
+    const pubId = pubMatch[1];
+    const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
+    const gidPart = gidMatch ? `&gid=${gidMatch[1]}&single=true` : '';
+    return `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv${gidPart}`;
+  }
   const idMatch = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (idMatch && idMatch[1]) {
+  if (idMatch && idMatch[1] && idMatch[1] !== 'e') {
     const sheetId = idMatch[1];
     const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
     const gid = gidMatch ? gidMatch[1] : '0';
