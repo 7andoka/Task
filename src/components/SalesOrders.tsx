@@ -578,6 +578,10 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [inputUrl, setInputUrl] = useState(sheetUrl);
 
+  const userRoleStr = String(user?.role || '');
+  const isPurchasingManager = userRoleStr.toLowerCase().includes('purchas') || userRoleStr.includes('مشتريات') || userRoleStr.includes('تسعير') || userRoleStr.toLowerCase().includes('pricing') || (user?.roles && (user.roles as string[]).some(r => String(r).toLowerCase().includes('purchas') || String(r).toLowerCase().includes('مشتريات') || String(r).toLowerCase().includes('تسعير')));
+  const canSeePrice = isAdmin || isPurchasingManager;
+
   // Data & Loading States
   const [data, setData] = useState<SalesOrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1391,8 +1395,10 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
         itemName: editingRecord.itemName,
         itemCode: editingRecord.itemCode,
         quantityKg: Number(editingRecord.quantityKg) || 0,
-        unitPrice: Number(editingRecord.unitPrice) || 0,
-        totalAmount: (Number(editingRecord.quantityKg) || 0) * (Number(editingRecord.unitPrice) || 0),
+        ...(canSeePrice ? {
+          unitPrice: Number(editingRecord.unitPrice) || 0,
+          totalAmount: (Number(editingRecord.quantityKg) || 0) * (Number(editingRecord.unitPrice) || 0)
+        } : {}),
         store: editingRecord.store || '',
         status: editingRecord.status || '',
         notes: editingRecord.notes || '',
@@ -1533,7 +1539,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
             }`}
           >
             <BarChart3 className="w-4 h-4" />
-            <span>{isRtl ? 'الرسوم البيانية والتحليلات' : 'Visual Analytics'}</span>
+            <span>{isRtl ? 'لوحة المؤشرات والتقارير' : 'Dashboard & Reports'}</span>
           </button>
         </div>
 
@@ -2009,8 +2015,12 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                       <th className="p-3 text-right">{isRtl ? 'النوع' : 'Variety'}</th>
                       <th className="p-3 text-center">{isRtl ? 'الكمية (كجم)' : 'Qty (Kg)'}</th>
                       <th className="p-3 text-center">{isRtl ? 'الوزن (طن)' : 'Tons'}</th>
-                      <th className="p-3 text-center">{isRtl ? 'السعر (ج.م)' : 'Price'}</th>
-                      <th className="p-3 text-center">{isRtl ? 'الإجمالي' : 'Total'}</th>
+                      {canSeePrice && (
+                        <>
+                          <th className="p-3 text-center">{isRtl ? 'السعر (ج.م)' : 'Price'}</th>
+                          <th className="p-3 text-center">{isRtl ? 'الإجمالي' : 'Total'}</th>
+                        </>
+                      )}
                       <th className="p-3 text-right">{isRtl ? 'المخزن' : 'Store'}</th>
                       <th className="p-3 text-center">{isRtl ? 'الحالة' : 'Status'}</th>
                       <th className="p-3 text-center w-20">{isRtl ? 'إجراءات' : 'Actions'}</th>
@@ -2291,15 +2301,17 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                               {row.quantityTons.toFixed(2)}
                             </td>
 
-                            {/* Unit Price */}
-                            <td className="p-3 text-center font-mono text-zinc-600 dark:text-zinc-300">
-                              {row.unitPrice ? `${row.unitPrice.toLocaleString()} ${isRtl ? 'ج.م' : 'EGP'}` : '-'}
-                            </td>
-
-                            {/* Total Amount */}
-                            <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                              {row.totalAmount ? `${row.totalAmount.toLocaleString()} ${row.currency || 'ج.م'}` : '-'}
-                            </td>
+                            {/* Unit Price & Total Amount */}
+                            {canSeePrice && (
+                              <>
+                                <td className="p-3 text-center font-mono text-zinc-600 dark:text-zinc-300">
+                                  {row.unitPrice ? `${row.unitPrice.toLocaleString()} ${isRtl ? 'ج.م' : 'EGP'}` : '-'}
+                                </td>
+                                <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  {row.totalAmount ? `${row.totalAmount.toLocaleString()} ${row.currency || 'ج.م'}` : '-'}
+                                </td>
+                              </>
+                            )}
 
                             {/* Store */}
                             <td className="p-3 text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
@@ -2467,68 +2479,164 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
             </div>
           )}
 
-          {/* TAB 4: Visual Analytics Charts View */}
+          {/* TAB 4: Comprehensive Dashboard & Reports View */}
           {activeView === 'analytics' && (
             <div className="space-y-6">
               
-              {/* Top Customers Bar Chart */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
-                <h3 className="font-black text-sm text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
-                  <BarChart3 size={18} className="text-blue-500" />
-                  <span>{isRtl ? 'أكبر العملاء حسب حجم السحب (بالطن)' : 'Top Customers by Volume (Tons)'}</span>
-                </h3>
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topCustomersChart} margin={{ top: 10, right: 10, left: 10, bottom: 25 }}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                      <XAxis dataKey="name" angle={-15} textAnchor="end" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip 
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const d = payload[0].payload;
-                            return (
-                              <div className="bg-zinc-900 text-white p-3 rounded-xl text-xs shadow-xl space-y-1">
-                                <p className="font-bold">{d.fullName}</p>
-                                <p className="text-blue-400 font-mono">{d.tons} {isRtl ? 'طن' : 'Tons'} ({d.kg.toLocaleString()} kg)</p>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }} 
-                      />
-                      <Bar dataKey="tons" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+              {/* Dashboard Header Banner */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-3xl p-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-right w-full">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 size={22} className="text-blue-200" />
+                    <h2 className="text-lg font-black tracking-tight">
+                      {isRtl ? 'لوحة المؤشرات والتقارير التحليلية لأوامر البيع' : 'Sales Orders Analytics & Executive Dashboard'}
+                    </h2>
+                  </div>
+                  <p className="text-xs text-blue-100 opacity-90">
+                    {isRtl 
+                      ? 'رؤى شاملة ومؤشرات أداء فورية لحركات الصرف، سحب العملاء، وتوزيع الأصناف.' 
+                      : 'Comprehensive insights and instant KPIs for dispatch movements, customer volume, and item distribution.'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="px-4 py-2 bg-white/10 backdrop-blur-md rounded-2xl text-xs font-mono font-bold text-white border border-white/20">
+                    {isRtl ? `إجمالي الحركات: ${filteredData.length}` : `Total Rows: ${filteredData.length}`}
+                  </div>
+                  <div className="px-4 py-2 bg-white/10 backdrop-blur-md rounded-2xl text-xs font-mono font-bold text-white border border-white/20">
+                    {isRtl ? `إجمالي الوزن: ${stats.totalTons.toFixed(2)} طن` : `Total Tons: ${stats.totalTons.toFixed(2)}t`}
+                  </div>
                 </div>
               </div>
 
-              {/* Varieties Distribution Pie Chart */}
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
-                <h3 className="font-black text-sm text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
-                  <PieChartIcon size={18} className="text-purple-500" />
-                  <span>{isRtl ? 'توزيع المبيعات حسب الأصناف والأنواع (طن)' : 'Sales by Variety Distribution (Tons)'}</span>
-                </h3>
-                <div className="h-72 w-full flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={varietyChartData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={95}
-                        paddingAngle={3}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                      >
-                        {varietyChartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+              {/* Two Column Grid for Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Top Customers Bar Chart */}
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
+                  <h3 className="font-black text-sm text-zinc-900 dark:text-white mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 size={18} className="text-blue-500" />
+                      <span>{isRtl ? 'أكبر العملاء حسب حجم السحب (بالطن)' : 'Top Customers by Volume (Tons)'}</span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-600">Top 7</span>
+                  </h3>
+                  <div className="h-72 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={topCustomersChart} margin={{ top: 10, right: 10, left: 10, bottom: 25 }}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                        <XAxis dataKey="name" angle={-15} textAnchor="end" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip 
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const d = payload[0].payload;
+                              return (
+                                <div className="bg-zinc-900 text-white p-3 rounded-xl text-xs shadow-xl space-y-1">
+                                  <p className="font-bold">{d.fullName}</p>
+                                  <p className="text-blue-400 font-mono">{d.tons} {isRtl ? 'طن' : 'Tons'} ({d.kg.toLocaleString()} kg)</p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }} 
+                        />
+                        <Bar dataKey="tons" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Varieties Distribution Pie Chart */}
+                <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm">
+                  <h3 className="font-black text-sm text-zinc-900 dark:text-white mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <PieChartIcon size={18} className="text-purple-500" />
+                      <span>{isRtl ? 'توزيع المبيعات حسب الأصناف والأنواع (طن)' : 'Sales by Variety Distribution (Tons)'}</span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-600">Share %</span>
+                  </h3>
+                  <div className="h-72 w-full flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={varietyChartData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={95}
+                          paddingAngle={3}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        >
+                          {varietyChartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Top Items Summary Report Table in Dashboard */}
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <Boxes size={18} className="text-emerald-500" />
+                    <h3 className="font-black text-sm text-zinc-900 dark:text-white">
+                      {isRtl ? 'تقرير أبرز الأصناف المنصرفة (أعلى سحب)' : 'Top Items Performance Report'}
+                    </h3>
+                  </div>
+                  <span className="text-xs text-zinc-400 font-mono">
+                    {itemsSummary.length} {isRtl ? 'صنف إجمالي' : 'Total Items'}
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-zinc-50 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 font-black">
+                        <th className="p-3 text-center w-12">#</th>
+                        <th className="p-3 text-right">{isRtl ? 'اسم الصنف' : 'Item Name'}</th>
+                        <th className="p-3 text-right">{isRtl ? 'النوع' : 'Variety'}</th>
+                        <th className="p-3 text-center">{isRtl ? 'عدد الحركات' : 'Movements'}</th>
+                        <th className="p-3 text-center">{isRtl ? 'الوزن (طن)' : 'Weight (Tons)'}</th>
+                        <th className="p-3 text-center">{isRtl ? 'الوزن (كجم)' : 'Weight (Kg)'}</th>
+                        {canSeePrice && (
+                          <th className="p-3 text-center">{isRtl ? 'الإجمالي' : 'Total Revenue'}</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                      {itemsSummary.slice(0, 5).map((item, idx) => (
+                        <tr key={idx} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                          <td className="p-3 text-center text-zinc-400 font-mono text-[11px]">{idx + 1}</td>
+                          <td className="p-3 font-bold text-zinc-900 dark:text-white">{item.itemName}</td>
+                          <td className="p-3">
+                            <span 
+                              className="px-2 py-0.5 rounded-lg text-[10px] font-bold"
+                              style={{
+                                backgroundColor: `${VARIETY_COLORS[item.variety || 'Other']}20`,
+                                color: VARIETY_COLORS[item.variety || 'Other']
+                              }}
+                            >
+                              {isRtl ? (VARIETY_NAMES_AR[item.variety || 'Other'] || item.variety) : item.variety}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center font-bold text-zinc-600 dark:text-zinc-300 font-mono">{item.count}</td>
+                          <td className="p-3 text-center font-black text-emerald-600 dark:text-emerald-400 font-mono">{item.totalTons.toFixed(2)}</td>
+                          <td className="p-3 text-center font-medium font-mono text-zinc-700 dark:text-zinc-300">{item.totalKg.toLocaleString()}</td>
+                          {canSeePrice && (
+                            <td className="p-3 text-center font-bold text-blue-600 dark:text-blue-400 font-mono">
+                              {item.totalAmount ? `${item.totalAmount.toLocaleString()} ج.م` : '-'}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
@@ -2669,16 +2777,20 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                   <span className="text-[10px] text-zinc-400 font-bold block">{isRtl ? 'الوزن (طن)' : 'Weight (Tons)'}</span>
                   <span className="font-black text-blue-600 font-mono text-sm">{selectedRecord.quantityTons.toFixed(2)}</span>
                 </div>
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl space-y-0.5">
-                  <span className="text-[10px] text-zinc-400 font-bold block">{isRtl ? 'سعر الوحدة' : 'Unit Price'}</span>
-                  <span className="font-bold font-mono">{selectedRecord.unitPrice ? `${selectedRecord.unitPrice} ${selectedRecord.currency}` : '-'}</span>
-                </div>
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl space-y-0.5">
-                  <span className="text-[10px] text-zinc-400 font-bold block">{isRtl ? 'إجمالي القيمة' : 'Total Value'}</span>
-                  <span className="font-black font-mono text-emerald-600 text-sm">
-                    {selectedRecord.totalAmount ? `${selectedRecord.totalAmount.toLocaleString()} ${selectedRecord.currency}` : '-'}
-                  </span>
-                </div>
+                {canSeePrice && (
+                  <>
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl space-y-0.5">
+                      <span className="text-[10px] text-zinc-400 font-bold block">{isRtl ? 'سعر الوحدة' : 'Unit Price'}</span>
+                      <span className="font-bold font-mono">{selectedRecord.unitPrice ? `${selectedRecord.unitPrice} ${selectedRecord.currency}` : '-'}</span>
+                    </div>
+                    <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl space-y-0.5">
+                      <span className="text-[10px] text-zinc-400 font-bold block">{isRtl ? 'إجمالي القيمة' : 'Total Value'}</span>
+                      <span className="font-black font-mono text-emerald-600 text-sm">
+                        {selectedRecord.totalAmount ? `${selectedRecord.totalAmount.toLocaleString()} ${selectedRecord.currency}` : '-'}
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl space-y-0.5">
                   <span className="text-[10px] text-zinc-400 font-bold block">{isRtl ? 'المخزن' : 'Store'}</span>
                   <span className="font-medium text-zinc-700 dark:text-zinc-300">{selectedRecord.store || '-'}</span>
@@ -2805,15 +2917,17 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                       className="w-full p-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono"
                     />
                   </div>
-                  <div>
-                    <label className="font-bold text-zinc-500 block mb-1">{isRtl ? 'السعر (ج.م)' : 'Price'}</label>
-                    <input
-                      type="number"
-                      value={editingRecord.unitPrice || 0}
-                      onChange={(e) => setEditingRecord({ ...editingRecord, unitPrice: parseFloat(e.target.value) || 0 })}
-                      className="w-full p-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono"
-                    />
-                  </div>
+                  {canSeePrice && (
+                    <div>
+                      <label className="font-bold text-zinc-500 block mb-1">{isRtl ? 'السعر (ج.م)' : 'Price'}</label>
+                      <input
+                        type="number"
+                        value={editingRecord.unitPrice || 0}
+                        onChange={(e) => setEditingRecord({ ...editingRecord, unitPrice: parseFloat(e.target.value) || 0 })}
+                        className="w-full p-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="font-bold text-zinc-500 block mb-1">{isRtl ? 'المخزن' : 'Store'}</label>
