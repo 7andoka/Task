@@ -489,8 +489,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   };
 
   // Helper to detect season from batch code
-  // Batch must be EXACTLY "2026" OR end with letter "B" (case-insensitive) to be merged into "2026".
-  // Otherwise, it is classified as "unspecified" ("غير محدد").
+  // When batch is exactly "2026" (no letters before or after) OR ends with letter "B" (case-insensitive) -> 2026.
+  // Otherwise -> unspecified ("غير محدد").
   const detectSeason = (batchVal: string): string => {
     if (!batchVal) return 'unspecified';
     const trimmed = batchVal.trim();
@@ -575,7 +575,11 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
 
   const getSeasonLabel = (id: string) => {
     if (id === '2026') return isRtl ? 'موسم 2026' : 'Season 2026';
-    return isRtl ? 'غير محدد' : 'Unspecified';
+    if (id === '2025') return isRtl ? 'موسم 2025' : 'Season 2025';
+    if (id === '2024') return isRtl ? 'موسم 2024' : 'Season 2024';
+    if (id === '2023') return isRtl ? 'موسم 2023' : 'Season 2023';
+    if (id === 'unspecified') return isRtl ? 'غير محدد' : 'Unspecified';
+    return isRtl ? `موسم ${id}` : `Season ${id}`;
   };
 
   const getAttributeLabel = (id: string, type: 'size' | 'process' | 'direction') => {
@@ -1151,8 +1155,19 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
   }, [dataset]);
 
   const availableSeasons = useMemo(() => {
-    return ['2026', 'unspecified'];
-  }, []);
+    const set = new Set<string>();
+    set.add('2026');
+    set.add('unspecified');
+    dataset.forEach(row => {
+      row.rawRows.forEach(r => {
+        if (r.season) set.add(r.season);
+      });
+      row.seasons.forEach(s => {
+        if (s) set.add(s);
+      });
+    });
+    return Array.from(set).sort().reverse();
+  }, [dataset]);
 
   const visibleLocations = useMemo(() => {
     if (selectedLocations.length === 0) {
@@ -1535,7 +1550,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
               <Database size={24} />
             </span>
             <h1 className="text-xl font-bold font-serif tracking-tight text-zinc-900 dark:text-zinc-50">
-              {isRtl ? 'رصيد الزيتون المتاح' : 'Olive Stock Balance'}
+              {isRtl ? 'الرصيد' : 'Balance'}
             </h1>
             
             <div className="flex flex-wrap items-center gap-2">
@@ -1940,6 +1955,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                       onClick={(data) => {
                         const item = data.payload || data;
                         setDrillDown(prev => prev?.id === item.id ? null : { type: 'analysis', id: item.id, label: item.name });
+                        setSelectedAnalyses(prev => prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]);
                       }}
                       className="cursor-pointer"
                     >
@@ -1982,7 +1998,10 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 {analysisChartData.map((item) => (
                   <button 
                     key={item.id} 
-                    onClick={() => setDrillDown(prev => prev?.id === item.id ? null : { type: 'analysis', id: item.id, label: item.name })}
+                    onClick={() => {
+                      setDrillDown(prev => prev?.id === item.id ? null : { type: 'analysis', id: item.id, label: item.name });
+                      setSelectedAnalyses(prev => prev.includes(item.id) ? prev.filter(x => x !== item.id) : [...prev, item.id]);
+                    }}
                     className={`w-full flex flex-col group py-1.5 border-b border-zinc-100 dark:border-zinc-800/50 last:border-0 text-right transition-colors rounded-lg px-2 ${drillDown?.id === item.id ? 'bg-zinc-50 dark:bg-zinc-800/40' : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-800/20'}`}
                   >
                     <div className="flex items-center justify-between mb-1">

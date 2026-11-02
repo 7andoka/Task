@@ -79,6 +79,7 @@ export const CATEGORIES = {
     { id: 'PTD', labelAr: 'مخلي', labelEn: 'PTD', aliases: ['ptd', 'pitted', 'مخلي', 'مخلى', 'مخلي من النوي'] },
     { id: 'SLC', labelAr: 'شرائح', labelEn: 'SLC', aliases: ['slc', 'slice', 'slices', 'شرائح', 'شرايح', 'سلايس', 'شريحة'] },
     { id: 'Pre', labelAr: 'خام', labelEn: 'Pre', aliases: ['pre', 'raw', 'preparation', 'خام', 'تجهيز', 'خامات'] },
+    { id: 'Fresh', labelAr: 'الفريش (فريش وزيت)', labelEn: 'Fresh & Oil', aliases: ['fresh', 'فريش', 'طازج', 'oil', 'زيت', 'زيوت', 'عصر'] },
     { id: 'Oil', labelAr: 'زيت', labelEn: 'Oil', aliases: ['oil', 'زيت', 'زيوت', 'عصر'] },
     { id: 'FARZA', labelAr: 'فرزه', labelEn: 'Farza', aliases: ['reject', 'bi products', 'فرزة', 'فرزة زيت', 'فرزه زيت', 'farza'] },
   ],
@@ -183,15 +184,19 @@ export const detectProcessFromName = (name: string): string => {
     return 'Pre';
   }
 
-  // 5. Oil -> زيت
+  // 5. Fresh -> فريش وزيت
   if (
+    words.includes('fresh') ||
+    clean.includes('fresh') ||
+    clean.includes('فريش') ||
+    clean.includes('طازج') ||
     words.includes('oil') ||
     clean.includes('oil') ||
     clean.includes('زيت') ||
     clean.includes('زيوت') ||
     clean.includes('عصر')
   ) {
-    return 'Oil';
+    return 'Fresh';
   }
 
   // 6. FARZA -> فرزة
@@ -615,6 +620,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
     if (!op) return '';
     if (op === 'Grading') return lang === 'ar' ? 'تدريج' : 'Grading';
     if (op === 'PittingAndSlicing') return lang === 'ar' ? 'خلي وشرائح' : 'Pitting & Slicing';
+    if (op === 'Pressing') return lang === 'ar' ? 'عصر' : 'Pressing';
     if (op === 'Other') return lang === 'ar' ? 'أخرى' : 'Other';
     return op;
   };
@@ -936,6 +942,20 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
           normName.includes('عصر')
         );
 
+        const checkFresh = () => (
+          effectiveProc === 'Fresh' ||
+          effectiveProc === 'Oil' ||
+          nameWords.includes('fresh') ||
+          normName.includes('fresh') ||
+          normName.includes('فريش') ||
+          normName.includes('طازج') ||
+          nameWords.includes('oil') ||
+          normName.includes('oil') ||
+          normName.includes('زيت') ||
+          normName.includes('زيوت') ||
+          normName.includes('عصر')
+        );
+
         const checkFarza = () => (
           effectiveProc === 'FARZA' ||
           nameWords.includes('farza') ||
@@ -949,6 +969,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
         if (filtInfo.id === 'PTD') return checkPtd();
         if (filtInfo.id === 'SLC') return checkSlc();
         if (filtInfo.id === 'Pre') return checkPre();
+        if (filtInfo.id === 'Fresh') return checkFresh();
         if (filtInfo.id === 'Oil') return checkOil();
         if (filtInfo.id === 'FARZA') return checkFarza();
       }
@@ -4743,6 +4764,7 @@ export default function ThirdPartyProcessing({ lang, user }: ThirdPartyProcessin
                   <option value="">{lang === 'ar' ? '-- اختر عملية التشغيل --' : '-- Select Operation --'}</option>
                   <option value="Grading">{lang === 'ar' ? 'تدريج' : 'Grading'}</option>
                   <option value="PittingAndSlicing">{lang === 'ar' ? 'خلي وشرائح' : 'Pitting & Slicing'}</option>
+                  <option value="Pressing">{lang === 'ar' ? 'عصر' : 'Pressing'}</option>
                   <option value="Other">{lang === 'ar' ? 'أخرى' : 'Other'}</option>
                 </select>
               </div>

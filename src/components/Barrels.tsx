@@ -15,7 +15,7 @@ import {
   Calendar, 
   Truck, 
   TrendingUp, 
-  TrendingDown,
+  TrendingDown, 
   User, 
   Users, 
   ExternalLink, 
@@ -24,20 +24,23 @@ import {
   Boxes, 
   Info, 
   CheckCircle2, 
-  Link as LinkIcon,
-  ArrowUpDown,
-  History,
-  Scale,
-  FileText,
-  AlertCircle,
-  Check
+  Link as LinkIcon, 
+  ArrowUpDown, 
+  History, 
+  Scale, 
+  FileText, 
+  AlertCircle, 
+  Check,
+  BarChart3,
+  Ban,
+  GitMerge
 } from 'lucide-react';
 import { Language, UserProfile } from '../types';
 import { toast } from 'sonner';
 import { 
   subscribeToSharedSheetUrl, 
   saveSharedSheetUrl, 
-  convertToCsvUrl,
+  convertToCsvUrl, 
   SheetMetadata 
 } from '../utils/sharedSheetConfig';
 import { normalizeArabicSearch, matchesArabicSearch } from '../utils/arabic';
@@ -50,15 +53,12 @@ export const DEFAULT_BARRELS_SHEET_URL = "";
 export function isInvalidBarrelsPlaceholder(url?: string | null): boolean {
   if (!url || !url.trim()) return true;
   const clean = url.trim();
-  // Any corrupted URL matching the /d/e/export bug or /d/e?
   if (clean.includes('/spreadsheets/d/e/export') || clean.includes('/spreadsheets/d/e?')) {
     return true;
   }
-  // Any broken placeholder pointing to olive stock spreadsheet with gid=0 or invalid gid
   if (clean.includes('2PACX-1vTOGkYpf6hSa20PDIE2BxZ0ClH7vXd9aA7yrAOxO4nN-afVgi8RdqY8EDbzD_hRHR9A8kYr34RRndv3') && (clean.includes('gid=0') || clean.includes('gid=527869852'))) {
     return true;
   }
-  // Needs to be a valid HTTP URL
   if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
     return true;
   }
@@ -73,28 +73,28 @@ export interface BarrelMovementRecord {
   id: string;
   rowNumber: number;
   date: string;
-  store?: string;        // المخزن (GPS / richland ...)
+  store?: string;
   customerName: string;
   movementType: 'صرف' | 'إضافة' | string;
-  dispatchedQty: number; // كمية الصرف
-  addedQty: number;      // كمية الإضافة
-  quantity: number;      // كمية الحركة
-  balance?: number;      // الرصيد
-  barrelType: string;    // نوع البرميل
-  docNumber: string;     // رقم الإذن
-  driverName: string;    // السائق
-  carNumber: string;     // رقم السيارة
-  notes: string;         // ملاحظات
+  dispatchedQty: number;
+  addedQty: number;
+  quantity: number;
+  balance?: number;
+  barrelType: string;
+  docNumber: string;
+  driverName: string;
+  carNumber: string;
+  notes: string;
   rawRow: Record<string, any>;
 }
 
 export interface CustomerBalanceSummary {
   customerName: string;
-  totalDispatched: number; // إجمالي المنصرف (صرف)
-  totalAdded: number;      // إجمالي المضاف (إضافة / مرتجع)
-  netBalance: number;      // الرصيد الحالي = الصرف - الإضافة (المتبقي لدى العميل)
-  movementsCount: number;  // عدد الحركات
-  lastDate: string;        // تاريخ آخر حركة
+  totalDispatched: number;
+  totalAdded: number;
+  netBalance: number;
+  movementsCount: number;
+  lastDate: string;
   barrelTypesSummary: Record<string, { dispatched: number; added: number; balance: number }>;
 }
 
@@ -129,8 +129,64 @@ export default function Barrels({ lang, user }: BarrelsProps) {
   const [newUrlInput, setNewUrlInput] = useState('');
   const [savingUrl, setSavingUrl] = useState(false);
 
-  // Active View Tab: 'movements' | 'customers'
+  // Excluded Customers
+  const [excludedCustomers, setExcludedCustomers] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('barrels_excluded_customers');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isExcludedModalOpen, setIsExcludedModalOpen] = useState(false);
+  const [customerToAdd, setCustomerToAdd] = useState('');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('barrels_excluded_customers', JSON.stringify(excludedCustomers));
+    } catch (e) {}
+  }, [excludedCustomers]);
+
+  // Active View Tab: 'customers' | 'movements'
   const [activeSubTab, setActiveSubTab] = useState<'customers' | 'movements'>('customers');
+
+  // Customer Merges (alias -> master)
+  const [customerMerges, setCustomerMerges] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('barrels_customer_merges');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [mergeMasterCustomer, setMergeMasterCustomer] = useState('');
+  const [customersToMerge, setCustomersToMerge] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('barrels_customer_merges', JSON.stringify(customerMerges));
+    } catch (e) {}
+  }, [customerMerges]);
+
+  const getCanonicalCustomer = (name: string): string => {
+    if (!name) return name;
+    const trimmed = name.trim();
+    let current = trimmed;
+    let depth = 0;
+    while (customerMerges[current] && depth < 5) {
+      current = customerMerges[current];
+      depth++;
+    }
+    return current;
+  };
+
+  const canonicalData = useMemo(() => {
+    return data.map(m => ({
+      ...m,
+      customerName: getCanonicalCustomer(m.customerName)
+    }));
+  }, [data, customerMerges]);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -242,35 +298,28 @@ export default function Barrels({ lang, user }: BarrelsProps) {
 
       let csvText = '';
 
-      // Try internal proxy first to avoid CORS issues
       try {
         const baseUrl = window.location.origin ? window.location.origin.replace(/\/$/, '') : '';
         const proxyUrl = `${baseUrl}/api/proxy-sheet?url=${encodeURIComponent(csvUrl)}&t=${Date.now()}`;
         const proxyResp = await fetch(proxyUrl);
         if (proxyResp.ok) {
           csvText = await proxyResp.text();
-        } else {
-          console.warn(`Proxy fetch returned status ${proxyResp.status}`);
         }
       } catch (proxyErr) {
         console.warn('Proxy fetch failed, falling back to direct fetch', proxyErr);
       }
 
-      // Direct fallback
       if (!csvText) {
         try {
           const directResp = await fetch(`${csvUrl}${csvUrl.includes('?') ? '&' : '?'}t=${Date.now()}`);
           if (directResp.ok) {
             csvText = await directResp.text();
-          } else {
-            console.warn(`Direct fetch returned status ${directResp.status}`);
           }
         } catch (directErr) {
           console.warn('Direct fetch attempt failed:', directErr);
         }
       }
 
-      // Fallback without single=true if applicable
       if (!csvText && csvUrl.includes('&single=true')) {
         try {
           const altUrl = csvUrl.replace('&single=true', '');
@@ -284,7 +333,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       }
 
       if (csvText && csvText.trim()) {
-        // Parse with PapaParse
         Papa.parse(csvText, {
           header: true,
           skipEmptyLines: true,
@@ -335,11 +383,8 @@ export default function Barrels({ lang, user }: BarrelsProps) {
         return;
       }
 
-      // If we reach here, neither proxy nor direct fetch succeeded
-      console.warn("Could not fetch barrels sheet data from URL:", csvUrl);
       if (data.length === 0) {
-        const demoData = generateDemoBarrelData();
-        setData(demoData);
+        setData(generateDemoBarrelData());
       }
       if (isManualRefresh && toastId) {
         toast.warning(isRtl ? 'تعذر الاتصال بشيت جوجل. تم الإبقاء على البيانات المخزنة.' : 'Failed to reach Google Sheet. Kept cached data.', { id: toastId });
@@ -347,8 +392,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     } catch (err: any) {
       console.warn("Fetch barrels sheet warning:", err);
       if (data.length === 0) {
-        const demoData = generateDemoBarrelData();
-        setData(demoData);
+        setData(generateDemoBarrelData());
       }
       if (isManualRefresh && toastId) {
         toast.warning(isRtl ? 'تعذر الاتصال بشيت جوجل. يرجى التحقق من الرابط.' : 'Failed to reach Google Sheet.', { id: toastId });
@@ -381,7 +425,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     }
   }, [sheetUrl]);
 
-  // Helper to normalize dates into YYYY-MM-DD
   const normalizeDate = (raw: string): string => {
     if (!raw) return '';
     const trimmed = raw.trim();
@@ -398,12 +441,10 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     return trimmed;
   };
 
-  // Intelligent column header mapper
   const parseBarrelRows = (rows: Record<string, any>[]): BarrelMovementRecord[] => {
     if (!rows || rows.length === 0) return [];
 
     return rows.map((row, index) => {
-      // Find keys ignoring case, spaces, and Arabic diacritics
       const keys = Object.keys(row);
       const findKey = (...synonyms: string[]) => {
         return keys.find(k => {
@@ -434,8 +475,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       const rawDate = dateKey && row[dateKey] ? normalizeDate(String(row[dateKey]).trim()) : '';
       const rawStore = storeKey && row[storeKey] ? String(row[storeKey]).trim() : '';
 
-      // Smart Customer Name Extraction:
-      // Handles shifted columns where customer was entered in "تسوية" or supplier is "عدد" or empty
       const directCustomer = customerKey && row[customerKey] ? String(row[customerKey]).trim() : '';
       const tasweyaVal = tasweyaKey && row[tasweyaKey] ? String(row[tasweyaKey]).trim() : '';
       let rawCustomer = directCustomer;
@@ -450,7 +489,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
         rawCustomer = isRtl ? 'عميل غير محدد' : 'Unspecified Customer';
       }
 
-      // Smart Barrel Type Extraction:
       const directBarrelType = barrelTypeKey && row[barrelTypeKey] ? String(row[barrelTypeKey]).trim() : '';
       const itemVal = itemKey && row[itemKey] ? String(row[itemKey]).trim() : '';
       const unitVal = unitKey && row[unitKey] ? String(row[unitKey]).trim() : '';
@@ -535,13 +573,9 @@ export default function Barrels({ lang, user }: BarrelsProps) {
         notes: notesKey && row[notesKey] ? String(row[notesKey]).trim() : '',
         rawRow: row
       };
-    }).filter(r => {
-      // Keep all rows with actual movements or positive quantities
-      return (r.dispatchedQty > 0 || r.addedQty > 0 || r.quantity > 0);
-    });
+    }).filter(r => (r.dispatchedQty > 0 || r.addedQty > 0 || r.quantity > 0));
   };
 
-  // Generate realistic demo data if sheet is empty or inaccessible
   const generateDemoBarrelData = (): BarrelMovementRecord[] => {
     const demoCustomers = [
       'مخللات الأمانة',
@@ -563,7 +597,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       d.setDate(d.getDate() - Math.floor(i / 2));
       const dateStr = d.toISOString().slice(0, 10);
       const customer = demoCustomers[i % demoCustomers.length];
-      const isDispatch = i % 3 !== 0; // 2 out of 3 are dispatch
+      const isDispatch = i % 3 !== 0;
       const qty = Math.floor(Math.random() * 80) + 10;
       const bType = demoBarrelTypes[i % demoBarrelTypes.length];
       const driver = demoDrivers[i % demoDrivers.length];
@@ -589,7 +623,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     return records;
   };
 
-  // Handle saving new Google Sheet URL
   const handleSaveUrl = async () => {
     const raw = newUrlInput.trim();
     if (!raw) {
@@ -623,7 +656,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     }
   };
 
-  // Handle clearing / resetting the Google Sheet URL
   const handleClearUrl = async () => {
     setSavingUrl(true);
     try {
@@ -642,7 +674,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     }
   };
 
-  // Compute Customer Balances Summaries (رصيد العملاء: صرف - إضافة - رصيد)
+  // Compute Customer Balances Summaries
   const customerSummaries = useMemo<CustomerBalanceSummary[]>(() => {
     const map = new Map<string, {
       dispatched: number;
@@ -652,12 +684,12 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       types: Record<string, { dispatched: number; added: number; balance: number }>;
     }>();
 
-    data.forEach(m => {
+    canonicalData.forEach(m => {
+      const name = m.customerName.trim();
+      if (excludedCustomers.includes(name)) return;
       if (selectedStores.length > 0 && m.store && !selectedStores.includes(m.store)) return;
       if (selectedDates.length > 0 && m.date && !selectedDates.includes(m.date)) return;
       if (selectedCustomers.length > 0 && !selectedCustomers.includes(m.customerName)) return;
-
-      const name = m.customerName.trim();
       if (!map.has(name)) {
         map.set(name, {
           dispatched: 0,
@@ -685,7 +717,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
 
     const summaries: CustomerBalanceSummary[] = [];
     map.forEach((val, customerName) => {
-      // Net Balance = Total Dispatched - Total Added (Remaining with customer)
       const netBalance = val.dispatched - val.added;
       const sortedDates = [...val.dates].sort().reverse();
       const lastDate = sortedDates[0] || '—';
@@ -701,18 +732,19 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       });
     });
 
-    // Default sort by net balance descending (highest outstanding barrels first)
     return summaries.sort((a, b) => b.netBalance - a.netBalance);
-  }, [data, selectedStores, selectedDates, selectedCustomers]);
+  }, [canonicalData, selectedStores, selectedDates, selectedCustomers, excludedCustomers]);
 
-  // Overall KPI Statistics (إجمالي الحركات)
+  // Overall KPI Statistics
   const totalStats = useMemo(() => {
     let totalDispatched = 0;
     let totalAdded = 0;
     let dispatchMovements = 0;
     let addMovements = 0;
 
-    data.forEach(m => {
+    canonicalData.forEach(m => {
+      const name = m.customerName.trim();
+      if (excludedCustomers.includes(name)) return;
       if (selectedStores.length > 0 && m.store && !selectedStores.includes(m.store)) return;
       if (selectedDates.length > 0 && m.date && !selectedDates.includes(m.date)) return;
       if (selectedCustomers.length > 0 && !selectedCustomers.includes(m.customerName)) return;
@@ -736,28 +768,28 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       totalTransactions,
       uniqueCustomersCount
     };
-  }, [data, customerSummaries, selectedStores, selectedDates, selectedCustomers]);
+  }, [canonicalData, customerSummaries, selectedStores, selectedDates, selectedCustomers, excludedCustomers]);
 
   // Distinct lists for dropdowns
   const uniqueCustomersList = useMemo(() => {
-    return Array.from(new Set(data.map(d => d.customerName))).filter(Boolean).sort();
-  }, [data]);
+    return Array.from(new Set(canonicalData.map(d => d.customerName))).filter(Boolean).sort();
+  }, [canonicalData]);
 
   const uniqueBarrelTypesList = useMemo(() => {
-    return Array.from(new Set(data.map(d => d.barrelType))).filter(Boolean).sort();
-  }, [data]);
+    return Array.from(new Set(canonicalData.map(d => d.barrelType))).filter(Boolean).sort();
+  }, [canonicalData]);
 
   const uniqueStoresList = useMemo(() => {
-    return Array.from(new Set(data.map(d => d.store).filter(Boolean))) as string[];
-  }, [data]);
+    return Array.from(new Set(canonicalData.map(d => d.store).filter(Boolean))) as string[];
+  }, [canonicalData]);
 
   const uniqueDatesList = useMemo(() => {
-    return Array.from(new Set(data.map(d => d.date).filter(Boolean))).sort().reverse();
-  }, [data]);
+    return Array.from(new Set(canonicalData.map(d => d.date).filter(Boolean))).sort().reverse();
+  }, [canonicalData]);
 
   const uniqueMovementTypesList = ['صرف', 'إضافة'];
 
-  // Filtered Customer Summaries (for the Customers tab)
+  // Filtered Customer Summaries
   const filteredCustomerSummaries = useMemo(() => {
     return customerSummaries.filter(c => {
       const matchSearch = !searchTerm.trim() || 
@@ -774,16 +806,18 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     });
   }, [customerSummaries, searchTerm, balanceFilter]);
 
-  // Filtered Detailed Movements Log (for the Movements tab)
+  // Filtered Detailed Movements Log
   const filteredMovements = useMemo(() => {
-    return data.filter(m => {
+    return canonicalData.filter(m => {
+      const name = m.customerName.trim();
+      if (excludedCustomers.includes(name)) return false;
       const matchSearch = !searchTerm.trim() || 
         matchesArabicSearch(m.customerName, searchTerm) || 
         matchesArabicSearch(m.docNumber, searchTerm) || 
         matchesArabicSearch(m.driverName, searchTerm) || 
         matchesArabicSearch(m.carNumber, searchTerm) || 
-        matchesArabicSearch(m.notes, searchTerm) ||
-        (m.store && matchesArabicSearch(m.store, searchTerm)) ||
+        matchesArabicSearch(m.notes, searchTerm) || 
+        (m.store && matchesArabicSearch(m.store, searchTerm)) || 
         m.customerName.toLowerCase().includes(searchTerm.toLowerCase());
 
       if (!matchSearch) return false;
@@ -813,7 +847,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       }
       return 0;
     });
-  }, [data, searchTerm, selectedCustomers, selectedMovementTypes, selectedBarrelTypes, selectedStores, selectedDates, dateFrom, dateTo, sortField, sortDirection]);
+  }, [canonicalData, searchTerm, selectedCustomers, selectedMovementTypes, selectedBarrelTypes, selectedStores, selectedDates, dateFrom, dateTo, sortField, sortDirection, excludedCustomers]);
 
   // Paginated movements
   const paginatedMovements = useMemo(() => {
@@ -826,10 +860,10 @@ export default function Barrels({ lang, user }: BarrelsProps) {
   // Statement for selected customer modal
   const customerStatementMovements = useMemo(() => {
     if (!statementCustomer) return [];
-    return data
+    return canonicalData
       .filter(m => m.customerName === statementCustomer)
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-  }, [data, statementCustomer]);
+  }, [canonicalData, statementCustomer]);
 
   const customerStatementTotals = useMemo(() => {
     if (!statementCustomer) return { dispatched: 0, added: 0, balance: 0 };
@@ -900,7 +934,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     toast.success(isRtl ? 'تم تصدير سجل حركات البراميل بنجاح' : 'Movements exported successfully');
   };
 
-  // Export Customer Statement to Excel
   const handleExportCustomerStatement = () => {
     if (!statementCustomer || customerStatementMovements.length === 0) {
       toast.error(isRtl ? 'لا توجد بيانات لتصديرها' : 'No data to export');
@@ -925,7 +958,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
     toast.success(isRtl ? 'تم تصدير كشف حساب العميل بنجاح' : 'Customer statement exported successfully');
   };
 
-  // Print Customer Statement
   const handlePrintCustomerStatement = () => {
     window.print();
   };
@@ -967,7 +999,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Refresh Button */}
           <button
             onClick={() => fetchData(undefined, true)}
             disabled={refreshing || loading}
@@ -978,7 +1009,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
             <span>{isRtl ? 'تحديث' : 'Refresh'}</span>
           </button>
 
-          {/* Export Button */}
           <button
             onClick={activeSubTab === 'customers' ? handleExportCustomerBalances : handleExportMovements}
             className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-sm shadow-emerald-600/20 cursor-pointer"
@@ -987,14 +1017,39 @@ export default function Barrels({ lang, user }: BarrelsProps) {
             <span>{isRtl ? 'تصدير إكسل' : 'Export Excel'}</span>
           </button>
 
-          {/* Google Sheet URL Config Button */}
           <button
             onClick={() => setIsUrlModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/60 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-bold text-xs transition-all border border-zinc-200/60 dark:border-zinc-700/60 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/60 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-bold text-xs transition-all border border-zinc-200/60 dark:border-zinc-700/60 cursor-pointer"
             title={isRtl ? 'تعديل رابط شيت جوجل' : 'Google Sheet URL'}
           >
             <LinkIcon size={14} className="text-blue-500" />
             <span>{isRtl ? 'رابط الشيت' : 'Sheet URL'}</span>
+          </button>
+
+          <button
+            onClick={() => setIsExcludedModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all border border-zinc-200/60 dark:border-zinc-700/60 cursor-pointer relative"
+          >
+            <Ban size={14} className="text-red-500" />
+            <span>{isRtl ? 'العملاء المستبعدون' : 'Excluded Customers'}</span>
+            {excludedCustomers.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px] font-mono font-black">
+                {excludedCustomers.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setIsMergeModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all border border-zinc-200/60 dark:border-zinc-700/60 cursor-pointer relative"
+          >
+            <GitMerge size={14} className="text-purple-500" />
+            <span>{isRtl ? 'دمج العملاء' : 'Merge Customers'}</span>
+            {Object.keys(customerMerges).length > 0 && (
+              <span className="px-1.5 py-0.2 bg-purple-600 text-white rounded-full text-[10px] font-mono font-black">
+                {Object.keys(customerMerges).length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -1026,9 +1081,8 @@ export default function Barrels({ lang, user }: BarrelsProps) {
         </div>
       )}
 
-      {/* KPI Cards: إجمالي الحركات والأرصدة */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {/* Total Dispatched Card */}
         <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm hover:border-red-500/30 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -1049,7 +1103,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
           </div>
         </div>
 
-        {/* Total Added / Returned Card */}
         <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm hover:border-emerald-500/30 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -1070,7 +1123,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
           </div>
         </div>
 
-        {/* Net Customer Balance (الرصيد المتبقي لدى العملاء) */}
         <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 dark:from-amber-500/15 dark:to-zinc-900 border border-amber-500/30 rounded-3xl shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
@@ -1091,7 +1143,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
           </div>
         </div>
 
-        {/* Total Movements Count Card */}
         <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm hover:border-blue-500/30 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -1111,7 +1162,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
           </div>
         </div>
 
-        {/* Active Customers Count Card */}
         <div className="p-4 bg-white dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/60 rounded-3xl shadow-sm hover:border-purple-500/30 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
@@ -1132,7 +1182,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
         </div>
       </div>
 
-      {/* Main Tabs Navigation: Customers Balances vs Detailed Movements Log */}
+      {/* Main Tabs Navigation */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-3">
         <div className="flex items-center gap-2 p-1.5 bg-zinc-100 dark:bg-zinc-800/60 rounded-2xl w-full sm:w-auto">
           <button
@@ -1172,7 +1222,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
           </button>
         </div>
 
-        {/* View Details Helper */}
         <p className="text-xs text-zinc-400 font-medium">
           {activeSubTab === 'customers' 
             ? (isRtl ? 'اضغط على أي عميل لمشاهدة كشف الحساب وسجل حركاته بالتفصيل' : 'Click on any customer to view full transaction statement')
@@ -1184,7 +1233,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       {/* Filter Bar */}
       <div className="bg-white dark:bg-zinc-900/60 p-4 rounded-3xl border border-zinc-200/70 dark:border-zinc-800/60 flex flex-col gap-3">
         <div className="flex flex-col md:flex-row items-center gap-3">
-          {/* Search Input */}
           <div className="relative flex-1 w-full">
             <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={17} />
             <input
@@ -1201,7 +1249,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
             />
           </div>
 
-          {/* Quick Balance Filter for Customers Tab */}
           {activeSubTab === 'customers' && (
             <div className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/50 p-1 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 shrink-0">
               <button
@@ -1247,7 +1294,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
             </div>
           )}
 
-          {/* Clear Filters Button */}
           {(searchTerm || balanceFilter !== 'all' || selectedCustomers.length > 0 || selectedMovementTypes.length > 0 || selectedBarrelTypes.length > 0 || selectedStores.length > 0 || selectedDates.length > 0 || dateFrom || dateTo) && (
             <button
               onClick={() => {
@@ -1269,7 +1315,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
           )}
         </div>
 
-        {/* Multi-Select Filters Bar */}
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
           <MultiSelectDropdown
             label={isRtl ? 'العملاء' : 'Customers'}
@@ -1322,7 +1367,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                 />
               )}
 
-              {/* Date Range Inputs */}
               <div className="flex items-center gap-2 mr-auto">
                 <span className="text-[11px] font-bold text-zinc-400">{isRtl ? 'من:' : 'From:'}</span>
                 <input
@@ -1353,109 +1397,114 @@ export default function Barrels({ lang, user }: BarrelsProps) {
           </p>
         </div>
       ) : activeSubTab === 'customers' ? (
-        /* TAB 1: CUSTOMER BALANCES TABLE (رصيد العملاء) */
-        <div className="bg-white dark:bg-zinc-900/60 rounded-3xl border border-zinc-200/70 dark:border-zinc-800/60 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users size={18} className="text-amber-500" />
-              <h2 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
-                {isRtl ? 'جدول أرصدة العملاء (صرف - إضافة - رصيد)' : 'Customer Balances Table'}
-              </h2>
-              <span className="text-xs text-zinc-400 font-bold font-mono">
-                ({filteredCustomerSummaries.length} {isRtl ? 'عميل' : 'customers'})
-              </span>
+        /* TAB 1: CUSTOMER BALANCES TABLE & CHARTS */
+        <div className="space-y-6">
+          {/* المخطط البياني لتوزيع أنواع البراميل لدى كبار العملاء */}
+          <TopCustomersBarrelsChart summaries={filteredCustomerSummaries} isRtl={isRtl} />
+
+          {/* جدول أرصدة العملاء */}
+          <div className="bg-white dark:bg-zinc-900/60 rounded-3xl border border-zinc-200/70 dark:border-zinc-800/60 overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users size={18} className="text-amber-500" />
+                <h2 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                  {isRtl ? 'جدول أرصدة العملاء (صرف - إضافة - رصيد)' : 'Customer Balances Table'}
+                </h2>
+                <span className="text-xs text-zinc-400 font-bold font-mono">
+                  ({filteredCustomerSummaries.length} {isRtl ? 'عميل' : 'customers'})
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
-              <thead>
-                <tr className="bg-zinc-50/80 dark:bg-zinc-800/40 text-zinc-400 border-b border-zinc-100 dark:border-zinc-800 font-black uppercase text-[10px] tracking-wider">
-                  <th className="py-3 px-4 text-center">#</th>
-                  <th className="py-3 px-4">{isRtl ? 'اسم العميل' : 'Customer Name'}</th>
-                  <th className="py-3 px-4 text-center">{isRtl ? 'إجمالي الصرف (صادر)' : 'Total Dispatched'}</th>
-                  <th className="py-3 px-4 text-center">{isRtl ? 'إجمالي الإضافة (وارد)' : 'Total Added'}</th>
-                  <th className="py-3 px-4 text-center">{isRtl ? 'صافي الرصيد الحالي' : 'Net Current Balance'}</th>
-                  <th className="py-3 px-4 text-center">{isRtl ? 'عدد الحركات' : 'Movements'}</th>
-                  <th className="py-3 px-4 text-center">{isRtl ? 'تاريخ آخر حركة' : 'Last Movement'}</th>
-                  <th className="py-3 px-4 text-center">{isRtl ? 'الإجراءات' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                {filteredCustomerSummaries.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-zinc-400">
-                      <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-40 text-amber-500" />
-                      <p className="font-bold text-xs">{isRtl ? 'لا توجد بيانات عملاء مطابقة للفلاتر' : 'No customer records matching filters'}</p>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs" dir={isRtl ? 'rtl' : 'ltr'}>
+                <thead>
+                  <tr className="bg-zinc-50/80 dark:bg-zinc-800/40 text-zinc-400 border-b border-zinc-100 dark:border-zinc-800 font-black uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-4 text-center">#</th>
+                    <th className="py-3 px-4">{isRtl ? 'اسم العميل' : 'Customer Name'}</th>
+                    <th className="py-3 px-4 text-center">{isRtl ? 'إجمالي الصرف (صادر)' : 'Total Dispatched'}</th>
+                    <th className="py-3 px-4 text-center">{isRtl ? 'إجمالي الإضافة (وارد)' : 'Total Added'}</th>
+                    <th className="py-3 px-4 text-center">{isRtl ? 'صافي الرصيد الحالي' : 'Net Current Balance'}</th>
+                    <th className="py-3 px-4 text-center">{isRtl ? 'عدد الحركات' : 'Movements'}</th>
+                    <th className="py-3 px-4 text-center">{isRtl ? 'تاريخ آخر حركة' : 'Last Movement'}</th>
+                    <th className="py-3 px-4 text-center">{isRtl ? 'الإجراءات' : 'Actions'}</th>
                   </tr>
-                ) : (
-                  filteredCustomerSummaries.map((c, index) => {
-                    const isPositive = c.netBalance > 0;
-                    const isZero = c.netBalance === 0;
-                    const isNegative = c.netBalance < 0;
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                  {filteredCustomerSummaries.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-zinc-400">
+                        <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-40 text-amber-500" />
+                        <p className="font-bold text-xs">{isRtl ? 'لا توجد بيانات عملاء مطابقة للفلاتر' : 'No customer records matching filters'}</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCustomerSummaries.map((c, index) => {
+                      const isPositive = c.netBalance > 0;
+                      const isZero = c.netBalance === 0;
 
-                    return (
-                      <tr 
-                        key={c.customerName}
-                        className="hover:bg-amber-50/30 dark:hover:bg-amber-950/10 transition-colors group cursor-pointer"
-                        onClick={() => setStatementCustomer(c.customerName)}
-                      >
-                        <td className="py-3 px-4 text-center font-mono text-[11px] text-zinc-400">
-                          {index + 1}
-                        </td>
-                        <td className="py-3 px-4 font-black text-zinc-900 dark:text-zinc-100 text-xs">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-xs shrink-0">
-                              {c.customerName.charAt(0)}
+                      return (
+                        <tr 
+                          key={c.customerName}
+                          className="hover:bg-amber-50/30 dark:hover:bg-amber-950/10 transition-colors group cursor-pointer"
+                          onClick={() => setStatementCustomer(c.customerName)}
+                        >
+                          <td className="py-3 px-4 text-center font-mono text-[11px] text-zinc-400">
+                            {index + 1}
+                          </td>
+                          <td className="py-3 px-4 font-black text-zinc-900 dark:text-zinc-100 text-xs">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold text-xs shrink-0">
+                                {c.customerName.charAt(0)}
+                              </div>
+                              <span>{c.customerName}</span>
                             </div>
-                            <span>{c.customerName}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-center font-mono font-bold text-red-600 dark:text-red-400">
-                          {formatNumber(c.totalDispatched)}
-                          <span className="text-[10px] text-zinc-400 mr-1">{isRtl ? 'ب' : 'b'}</span>
-                        </td>
-                        <td className="py-3 px-4 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {formatNumber(c.totalAdded)}
-                          <span className="text-[10px] text-zinc-400 mr-1">{isRtl ? 'ب' : 'b'}</span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full font-mono font-black text-xs ${
-                            isPositive
-                              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
-                              : isZero
-                                ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
-                                : 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30'
-                          }`}>
-                            {isPositive ? '+' : ''}{formatNumber(c.netBalance)} {isRtl ? 'برميل' : 'bbl'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center font-mono text-zinc-500 font-bold">
-                          {c.movementsCount}
-                        </td>
-                        <td className="py-3 px-4 text-center font-mono text-zinc-400 text-[11px]">
-                          {c.lastDate}
-                        </td>
-                        <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => setStatementCustomer(c.customerName)}
-                            className="px-3 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-bold text-[11px] rounded-xl border border-amber-200 dark:border-amber-800 transition-all cursor-pointer flex items-center gap-1 mx-auto"
-                          >
-                            <FileText size={12} />
-                            <span>{isRtl ? 'كشف الحركات' : 'Statement'}</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono font-bold text-red-600 dark:text-red-400">
+                            {formatNumber(c.totalDispatched)}
+                            <span className="text-[10px] text-zinc-400 mr-1">{isRtl ? 'ب' : 'b'}</span>
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            {formatNumber(c.totalAdded)}
+                            <span className="text-[10px] text-zinc-400 mr-1">{isRtl ? 'ب' : 'b'}</span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full font-mono font-black text-xs ${
+                              isPositive
+                                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                                : isZero
+                                  ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                                  : 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30'
+                            }`}>
+                              {isPositive ? '+' : ''}{formatNumber(c.netBalance)} {isRtl ? 'برميل' : 'bbl'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono text-zinc-500 font-bold">
+                            {c.movementsCount}
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono text-zinc-400 text-[11px]">
+                            {c.lastDate}
+                          </td>
+                          <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => setStatementCustomer(c.customerName)}
+                              className="px-3 py-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-bold text-[11px] rounded-xl border border-amber-200 dark:border-amber-800 transition-all cursor-pointer flex items-center gap-1 mx-auto"
+                            >
+                              <FileText size={12} />
+                              <span>{isRtl ? 'كشف الحركات' : 'Statement'}</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : (
-        /* TAB 2: DETAILED MOVEMENTS LOG TABLE (سجل الحركات) */
+        /* TAB 2: DETAILED MOVEMENTS LOG TABLE */
         <div className="bg-white dark:bg-zinc-900/60 rounded-3xl border border-zinc-200/70 dark:border-zinc-800/60 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1468,7 +1517,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
               </span>
             </div>
 
-            {/* Page Size Selector */}
             <div className="flex items-center gap-2 text-xs">
               <span className="text-zinc-400 font-bold">{isRtl ? 'عرض:' : 'Show:'}</span>
               <select
@@ -1571,7 +1619,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
             </table>
           </div>
 
-          {/* Pagination Controls */}
           {totalPages > 1 && (
             <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
               <span className="text-xs text-zinc-400 font-bold font-mono">
@@ -1625,7 +1672,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
         </div>
       )}
 
-      {/* Customer Detailed Statement Modal (كشف حساب براميل العميل) */}
+      {/* Customer Detailed Statement Modal */}
       <AnimatePresence>
         {statementCustomer && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -1636,7 +1683,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
               className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl print-modal-container"
               dir={isRtl ? 'rtl' : 'ltr'}
             >
-              {/* Official Print Header */}
               <div className="hidden print:block mb-4 text-center border-b-2 border-zinc-900 pb-4">
                 <h1 className="text-2xl font-black text-zinc-900 tracking-tight">ريش لاند لتصنيع وتصدير الحاصلات الزراعية</h1>
                 <p className="text-xs text-zinc-700 font-bold mt-1">إدارة الحسابات والمخازن - كشف حساب عهدة براميل رسمي</p>
@@ -1646,7 +1692,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                 </div>
               </div>
 
-              {/* Modal Header */}
               <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/30 print:hidden">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-amber-500/10 text-amber-600 rounded-2xl">
@@ -1670,7 +1715,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                 </button>
               </div>
 
-              {/* Customer Balance Summary Bar inside Modal */}
               <div className="p-4 bg-amber-500/5 border-b border-amber-500/10 grid grid-cols-3 gap-3 text-center print:border-zinc-300 print:bg-zinc-50">
                 <div className="p-3 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60 print:border-zinc-300 print:bg-white">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">
@@ -1700,7 +1744,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                 </div>
               </div>
 
-              {/* Statement Table */}
               <div className="overflow-y-auto flex-1 p-4 print:overflow-visible print:p-0">
                 <table className="w-full text-right text-xs print:border-collapse print:border print:border-zinc-800" dir={isRtl ? 'rtl' : 'ltr'}>
                   <thead>
@@ -1744,7 +1787,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                 </table>
               </div>
 
-              {/* Official Print Signatures */}
               <div className="hidden print:flex items-center justify-between mt-12 pt-8 border-t-2 border-zinc-900 text-xs font-bold text-zinc-900 page-break-inside-avoid">
                 <div className="text-center">
                   <p className="mb-12 font-bold">إعداد ومراجعة (المحاسب)</p>
@@ -1760,7 +1802,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                 </div>
               </div>
 
-              {/* Modal Footer */}
               <div className="p-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-800/35 print:hidden">
                 <div className="flex items-center gap-2">
                   <button
@@ -1877,9 +1918,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                   )}
 
                   <button
-                    onClick={() => {
-                      setNewUrlInput('');
-                    }}
+                    onClick={() => setNewUrlInput('')}
                     className="px-4 py-3 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-2xl text-xs font-bold transition-all cursor-pointer"
                   >
                     {isRtl ? 'مسح الخانة' : 'Clear'}
@@ -1890,6 +1929,396 @@ export default function Barrels({ lang, user }: BarrelsProps) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Excluded Customers Modal */}
+      <AnimatePresence>
+        {isExcludedModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl relative flex flex-col max-h-[85vh]"
+              dir={isRtl ? 'rtl' : 'ltr'}
+            >
+              <button
+                onClick={() => setIsExcludedModalOpen(false)}
+                className="absolute top-5 left-5 p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-red-500/10 text-red-500 rounded-2xl">
+                  <Ban size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+                    {isRtl ? 'إدارة العملاء المستبعدين' : 'Manage Excluded Customers'}
+                  </h3>
+                  <p className="text-xs text-zinc-400 font-bold">
+                    {isRtl ? 'العملاء المضافون هنا لن يظهروا في الجداول أو الأرصدة أو التقارير' : 'Excluded customers will not appear in tables, balances or reports'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={customerToAdd}
+                    onChange={(e) => setCustomerToAdd(e.target.value)}
+                    className="flex-1 px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl text-xs font-bold text-zinc-800 dark:text-zinc-200"
+                  >
+                    <option value="">{isRtl ? '-- اختر عميل لاستبعاده --' : '-- Select customer to exclude --'}</option>
+                    {uniqueCustomersList
+                      .filter(c => !excludedCustomers.includes(c))
+                      .map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                  </select>
+                  <button
+                    onClick={() => {
+                      if (!customerToAdd) return;
+                      if (!excludedCustomers.includes(customerToAdd)) {
+                        setExcludedCustomers(prev => [...prev, customerToAdd]);
+                        toast.success(isRtl ? `تم استبعاد العميل: ${customerToAdd}` : `Customer excluded: ${customerToAdd}`);
+                        setCustomerToAdd('');
+                      }
+                    }}
+                    disabled={!customerToAdd}
+                    className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                  >
+                    {isRtl ? 'استبعاد' : 'Exclude'}
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-2 border border-zinc-200/70 dark:border-zinc-800 p-3 rounded-2xl bg-zinc-50/50 dark:bg-zinc-800/30">
+                  <div className="flex items-center justify-between text-xs font-bold text-zinc-500 pb-2 border-b border-zinc-200/60 dark:border-zinc-700">
+                    <span>{isRtl ? `العملاء المستبعدون (${excludedCustomers.length})` : `Excluded Customers (${excludedCustomers.length})`}</span>
+                    {excludedCustomers.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setExcludedCustomers([]);
+                          toast.success(isRtl ? 'تم إلغاء استبعاد جميع العملاء' : 'All customer exclusions cleared');
+                        }}
+                        className="text-red-500 hover:underline text-[11px] cursor-pointer"
+                      >
+                        {isRtl ? 'إلغاء الكل' : 'Clear All'}
+                      </button>
+                    )}
+                  </div>
+
+                  {excludedCustomers.length === 0 ? (
+                    <p className="text-xs text-zinc-400 text-center py-8">
+                      {isRtl ? 'لا يوجد عملاء مستبعدون حالياً' : 'No excluded customers currently'}
+                    </p>
+                  ) : (
+                    excludedCustomers.map(c => (
+                      <div key={c} className="flex items-center justify-between p-2.5 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{c}</span>
+                        <button
+                          onClick={() => {
+                            setExcludedCustomers(prev => prev.filter(item => item !== c));
+                            toast.success(isRtl ? `تمت إزالة الاستبعاد عن: ${c}` : `Exclusion removed for: ${c}`);
+                          }}
+                          className="px-2.5 py-1 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                        >
+                          {isRtl ? 'إلغاء الاستبعاد' : 'Restore'}
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => setIsExcludedModalOpen(false)}
+                    className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-900 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer"
+                  >
+                    {isRtl ? 'تم' : 'Done'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Customer Merge Modal */}
+      <AnimatePresence>
+        {isMergeModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 max-w-xl w-full shadow-2xl relative flex flex-col max-h-[85vh]"
+              dir={isRtl ? 'rtl' : 'ltr'}
+            >
+              <button
+                onClick={() => setIsMergeModalOpen(false)}
+                className="absolute top-5 left-5 p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-purple-500/10 text-purple-500 rounded-2xl">
+                  <GitMerge size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+                    {isRtl ? 'دمج أسماء العملاء المتعددة' : 'Merge Multiple Customer Names'}
+                  </h3>
+                  <p className="text-xs text-zinc-400 font-bold">
+                    {isRtl ? 'دمج عدة أسماء لنفس العميل تحت اسم رئيسي موحد لجميع الحركات والأرصدة' : 'Merge several customer aliases under one master name for all balances & reports'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4 flex-1 overflow-y-auto pr-1">
+                <div>
+                  <label className="text-xs font-black text-zinc-700 dark:text-zinc-300 block mb-1.5">
+                    {isRtl ? 'اختر العميل الرئيسي (الوجهة الموحدة):' : 'Select Master Customer (Target):'}
+                  </label>
+                  <select
+                    value={mergeMasterCustomer}
+                    onChange={(e) => setMergeMasterCustomer(e.target.value)}
+                    className="w-full px-3.5 py-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl text-xs font-bold text-zinc-800 dark:text-zinc-200"
+                  >
+                    <option value="">{isRtl ? '-- اختر العميل الرئيسي --' : '-- Select Master Customer --'}</option>
+                    {uniqueCustomersList.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-black text-zinc-700 dark:text-zinc-300 block mb-1.5">
+                    {isRtl ? 'اختر العملاء الفرعيون المراد دمجهم:' : 'Select Secondary Customers to Merge:'}
+                  </label>
+                  <div className="max-h-48 overflow-y-auto border border-zinc-200 dark:border-zinc-700 rounded-2xl p-3 bg-zinc-50/50 dark:bg-zinc-800/40 space-y-1.5">
+                    {uniqueCustomersList
+                      .filter(c => c !== mergeMasterCustomer)
+                      .map(c => {
+                        const isChecked = customersToMerge.includes(c);
+                        const isAlreadyMergedElsewhere = Object.keys(customerMerges).includes(c) && customerMerges[c] !== mergeMasterCustomer;
+                        return (
+                          <div
+                            key={c}
+                            onClick={() => {
+                              if (isChecked) {
+                                setCustomersToMerge(customersToMerge.filter(x => x !== c));
+                              } else {
+                                setCustomersToMerge([...customersToMerge, c]);
+                              }
+                            }}
+                            className={`flex items-center justify-between p-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+                              isChecked
+                                ? 'bg-purple-500/10 text-purple-900 dark:text-purple-200 border border-purple-500/20'
+                                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${
+                                isChecked ? 'bg-purple-600 border-purple-600 text-white' : 'border-zinc-300 dark:border-zinc-600'
+                              }`}>
+                                {isChecked && <Check size={11} />}
+                              </div>
+                              <span>{c}</span>
+                            </div>
+                            {isAlreadyMergedElsewhere && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+                                ({isRtl ? `مدمج حالياً مع: ${customerMerges[c]}` : `Currently merged into ${customerMerges[c]}`})
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!mergeMasterCustomer) {
+                      toast.error(isRtl ? 'يرجى اختيار العميل الرئيسي أولاً' : 'Please select master customer first');
+                      return;
+                    }
+                    if (customersToMerge.length === 0) {
+                      toast.error(isRtl ? 'يرجى اختيار عميل فرعي واحد على الأقل للدمج' : 'Please select at least one secondary customer to merge');
+                      return;
+                    }
+
+                    const newMerges = { ...customerMerges };
+                    customersToMerge.forEach(sec => {
+                      newMerges[sec] = mergeMasterCustomer;
+                    });
+                    setCustomerMerges(newMerges);
+                    toast.success(
+                      isRtl
+                        ? `تم دمج ${customersToMerge.length} عميل بنجاح تحت العميل الرئيسي: ${mergeMasterCustomer}`
+                        : `Successfully merged ${customersToMerge.length} customers into ${mergeMasterCustomer}`
+                    );
+                    setCustomersToMerge([]);
+                    setMergeMasterCustomer('');
+                  }}
+                  disabled={!mergeMasterCustomer || customersToMerge.length === 0}
+                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-black transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                >
+                  {isRtl ? 'تنفيذ دمج العملاء المحددين' : 'Execute Customer Merge'}
+                </button>
+
+                {Object.keys(customerMerges).length > 0 && (
+                  <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-zinc-500">
+                      <span>{isRtl ? `عمليات الدمج الحالية (${Object.keys(customerMerges).length})` : `Active Merges (${Object.keys(customerMerges).length})`}</span>
+                      <button
+                        onClick={() => {
+                          setCustomerMerges({});
+                          toast.success(isRtl ? 'تم إلغاء جميع عمليات دمج العملاء' : 'All customer merges cleared');
+                        }}
+                        className="text-red-500 hover:underline text-[11px] cursor-pointer"
+                      >
+                        {isRtl ? 'إلغاء كل الدمج' : 'Reset All Merges'}
+                      </button>
+                    </div>
+
+                    <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                      {Object.entries(customerMerges).map(([sec, master]) => (
+                        <div key={sec} className="flex items-center justify-between p-2 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs">
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="text-zinc-600 dark:text-zinc-300 font-bold truncate">{sec}</span>
+                            <span className="text-zinc-400">←</span>
+                            <span className="text-purple-600 dark:text-purple-400 font-black truncate">{master}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const updated = { ...customerMerges };
+                              delete updated[sec];
+                              setCustomerMerges(updated);
+                              toast.success(isRtl ? `تم فصل العميل: ${sec}` : `Unmerged customer: ${sec}`);
+                            }}
+                            className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-bold transition-colors cursor-pointer shrink-0"
+                          >
+                            {isRtl ? 'فصل' : 'Unmerge'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
+                <button
+                  onClick={() => setIsMergeModalOpen(false)}
+                  className="px-5 py-2 bg-zinc-800 hover:bg-zinc-900 text-white rounded-2xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  {isRtl ? 'إغلاق' : 'Close'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * مكوّن المخطط البياني لتوزيع أنواع البراميل لدى كبار العملاء
+ */
+function TopCustomersBarrelsChart({ 
+  summaries, 
+  isRtl 
+}: { 
+  summaries: CustomerBalanceSummary[]; 
+  isRtl: boolean; 
+}) {
+  const topCustomers = useMemo(() => {
+    return summaries
+      .filter(c => c.netBalance > 0)
+      .slice(0, 5);
+  }, [summaries]);
+
+  const colorPalette = [
+    { bg: 'bg-blue-500', text: 'text-blue-500', dot: '#3b82f6' },
+    { bg: 'bg-amber-500', text: 'text-amber-500', dot: '#f59e0b' },
+    { bg: 'bg-emerald-500', text: 'text-emerald-500', dot: '#10b981' },
+    { bg: 'bg-purple-500', text: 'text-purple-500', dot: '#a855f7' },
+    { bg: 'bg-rose-500', text: 'text-rose-500', dot: '#f43f5e' },
+  ];
+
+  if (topCustomers.length === 0) return null;
+
+  return (
+    <div className="bg-white dark:bg-zinc-900/60 p-5 rounded-3xl border border-zinc-200/70 dark:border-zinc-800/60 shadow-sm space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800 pb-3">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-amber-500/10 text-amber-600 rounded-xl">
+            <BarChart3 size={18} />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+              {isRtl ? 'توزيع أرصدة البراميل حسب النوع لكبار العملاء' : 'Barrels Type Distribution by Top Customers'}
+            </h3>
+            <p className="text-[11px] text-zinc-400 font-medium">
+              {isRtl ? 'تحليل أنواع البراميل المتبقية في عهدة أعلى 5 عملاء' : 'Analysis of outstanding barrel types for top 5 customers'}
+            </p>
+          </div>
+        </div>
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-mono w-fit">
+          {isRtl ? 'أعلى 5 عملاء رصيداً' : 'Top 5 Customers'}
+        </span>
+      </div>
+
+      <div className="space-y-4 pt-1">
+        {topCustomers.map((cust) => {
+          const typeEntries = Object.entries(cust.barrelTypesSummary)
+            .filter(([_, stat]) => stat.balance > 0);
+
+          return (
+            <div key={cust.customerName} className="space-y-2 bg-zinc-50/50 dark:bg-zinc-800/30 p-3.5 rounded-2xl border border-zinc-100 dark:border-zinc-800/60">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-black text-zinc-800 dark:text-zinc-200">{cust.customerName}</span>
+                <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                  {cust.netBalance.toLocaleString()} {isRtl ? 'برميل' : 'bbl'}
+                </span>
+              </div>
+
+              {/* شريط التوزيع المكدس */}
+              <div className="w-full h-3.5 rounded-full bg-zinc-200/70 dark:bg-zinc-700/60 overflow-hidden flex shadow-inner">
+                {typeEntries.map(([typeName, stat], idx) => {
+                  const pct = cust.netBalance > 0 ? (stat.balance / cust.netBalance) * 100 : 0;
+                  const color = colorPalette[idx % colorPalette.length].bg;
+                  return (
+                    <div
+                      key={typeName}
+                      style={{ width: `${pct}%` }}
+                      className={`${color} h-full transition-all hover:opacity-85`}
+                      title={`${typeName}: ${stat.balance} ${isRtl ? 'برميل' : 'bbl'} (${pct.toFixed(1)}%)`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* بطاقات دلالة الأنواع والكميات */}
+              <div className="flex flex-wrap gap-2.5 pt-1 text-[11px]">
+                {typeEntries.map(([typeName, stat], idx) => {
+                  const color = colorPalette[idx % colorPalette.length];
+                  return (
+                    <div key={typeName} className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-200/50 dark:border-zinc-700/50">
+                      <span className={`w-2 h-2 rounded-full ${color.bg}`} />
+                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">{typeName}:</span>
+                      <strong className="text-zinc-800 dark:text-zinc-200 font-mono font-bold">{stat.balance}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

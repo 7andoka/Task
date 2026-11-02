@@ -619,15 +619,20 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
   const [sortField, setSortField] = useState<keyof SalesOrderRecord>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Quick Inline Edit State for Movement No, Sales Order, Delivery, and POST DOCUMENT
-  const [editingCell, setEditingCell] = useState<{ id: string; field: 'movementNo' | 'salesOrder' | 'delivery' | 'postDocument' } | null>(null);
+  // Quick Inline Edit State for Movement No, Sales Order, Delivery, POST DOCUMENT, and Unit Price
+  const [editingCell, setEditingCell] = useState<{ id: string; field: 'movementNo' | 'salesOrder' | 'delivery' | 'postDocument' | 'unitPrice' } | null>(null);
   const [cellValue, setCellValue] = useState('');
   const [savingCellId, setSavingCellId] = useState<string | null>(null);
 
-  // Fast inline update function for Movement No, Sales Order, Delivery, and POST DOCUMENT
-  const handleInlineUpdate = async (record: SalesOrderRecord, field: 'movementNo' | 'salesOrder' | 'delivery' | 'postDocument', value: string) => {
+  // Fast inline update function for Movement No, Sales Order, Delivery, POST DOCUMENT, and Unit Price
+  const handleInlineUpdate = async (record: SalesOrderRecord, field: 'movementNo' | 'salesOrder' | 'delivery' | 'postDocument' | 'unitPrice', value: string) => {
     const trimmedVal = value.trim();
-    if (record[field] === trimmedVal) {
+    const numVal = field === 'unitPrice' ? (parseFloat(trimmedVal) || 0) : trimmedVal;
+    if (field === 'unitPrice' && record.unitPrice === numVal) {
+      setEditingCell(null);
+      return;
+    }
+    if (field !== 'unitPrice' && record[field as keyof SalesOrderRecord] === trimmedVal) {
       setEditingCell(null);
       return;
     }
@@ -636,7 +641,8 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
     try {
       const docRef = doc(db, COLLECTIONS.SALES_ORDERS_OVERRIDES, record.id);
       await setDoc(docRef, {
-        [field]: trimmedVal,
+        [field]: numVal,
+        ...(field === 'unitPrice' ? { totalAmount: (record.quantityKg || 0) * (parseFloat(trimmedVal) || 0) } : {}),
         updatedAt: new Date().toISOString(),
         updatedBy: user?.displayName || user?.username || 'User'
       }, { merge: true });
@@ -644,7 +650,7 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
       soundFx.playSuccess();
       toast.success(
         isRtl 
-          ? `تم تحديث ${field === 'movementNo' ? 'رقم الحركة' : field === 'salesOrder' ? 'أمر البيع (Sales Order)' : field === 'delivery' ? 'التسليم (Delivery)' : 'مستند الترحيل (POST DOCUMENT)'} بنجاح`
+          ? `تم تحديث ${field === 'movementNo' ? 'رقم الحركة' : field === 'salesOrder' ? 'أمر البيع (Sales Order)' : field === 'delivery' ? 'التسليم (Delivery)' : field === 'postDocument' ? 'مستند الترحيل (POST DOCUMENT)' : 'سعر الكيلو'} بنجاح`
           : `${field} updated successfully`
       );
     } catch (err) {
@@ -2304,8 +2310,49 @@ export default function SalesOrders({ lang, user }: SalesOrdersProps) {
                             {/* Unit Price & Total Amount */}
                             {canSeePrice && (
                               <>
-                                <td className="p-3 text-center font-mono text-zinc-600 dark:text-zinc-300">
-                                  {row.unitPrice ? `${row.unitPrice.toLocaleString()} ${isRtl ? 'ج.م' : 'EGP'}` : '-'}
+                                <td className="p-2.5 text-center font-mono text-zinc-600 dark:text-zinc-300 whitespace-nowrap">
+                                  {editingCell?.id === row.id && editingCell?.field === 'unitPrice' ? (
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="number"
+                                        value={cellValue}
+                                        onChange={(e) => setCellValue(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleInlineUpdate(row, 'unitPrice', cellValue);
+                                          if (e.key === 'Escape') setEditingCell(null);
+                                        }}
+                                        autoFocus
+                                        placeholder="Price..."
+                                        className="px-2 py-1 bg-white dark:bg-zinc-800 border-2 border-indigo-500 rounded-lg text-xs font-mono font-bold text-zinc-900 dark:text-zinc-100 outline-none w-24 shadow-sm"
+                                      />
+                                      <button
+                                        onClick={() => handleInlineUpdate(row, 'unitPrice', cellValue)}
+                                        className="p-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 cursor-pointer shadow-xs"
+                                        title={isRtl ? 'حفظ' : 'Save'}
+                                      >
+                                        <Check size={12} />
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingCell(null)}
+                                        className="p-1 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                                        title={isRtl ? 'إلغاء' : 'Cancel'}
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      onClick={() => {
+                                        setEditingCell({ id: row.id, field: 'unitPrice' });
+                                        setCellValue(String(row.unitPrice || ''));
+                                      }}
+                                      className="group/cell inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer transition-all border border-transparent hover:border-indigo-300"
+                                      title={isRtl ? 'انقر لتعديل سعر الكيلو' : 'Click to edit price per kg'}
+                                    >
+                                      <span>{row.unitPrice ? `${row.unitPrice.toLocaleString()} ${isRtl ? 'ج.م' : 'EGP'}` : '+ سعر الكيلو'}</span>
+                                      <Edit3 size={10} className="text-indigo-400 opacity-0 group-hover/cell:opacity-100 transition-opacity" />
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="p-3 text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">
                                   {row.totalAmount ? `${row.totalAmount.toLocaleString()} ${row.currency || 'ج.م'}` : '-'}
