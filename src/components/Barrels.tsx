@@ -1399,9 +1399,6 @@ export default function Barrels({ lang, user }: BarrelsProps) {
       ) : activeSubTab === 'customers' ? (
         /* TAB 1: CUSTOMER BALANCES TABLE & CHARTS */
         <div className="space-y-6">
-          {/* المخطط البياني لتوزيع أنواع البراميل لدى كبار العملاء */}
-          <TopCustomersBarrelsChart summaries={filteredCustomerSummaries} isRtl={isRtl} />
-
           {/* جدول أرصدة العملاء */}
           <div className="bg-white dark:bg-zinc-900/60 rounded-3xl border border-zinc-200/70 dark:border-zinc-800/60 overflow-hidden shadow-sm">
             <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
@@ -2225,103 +2222,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
   );
 }
 
-/**
- * مكوّن المخطط البياني لتوزيع أنواع البراميل لدى كبار العملاء
- */
-function TopCustomersBarrelsChart({ 
-  summaries, 
-  isRtl 
-}: { 
-  summaries: CustomerBalanceSummary[]; 
-  isRtl: boolean; 
-}) {
-  const topCustomers = useMemo(() => {
-    return summaries
-      .filter(c => c.netBalance > 0)
-      .slice(0, 5);
-  }, [summaries]);
 
-  const colorPalette = [
-    { bg: 'bg-blue-500', text: 'text-blue-500', dot: '#3b82f6' },
-    { bg: 'bg-amber-500', text: 'text-amber-500', dot: '#f59e0b' },
-    { bg: 'bg-emerald-500', text: 'text-emerald-500', dot: '#10b981' },
-    { bg: 'bg-purple-500', text: 'text-purple-500', dot: '#a855f7' },
-    { bg: 'bg-rose-500', text: 'text-rose-500', dot: '#f43f5e' },
-  ];
-
-  if (topCustomers.length === 0) return null;
-
-  return (
-    <div className="bg-white dark:bg-zinc-900/60 p-5 rounded-3xl border border-zinc-200/70 dark:border-zinc-800/60 shadow-sm space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800 pb-3">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-amber-500/10 text-amber-600 rounded-xl">
-            <BarChart3 size={18} />
-          </div>
-          <div>
-            <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
-              {isRtl ? 'توزيع أرصدة البراميل حسب النوع لكبار العملاء' : 'Barrels Type Distribution by Top Customers'}
-            </h3>
-            <p className="text-[11px] text-zinc-400 font-medium">
-              {isRtl ? 'تحليل أنواع البراميل المتبقية في عهدة أعلى 5 عملاء' : 'Analysis of outstanding barrel types for top 5 customers'}
-            </p>
-          </div>
-        </div>
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-mono w-fit">
-          {isRtl ? 'أعلى 5 عملاء رصيداً' : 'Top 5 Customers'}
-        </span>
-      </div>
-
-      <div className="space-y-4 pt-1">
-        {topCustomers.map((cust) => {
-          const typeEntries = Object.entries(cust.barrelTypesSummary)
-            .filter(([_, stat]) => stat.balance > 0);
-
-          return (
-            <div key={cust.customerName} className="space-y-2 bg-zinc-50/50 dark:bg-zinc-800/30 p-3.5 rounded-2xl border border-zinc-100 dark:border-zinc-800/60">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-black text-zinc-800 dark:text-zinc-200">{cust.customerName}</span>
-                <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
-                  {cust.netBalance.toLocaleString()} {isRtl ? 'برميل' : 'bbl'}
-                </span>
-              </div>
-
-              {/* شريط التوزيع المكدس */}
-              <div className="w-full h-3.5 rounded-full bg-zinc-200/70 dark:bg-zinc-700/60 overflow-hidden flex shadow-inner">
-                {typeEntries.map(([typeName, stat], idx) => {
-                  const pct = cust.netBalance > 0 ? (stat.balance / cust.netBalance) * 100 : 0;
-                  const color = colorPalette[idx % colorPalette.length].bg;
-                  return (
-                    <div
-                      key={typeName}
-                      style={{ width: `${pct}%` }}
-                      className={`${color} h-full transition-all hover:opacity-85`}
-                      title={`${typeName}: ${stat.balance} ${isRtl ? 'برميل' : 'bbl'} (${pct.toFixed(1)}%)`}
-                    />
-                  );
-                })}
-              </div>
-
-              {/* بطاقات دلالة الأنواع والكميات */}
-              <div className="flex flex-wrap gap-2.5 pt-1 text-[11px]">
-                {typeEntries.map(([typeName, stat], idx) => {
-                  const color = colorPalette[idx % colorPalette.length];
-                  return (
-                    <div key={typeName} className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-200/50 dark:border-zinc-700/50">
-                      <span className={`w-2 h-2 rounded-full ${color.bg}`} />
-                      <span className="text-zinc-500 dark:text-zinc-400 font-medium">{typeName}:</span>
-                      <strong className="text-zinc-800 dark:text-zinc-200 font-mono font-bold">{stat.balance}</strong>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function MultiSelectDropdown({
   label,
