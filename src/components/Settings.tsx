@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { 
   Bell, Save, CheckCircle2, Download, Moon, Sun, Palette, 
-  LayoutGrid, Check, BarChart3, Scale, Truck, Sprout, FileText, 
+  LayoutGrid, Check, BarChart3, Scale, Truck, Cylinder, Sprout, FileText, 
   Layers, Snowflake, Package, ClipboardList, Database, Boxes, 
   CheckSquare, Users, Settings as SettingsIcon, Shield, ShoppingCart 
 } from 'lucide-react';
@@ -39,6 +39,7 @@ export default function Settings({ lang, user, setUser }: SettingsProps) {
     { id: 'kpis', label: lang === 'ar' ? 'لوحة المؤشرات والقيادة' : 'Executive KPIs Dashboard', icon: BarChart3, roles: ['Admin', 'Warehouse Manager', 'Senior Manager', 'Manager'] },
     { id: 'scaleReports', label: t.scaleReports, icon: Scale },
     { id: 'supplyTracking', label: t.supplyTracking, icon: Truck },
+    { id: 'barrels', label: lang === 'ar' ? 'حسابات وحركات البراميل' : 'Barrels Management', icon: Cylinder },
     { id: 'freshSupply', label: t.freshSupply, icon: Sprout },
     { id: 'purchaseOrders', label: t.purchaseOrders, icon: FileText },
     { id: 'salesOrders', label: t.salesOrders, icon: ShoppingCart },
