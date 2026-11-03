@@ -147,6 +147,10 @@ export default function Barrels({ lang, user }: BarrelsProps) {
   }, []);
 
   const updateExcludedCustomers = async (newList: string[]) => {
+    if (!isAdmin) {
+      toast.error(isRtl ? 'عذراً، تعديل العملاء المستبعدين مخصص للمشرف (Admin) فقط' : 'Permission denied. Admin only.');
+      return;
+    }
     setExcludedCustomers(newList);
     try {
       await saveSharedJsonSetting(
@@ -180,6 +184,10 @@ export default function Barrels({ lang, user }: BarrelsProps) {
   }, []);
 
   const updateCustomerMerges = async (newMerges: Record<string, string>) => {
+    if (!isAdmin) {
+      toast.error(isRtl ? 'عذراً، دمج العملاء مخصص للمشرف (Admin) فقط' : 'Permission denied. Admin only.');
+      return;
+    }
     setCustomerMerges(newMerges);
     try {
       await saveSharedJsonSetting(
@@ -1050,31 +1058,35 @@ export default function Barrels({ lang, user }: BarrelsProps) {
             <span>{isRtl ? 'رابط الشيت' : 'Sheet URL'}</span>
           </button>
 
-          <button
-            onClick={() => setIsExcludedModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all border border-zinc-200/60 dark:border-zinc-700/60 cursor-pointer relative"
-          >
-            <Ban size={14} className="text-red-500" />
-            <span>{isRtl ? 'العملاء المستبعدون' : 'Excluded Customers'}</span>
-            {excludedCustomers.length > 0 && (
-              <span className="px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px] font-mono font-black">
-                {excludedCustomers.length}
-              </span>
-            )}
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setIsExcludedModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all border border-zinc-200/60 dark:border-zinc-700/60 cursor-pointer relative"
+              >
+                <Ban size={14} className="text-red-500" />
+                <span>{isRtl ? 'العملاء المستبعدون' : 'Excluded Customers'}</span>
+                {excludedCustomers.length > 0 && (
+                  <span className="px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px] font-mono font-black">
+                    {excludedCustomers.length}
+                  </span>
+                )}
+              </button>
 
-          <button
-            onClick={() => setIsMergeModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all border border-zinc-200/60 dark:border-zinc-700/60 cursor-pointer relative"
-          >
-            <GitMerge size={14} className="text-purple-500" />
-            <span>{isRtl ? 'دمج العملاء' : 'Merge Customers'}</span>
-            {Object.keys(customerMerges).length > 0 && (
-              <span className="px-1.5 py-0.2 bg-purple-600 text-white rounded-full text-[10px] font-mono font-black">
-                {Object.keys(customerMerges).length}
-              </span>
-            )}
-          </button>
+              <button
+                onClick={() => setIsMergeModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 font-bold text-xs transition-all border border-zinc-200/60 dark:border-zinc-700/60 cursor-pointer relative"
+              >
+                <GitMerge size={14} className="text-purple-500" />
+                <span>{isRtl ? 'دمج العملاء' : 'Merge Customers'}</span>
+                {Object.keys(customerMerges).length > 0 && (
+                  <span className="px-1.5 py-0.2 bg-purple-600 text-white rounded-full text-[10px] font-mono font-black">
+                    {Object.keys(customerMerges).length}
+                  </span>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
