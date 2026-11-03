@@ -41,7 +41,9 @@ import {
   subscribeToSharedSheetUrl, 
   saveSharedSheetUrl, 
   convertToCsvUrl, 
-  SheetMetadata 
+  SheetMetadata,
+  subscribeToSharedJsonSetting,
+  saveSharedJsonSetting
 } from '../utils/sharedSheetConfig';
 import { normalizeArabicSearch, matchesArabicSearch } from '../utils/arabic';
 
@@ -129,45 +131,67 @@ export default function Barrels({ lang, user }: BarrelsProps) {
   const [newUrlInput, setNewUrlInput] = useState('');
   const [savingUrl, setSavingUrl] = useState(false);
 
-  // Excluded Customers
-  const [excludedCustomers, setExcludedCustomers] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('barrels_excluded_customers');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Excluded Customers (Synced in Cloud)
+  const [excludedCustomers, setExcludedCustomers] = useState<string[]>([]);
   const [isExcludedModalOpen, setIsExcludedModalOpen] = useState(false);
   const [customerToAdd, setCustomerToAdd] = useState('');
 
   useEffect(() => {
+    const unsubscribe = subscribeToSharedJsonSetting<string[]>(
+      'barrels_excluded_customers_config',
+      [],
+      'barrels_excluded_customers',
+      (val) => setExcludedCustomers(Array.isArray(val) ? val : [])
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const updateExcludedCustomers = async (newList: string[]) => {
+    setExcludedCustomers(newList);
     try {
-      localStorage.setItem('barrels_excluded_customers', JSON.stringify(excludedCustomers));
-    } catch (e) {}
-  }, [excludedCustomers]);
+      await saveSharedJsonSetting(
+        'barrels_excluded_customers_config',
+        newList,
+        'barrels_excluded_customers',
+        user ? { displayName: user.displayName, username: user.username || user.email } : null
+      );
+    } catch (e) {
+      console.warn("Failed to save excluded customers to cloud", e);
+    }
+  };
 
   // Active View Tab: 'customers' | 'movements'
   const [activeSubTab, setActiveSubTab] = useState<'customers' | 'movements'>('customers');
 
-  // Customer Merges (alias -> master)
-  const [customerMerges, setCustomerMerges] = useState<Record<string, string>>(() => {
-    try {
-      const saved = localStorage.getItem('barrels_customer_merges');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  // Customer Merges (alias -> master, Synced in Cloud)
+  const [customerMerges, setCustomerMerges] = useState<Record<string, string>>({});
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [mergeMasterCustomer, setMergeMasterCustomer] = useState('');
   const [customersToMerge, setCustomersToMerge] = useState<string[]>([]);
 
   useEffect(() => {
+    const unsubscribe = subscribeToSharedJsonSetting<Record<string, string>>(
+      'barrels_customer_merges_config',
+      {},
+      'barrels_customer_merges',
+      (val) => setCustomerMerges(val && typeof val === 'object' ? val : {})
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const updateCustomerMerges = async (newMerges: Record<string, string>) => {
+    setCustomerMerges(newMerges);
     try {
-      localStorage.setItem('barrels_customer_merges', JSON.stringify(customerMerges));
-    } catch (e) {}
-  }, [customerMerges]);
+      await saveSharedJsonSetting(
+        'barrels_customer_merges_config',
+        newMerges,
+        'barrels_customer_merges',
+        user ? { displayName: user.displayName, username: user.username || user.email } : null
+      );
+    } catch (e) {
+      console.warn("Failed to save customer merges to cloud", e);
+    }
+  };
 
   const getCanonicalCustomer = (name: string): string => {
     if (!name) return name;
@@ -1977,7 +2001,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                     onClick={() => {
                       if (!customerToAdd) return;
                       if (!excludedCustomers.includes(customerToAdd)) {
-                        setExcludedCustomers(prev => [...prev, customerToAdd]);
+                        updateExcludedCustomers([...excludedCustomers, customerToAdd]);
                         toast.success(isRtl ? `تم استبعاد العميل: ${customerToAdd}` : `Customer excluded: ${customerToAdd}`);
                         setCustomerToAdd('');
                       }
@@ -1995,7 +2019,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                     {excludedCustomers.length > 0 && (
                       <button
                         onClick={() => {
-                          setExcludedCustomers([]);
+                          updateExcludedCustomers([]);
                           toast.success(isRtl ? 'تم إلغاء استبعاد جميع العملاء' : 'All customer exclusions cleared');
                         }}
                         className="text-red-500 hover:underline text-[11px] cursor-pointer"
@@ -2015,7 +2039,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                         <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{c}</span>
                         <button
                           onClick={() => {
-                            setExcludedCustomers(prev => prev.filter(item => item !== c));
+                            updateExcludedCustomers(excludedCustomers.filter(item => item !== c));
                             toast.success(isRtl ? `تمت إزالة الاستبعاد عن: ${c}` : `Exclusion removed for: ${c}`);
                           }}
                           className="px-2.5 py-1 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
@@ -2150,7 +2174,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                     customersToMerge.forEach(sec => {
                       newMerges[sec] = mergeMasterCustomer;
                     });
-                    setCustomerMerges(newMerges);
+                    updateCustomerMerges(newMerges);
                     toast.success(
                       isRtl
                         ? `تم دمج ${customersToMerge.length} عميل بنجاح تحت العميل الرئيسي: ${mergeMasterCustomer}`
@@ -2171,7 +2195,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                       <span>{isRtl ? `عمليات الدمج الحالية (${Object.keys(customerMerges).length})` : `Active Merges (${Object.keys(customerMerges).length})`}</span>
                       <button
                         onClick={() => {
-                          setCustomerMerges({});
+                          updateCustomerMerges({});
                           toast.success(isRtl ? 'تم إلغاء جميع عمليات دمج العملاء' : 'All customer merges cleared');
                         }}
                         className="text-red-500 hover:underline text-[11px] cursor-pointer"
@@ -2192,7 +2216,7 @@ export default function Barrels({ lang, user }: BarrelsProps) {
                             onClick={() => {
                               const updated = { ...customerMerges };
                               delete updated[sec];
-                              setCustomerMerges(updated);
+                              updateCustomerMerges(updated);
                               toast.success(isRtl ? `تم فصل العميل: ${sec}` : `Unmerged customer: ${sec}`);
                             }}
                             className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-bold transition-colors cursor-pointer shrink-0"

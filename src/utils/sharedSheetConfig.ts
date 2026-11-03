@@ -152,3 +152,79 @@ export async function saveSharedSheetUrl(
     { merge: true }
   );
 }
+
+/**
+ * Subscribe in real-time to any JSON setting (array or object) stored in Firestore `settings/{docId}`.
+ */
+export function subscribeToSharedJsonSetting<T>(
+  docId: string,
+  defaultValue: T,
+  storageKey: string,
+  onUpdate: (val: T) => void
+): () => void {
+  try {
+    const local = localStorage.getItem(storageKey);
+    if (local) {
+      onUpdate(JSON.parse(local));
+    } else {
+      onUpdate(defaultValue);
+    }
+  } catch (e) {
+    onUpdate(defaultValue);
+  }
+
+  const docRef = doc(db, COLLECTIONS.SETTINGS, docId);
+  const unsubscribe = onSnapshot(
+    docRef,
+    (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data?.value !== undefined) {
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(data.value));
+            onUpdate(data.value);
+            return;
+          } catch (e) {}
+        }
+      }
+      try {
+        const local = localStorage.getItem(storageKey);
+        if (local) {
+          onUpdate(JSON.parse(local));
+          return;
+        }
+      } catch (e) {}
+      onUpdate(defaultValue);
+    },
+    (err) => {
+      console.warn(`[SharedJsonSetting] Firestore subscription failed for ${docId}:`, err);
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
+ * Save any JSON setting (array or object) to Cloud Firestore `settings/{docId}` so it syncs across all devices and users.
+ */
+export async function saveSharedJsonSetting<T>(
+  docId: string,
+  value: T,
+  storageKey: string,
+  user?: { displayName?: string; username?: string } | null
+): Promise<void> {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(value));
+  } catch (e) {}
+
+  const docRef = doc(db, COLLECTIONS.SETTINGS, docId);
+  await setDoc(
+    docRef,
+    {
+      value,
+      updatedAt: new Date().toISOString(),
+      updatedBy: user?.displayName || user?.username || 'Admin'
+    },
+    { merge: true }
+  );
+}
