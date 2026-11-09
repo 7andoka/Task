@@ -51,6 +51,7 @@ interface PivotedStockRow {
   totalQuantity: number;
   variety: string;
   size: string;
+  sizes: string[];
   treatment: string;
   processType: string;
   locationQuantities: Record<string, number>;
@@ -62,6 +63,7 @@ interface PivotedStockRow {
     analysis: string;
     batch: string;
     season: string;
+    size: string;
   }[];
 }
 
@@ -77,13 +79,14 @@ const CATEGORIES_REF = {
     { id: 'Green', labelAr: 'مطبوخ', labelEn: 'Cooked', aliases: ['gree', 'olive', 'green', 'green olive', 'cooked', 'اخضر', 'مطبوخ'] },
     { id: 'Black', labelAr: 'مياه وملح', labelEn: 'Brine', aliases: ['brine', 'black', 'water and salt', 'م م', 'مياه ملح', 'اسود', 'مياه وملح'] },
   ],
+  // الترتيب مهم: من الأطول للأقصر عشان XXXS ما تتقرأش XS
   size: [
-    { id: 'L', labelAr: 'L', labelEn: 'L', aliases: ['كبير', 'لارج', 'large'] },
-    { id: 'M', labelAr: 'M', labelEn: 'M', aliases: ['وسط', 'ميديم', 'medium'] },
+    { id: 'XXXS', labelAr: 'XXXS', labelEn: 'XXXS', aliases: ['3xs'] },
+    { id: 'XXS', labelAr: 'XXS', labelEn: 'XXS', aliases: ['2xs'] },
+    { id: 'XS', labelAr: 'صغير جداً (XS)', labelEn: 'Extra Small (XS)', aliases: [] },
     { id: 'S', labelAr: 'S', labelEn: 'S', aliases: ['صغير', 'سمول', 'small'] },
-    { id: 'XS', labelAr: 'صغير جداً (XS)', labelEn: 'Extra Small (XS)', aliases: ['xs', 'x'] },
-    { id: 'XXXS', labelAr: 'XXXS', labelEn: 'XXXS', aliases: ['3xs', 'xxxs'] },
-    { id: 'XXS', labelAr: 'XXS', labelEn: 'XXS', aliases: ['2xs', 'xxs'] },
+    { id: 'M', labelAr: 'M', labelEn: 'M', aliases: ['وسط', 'ميديم', 'medium'] },
+    { id: 'L', labelAr: 'L', labelEn: 'L', aliases: ['كبير', 'لارج', 'large'] },
   ]
 };
 
@@ -511,7 +514,8 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     for (const cat of categories) {
       // Check ID
       const catId = cat.id.toLowerCase();
-      if (catId.length <= 2) {
+      // الأحجام لازم تتطابق ككلمة كاملة (عشان XXXS ما تتقرأش XS)
+      if (type === 'size' || catId.length <= 2) {
         if (words.includes(catId)) return cat.id;
       } else {
         if (dLower.includes(catId)) return cat.id;
@@ -521,7 +525,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       if (cat.aliases) {
         for (const alias of cat.aliases) {
           const aLower = alias.toLowerCase();
-          if (aLower.length <= 2) {
+          if (type === 'size' || aLower.length <= 2) {
             if (words.includes(aLower)) return cat.id;
           } else {
             if (dLower.includes(aLower)) return cat.id;
@@ -566,9 +570,13 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     if (batchVal && batchVal.length >= 2) {
       const secondChar = batchVal.charAt(1).toUpperCase();
       if (secondChar === 'S') return 'S';
-      if (secondChar === 'X') return 'XS';
       if (secondChar === 'L') return 'L';
       if (secondChar === 'M') return 'M';
+      if (secondChar === 'X') {
+        // X ممكن تكون XS أو XXS أو XXXS: نفرّق من الوصف، والافتراضي XS
+        const fromDesc = detectAttribute(descr, 'size');
+        return (fromDesc === 'XXXS' || fromDesc === 'XXS') ? fromDesc : 'XS';
+      }
     }
     return detectAttribute(descr, 'size');
   };
@@ -901,6 +909,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           totalQuantity: 0,
           variety: detectVariety(descr),
           size: itemIsPre ? '' : rowSize,
+          sizes: [],
           treatment: detectAttribute(descr, 'direction'),
           processType: itemIsPre ? 'Pre' : rowProcess,
           locationQuantities: {},
@@ -927,8 +936,13 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         location: locDescr,
         analysis: rowAnalysis,
         batch: batchVal,
-        season: rowSeason
+        season: rowSeason,
+        size: rowSize
       });
+
+      if (rowSize && !entry.sizes.includes(rowSize)) {
+        entry.sizes.push(rowSize);
+      }
 
       if (!entry.analyses.includes(rowAnalysis)) {
         entry.analyses.push(rowAnalysis);
@@ -942,7 +956,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     const finalRows = Array.from(pivotMap.values()).map(entry => {
       if (entry.processType === 'Pre' || isPreItem(entry.description, entry.materialCode)) {
         entry.size = '';
+        entry.sizes = [];
         entry.processType = 'Pre';
+        entry.rawRows.forEach(r => { r.size = ''; });
       }
       return entry;
     });
@@ -1181,12 +1197,13 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     return dataset
       .map(row => {
         // If analysis or season filter is selected, we filter the rawRows inside
-        const activeRawRows = (selectedAnalyses.length === 0 && selectedSeasons.length === 0)
+        const activeRawRows = (selectedAnalyses.length === 0 && selectedSeasons.length === 0 && selectedSizes.length === 0)
           ? row.rawRows
           : row.rawRows.filter(r => {
               const matchAnalysis = selectedAnalyses.length === 0 || selectedAnalyses.includes(r.analysis);
               const matchSeason = selectedSeasons.length === 0 || selectedSeasons.includes(r.season);
-              return matchAnalysis && matchSeason;
+              const matchSize = selectedSizes.length === 0 || selectedSizes.includes(r.size);
+              return matchAnalysis && matchSeason && matchSize;
             });
 
         // Recompute quantities based on the active rawRows
@@ -1200,13 +1217,16 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         // Unique analyses and seasons remaining with quantity > 0
         const activeAnalyses = Array.from(new Set(activeRawRows.filter(r => r.quantity > 0).map(r => r.analysis)));
         const activeSeasons = Array.from(new Set(activeRawRows.filter(r => r.quantity > 0).map(r => r.season)));
+        const activeSizes = Array.from(new Set(activeRawRows.filter(r => r.quantity > 0 && r.size).map(r => r.size)));
 
         return {
           ...row,
           totalQuantity,
           locationQuantities,
           analyses: activeAnalyses,
-          seasons: activeSeasons
+          seasons: activeSeasons,
+          sizes: activeSizes,
+          activeRawRows
         };
       })
       .filter(row => {
@@ -1256,10 +1276,6 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           matchesProduce = pepperItem && matchesPepper;
         }
 
-        const matchesSize = 
-          selectedSizes.length === 0 || 
-          selectedSizes.includes(row.size);
-
         const matchesTreatment = 
           selectedTreatments.length === 0 || 
           selectedTreatments.includes(row.treatment);
@@ -1268,7 +1284,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
           selectedProcesses.length === 0 || 
           selectedProcesses.includes(row.processType);
 
-        return matchesSearch && matchesLocation && matchesProduce && matchesSize && matchesTreatment && matchesProcess;
+        return matchesSearch && matchesLocation && matchesProduce && matchesTreatment && matchesProcess;
       });
   }, [dataset, searchTerm, selectedLocations, selectedOliveVarieties, selectedPepperVarieties, selectedSizes, selectedTreatments, selectedProcesses, selectedAnalyses, selectedSeasons]);
 
@@ -1302,15 +1318,11 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         totalOlive += row.totalQuantity;
       }
 
-      // Check if size is XXXS
-      if (row.size === 'XXXS') {
-        totalXxxs += row.totalQuantity;
-      }
-
-      // Check if size is S
-      if (row.size === 'S') {
-        totalS += row.totalQuantity;
-      }
+      // الحجم بيتحسب من كل تشغيلة (الحرف التاني) مش من الكود ككل
+      row.rawRows.forEach(r => {
+        if (r.size === 'XXXS') totalXxxs += r.quantity;
+        if (r.size === 'S') totalS += r.quantity;
+      });
     });
 
     return { totalOlive, totalPepper, totalFarza, totalXxxs, totalS };
@@ -1359,7 +1371,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     };
 
     filteredDataset.forEach(row => {
-      row.rawRows.forEach(raw => {
+      row.rawRows.filter(raw => selectedSizes.length === 0 || selectedSizes.includes(raw.size)).forEach(raw => {
         const analysis = raw.analysis || 'none';
         if (analysisBreakdown[analysis] !== undefined) {
           analysisBreakdown[analysis] += raw.quantity;
@@ -1378,7 +1390,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
       locationBreakdown,
       analysisBreakdown
     };
-  }, [filteredDataset, varieties, storageLocations]);
+  }, [filteredDataset, varieties, storageLocations, selectedSizes]);
 
   const chartData = useMemo(() => {
     return Object.entries(stats.varietyBreakdown)
@@ -1446,7 +1458,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         relevantQty = row.locationQuantities[drillDown.id] || 0;
         if (relevantQty > 0) matches = true;
       } else if (drillDown.type === 'analysis') {
-        row.rawRows.forEach(raw => {
+        row.rawRows.filter(raw => selectedSizes.length === 0 || selectedSizes.includes(raw.size)).forEach(raw => {
           const analysis = raw.analysis || 'none';
           const targetAnalysis = drillDown.id === 'none' ? 'none' : drillDown.id;
           if (analysis === targetAnalysis) {
@@ -1466,7 +1478,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     });
 
     return results.sort((a, b) => b.qty - a.qty);
-  }, [drillDown, filteredDataset]);
+  }, [drillDown, filteredDataset, selectedSizes]);
 
   const VARIETY_COLORS: Record<string, string> = {
     Manzanilla: '#f59e0b',
@@ -1507,7 +1519,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
         [isRtl ? 'كود الخام' : 'Material Code']: item.materialCode,
         [isRtl ? 'الوصف' : 'Description']: item.description,
         [isRtl ? 'صنف الزيتون' : 'Variety']: getVarietyName(item.variety),
-        [isRtl ? 'الحجم' : 'Size']: item.size || '—',
+        [isRtl ? 'الحجم' : 'Size']: item.sizes.length > 0 ? item.sizes.join(' / ') : '—',
         [isRtl ? 'التشغيل' : 'Process']: getAttributeLabel(item.processType, 'process'),
         [isRtl ? 'التوجيه' : 'Treatment']: getAttributeLabel(item.treatment, 'direction'),
         [isRtl ? 'الموسم' : 'Season']: item.seasons.map(s => getSeasonLabel(s)).join(', '),
@@ -2353,9 +2365,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                             <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-tight border w-fit whitespace-nowrap shadow-xs select-none ${getVarietyColor(row.variety)}`}>
                               {getVarietyName(row.variety)}
                             </span>
-                            {row.size && (
+                            {row.sizes && row.sizes.length > 0 && (
                               <span className="bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[9px] px-2 py-0.5 rounded-lg font-extrabold border border-zinc-200/50 dark:border-zinc-750 whitespace-nowrap shadow-xs">
-                                {row.size}
+                                {row.sizes.join(' / ')}
                               </span>
                             )}
                             {row.processType && (
