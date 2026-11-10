@@ -269,6 +269,7 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
     }
   });
   const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
+  const [selectedItemForBreakdown, setSelectedItemForBreakdown] = useState<PivotedStockRow | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -2339,7 +2340,9 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                     filteredDataset.map((row) => (
                       <tr 
                         key={row.materialCode} 
-                        className="group hover:bg-emerald-500/[0.015] dark:hover:bg-emerald-500/[0.025] transition-all duration-150 even:bg-zinc-50/10 dark:even:bg-zinc-800/5"
+                        onClick={() => setSelectedItemForBreakdown(row)}
+                        className="group hover:bg-emerald-500/[0.03] dark:hover:bg-emerald-500/[0.05] transition-all duration-150 even:bg-zinc-50/10 dark:even:bg-zinc-800/5 cursor-pointer"
+                        title={isRtl ? 'اضغط لعرض تفصيل المقاسات لهذا الصنف' : 'Click to view size breakdown for this item'}
                       >
                         <td 
                           className={`px-4 py-3 transition-all ${pinnedColumns.includes('material_code') ? 'sticky right-0 z-20 bg-white group-hover:bg-zinc-50 dark:bg-zinc-950 dark:group-hover:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800/80 shadow-[2px_0_10px_-2px_rgba(0,0,0,0.05)]' : ''}`}
@@ -2664,6 +2667,84 @@ export default function OliveStock({ lang, user }: OliveStockProps) {
                 >
                   <Check size={14} />
                   {isRtl ? 'اعتماد الرصيد كمرجع للمقارنة' : 'Accept Current Balance as Reference'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Item Size Breakdown Modal */}
+      <AnimatePresence>
+        {selectedItemForBreakdown && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedItemForBreakdown(null)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-lg max-h-[85vh] flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-6 overflow-hidden text-right z-10"
+              dir={isRtl ? 'rtl' : 'ltr'}
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Tag size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                      {isRtl ? 'تفاصيل أرصدة المقاسات للصنف' : 'Item Size Balances Breakdown'}
+                    </h3>
+                    <p className="text-xs font-mono text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
+                      {selectedItemForBreakdown.materialCode} - {selectedItemForBreakdown.description}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedItemForBreakdown(null)}
+                  className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-white rounded-xl transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="my-4 space-y-2.5 overflow-y-auto max-h-[50vh] pr-1">
+                {Object.entries(
+                  selectedItemForBreakdown.rawRows.reduce((acc: Record<string, number>, r) => {
+                    const s = r.size || (isRtl ? 'غير محدد (بدون مقاس)' : 'Unspecified');
+                    acc[s] = (acc[s] || 0) + r.quantity;
+                    return acc;
+                  }, {})
+                ).map(([sizeName, qty]) => (
+                  <div key={sizeName} className="flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      <span className="text-xs font-black text-zinc-800 dark:text-zinc-200">
+                        {isRtl ? 'مقاس' : 'Size'}: {sizeName}
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs font-black text-emerald-600 dark:text-emerald-400">
+                      {formatNumber(qty)} {isRtl ? 'كجم' : 'kg'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                <span className="text-xs font-bold text-zinc-400">
+                  {isRtl ? 'إجمالي الصنف:' : 'Total Item Qty:'} <strong className="text-zinc-800 dark:text-zinc-200 font-mono">{formatNumber(selectedItemForBreakdown.totalQuantity)} {isRtl ? 'كجم' : 'kg'}</strong>
+                </span>
+                <button
+                  onClick={() => setSelectedItemForBreakdown(null)}
+                  className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-900 text-white rounded-2xl text-xs font-black transition-all cursor-pointer"
+                >
+                  {isRtl ? 'إغلاق' : 'Close'}
                 </button>
               </div>
             </motion.div>
